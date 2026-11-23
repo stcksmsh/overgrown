@@ -35,7 +35,7 @@ Handover for the next session. The brief (owner's project brief, section numbers
 
 1. Close G2 and G3 with the owner (above).
 2. **G4 rest**: re-pin the data submodule after data PR #4; indoor species through the pipeline (a few per archetype); export/import round-trip on a device. Light-class labels in the place editor are the builder's wording: owner to confirm.
-3. Feeding and repotting reminders from simple rules (D17). Feeding data now exists in the draft indoor archetypes (not the tropical-foliage one); none reaches the app until the owner reviews.
+3. Feeding and repotting reminders: merged (PR #10, D29). FED event in the export; reminders on Today and in the notification at 09:00 or inside that day's watering prompt. Nothing shows on a device until a reviewed care entry has season data. Open minors: BigTextStyle on every prompt; a Doze delay past midnight posts the next day's reminder at night.
 4. The owner asked about plants in the ground: the data side is ready (`in_ground` context); the engine needs a soil model. Out of v1 scope; raise after G3/G4.
 5. G5 proof (baseline comparison with real scale data and the archetype test), G6 hardening.
 
