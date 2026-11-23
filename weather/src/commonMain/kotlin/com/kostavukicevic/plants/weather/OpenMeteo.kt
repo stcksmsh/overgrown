@@ -42,7 +42,7 @@ class OpenMeteo(
         val key = "open-meteo:forecast:$at"
         val cached = store.load(key)
         val t = now()
-        cached?.notBefore?.let { if (t < it) return FetchResult.RateLimited(ProviderId.OPEN_METEO, it) }
+        cached?.notBefore?.let { if (t < it) return FetchResult.RateLimited(ProviderId.OPEN_METEO, it, local = true) }
         if (cached != null && cached.body.isNotEmpty() && t - cached.fetchedAt < minInterval) {
             return FetchResult.Cached(ProviderId.OPEN_METEO, parseDaily(cached.body), cached.fetchedAt)
         }

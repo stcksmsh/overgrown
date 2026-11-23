@@ -47,7 +47,7 @@ class MetNorway(
         val key = "met-norway:compact:$at"
         val cached = store.load(key)
         val t = now()
-        cached?.notBefore?.let { if (t < it) return FetchResult.RateLimited(ProviderId.MET_NORWAY, it) }
+        cached?.notBefore?.let { if (t < it) return FetchResult.RateLimited(ProviderId.MET_NORWAY, it, local = true) }
         // Never before Expires; and without an Expires header, not more than once an hour.
         val fresh = cached?.expires ?: cached?.fetchedAt?.plus(1.hours)
         if (cached != null && cached.body.isNotEmpty() && fresh != null && t < fresh) {
@@ -78,7 +78,8 @@ class MetNorway(
             }
             304 -> {
                 val body = cached?.body ?: return FetchResult.Failed(ProviderId.MET_NORWAY, "304 without a cached response")
-                store.save(key, cached.copy(expires = expires ?: cached.expires, consecutiveFailures = 0, notBefore = null))
+                // Without a new Expires, wait an hour rather than reuse a past one.
+                store.save(key, cached.copy(expires = expires ?: (t + 1.hours), consecutiveFailures = 0, notBefore = null))
                 FetchResult.Cached(ProviderId.MET_NORWAY, aggregate(body), cached.fetchedAt)
             }
             429 -> {
