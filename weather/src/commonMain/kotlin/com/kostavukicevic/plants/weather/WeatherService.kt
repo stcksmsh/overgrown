@@ -42,10 +42,16 @@ class WeatherService(
         when (result) {
             is FetchResult.Fresh, is FetchResult.Cached -> { state.setFailures(0); state.setFallback(false) }
             is FetchResult.RateLimited, is FetchResult.Failed -> {
-                val failures = state.failures() + 1
-                state.setFailures(failures)
-                if (failures >= sustained || result is FetchResult.RateLimited) state.setFallback(true)
-                if (foreground) return metNorway.forecast(at, foreground = true).takeIf { it is FetchResult.Fresh || it is FetchResult.Cached } ?: result
+                // Only answers from the server count: waiting out our own back-off sent nothing.
+                val fromServer = !(result is FetchResult.RateLimited && result.local)
+                if (fromServer) {
+                    val failures = if (result is FetchResult.Failed) state.failures() + 1 else state.failures()
+                    state.setFailures(failures)
+                    if (failures >= sustained || result is FetchResult.RateLimited) state.setFallback(true)
+                }
+                if (foreground && state.useFallback()) {
+                    return metNorway.forecast(at, foreground = true).takeIf { it is FetchResult.Fresh || it is FetchResult.Cached } ?: result
+                }
             }
             is FetchResult.NotAllowed -> Unit
         }
