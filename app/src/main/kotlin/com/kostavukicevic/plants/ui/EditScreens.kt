@@ -189,7 +189,7 @@ fun EditPlaceScreen(placeId: Long?, onDone: () -> Unit) {
                 listOf("LOW" to stringResource(R.string.light_low), "MEDIUM" to stringResource(R.string.light_medium), "HIGH" to stringResource(R.string.light_high), "DIRECT" to stringResource(R.string.light_direct)),
                 light,
             ) { light = it }
-            LightCheck { light = it.name }
+            LightCheck(light) { light = it.name }
             SwitchRow(stringResource(R.string.field_dry_air), dryAir) { dryAir = it }
         }
 
@@ -201,7 +201,10 @@ fun EditPlaceScreen(placeId: Long?, onDone: () -> Unit) {
             val entity = (loaded ?: PlaceEntity(name = "", outdoor = outdoor, latitude = la, longitude = lo))
                 .copy(
                     name = name.trim(), outdoor = outdoor, latitude = la, longitude = lo, rainExposure = rain, windExposure = wind,
-                    lightClass = if (outdoor) loaded?.lightClass else light, dryAir = if (outdoor) loaded?.dryAir ?: false else dryAir,
+                    lightClass = if (outdoor) loaded?.lightClass else light,
+                    // The chosen class is authoritative indoors; a stored lux would override it in the engine (D28).
+                    lux = if (outdoor) loaded?.lux else null,
+                    dryAir = if (outdoor) loaded?.dryAir ?: false else dryAir,
                 )
             scope.launch {
                 g.garden.savePlace(entity)
@@ -217,7 +220,7 @@ fun EditPlaceScreen(placeId: Long?, onDone: () -> Unit) {
  * lux reading (D28). Shows nothing on a device without a light sensor.
  */
 @Composable
-private fun LightCheck(onClass: (LightClass) -> Unit) {
+private fun LightCheck(selected: String, onClass: (LightClass) -> Unit) {
     val context = LocalContext.current
     val sensors = remember { context.getSystemService(SensorManager::class.java) }
     val sensor = remember { sensors?.getDefaultSensor(Sensor.TYPE_LIGHT) }
@@ -226,6 +229,8 @@ private fun LightCheck(onClass: (LightClass) -> Unit) {
     var checking by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<LightClass?>(null) }
     var noReading by remember { mutableStateOf(false) }
+    // A class picked by hand after a check makes "Selected above" untrue, so the message goes.
+    LaunchedEffect(selected) { if (result != null && result?.name != selected) result = null }
 
     LaunchedEffect(run) {
         if (run == 0) return@LaunchedEffect
