@@ -171,16 +171,33 @@ class WeatherTest {
     }
 
     @Test
-    fun fallsBackToMetNorwayOnlyInTheForeground() = runTest {
+    fun fallsBackToMetNorwayAfterSustainedFailuresOnlyInTheForeground() = runTest {
         val http = FakeHttp { url, _ -> if ("open-meteo" in url) HttpResponse(500, emptyMap(), "") else ok(metBody) }
         val state = InMemoryFallbackState()
         val service = WeatherService(OpenMeteo(http, InMemoryResponseStore(), { clock }), met(http), state)
 
-        assertIs<FetchResult.Failed>(service.fetch(at, foreground = false))
+        // Three real failures, spaced past the back-off, in the background: never MET Norway.
+        repeat(3) {
+            assertIs<FetchResult.Failed>(service.fetch(at, foreground = false))
+            clock += kotlin.time.Duration.parse("7h")
+        }
         assertTrue(http.calls.none { "api.met.no" in it.first })
+        assertTrue(state.useFallback())
 
         val fg = service.fetch(at, foreground = true)
         assertEquals(ProviderId.MET_NORWAY, assertIs<FetchResult.Fresh>(fg).provider)
+    }
+
+    @Test
+    fun ownBackOffDoesNotCountAsAFailure() = runTest {
+        val http = FakeHttp { url, _ -> if ("open-meteo" in url) HttpResponse(500, emptyMap(), "") else ok(metBody) }
+        val state = InMemoryFallbackState()
+        val service = WeatherService(OpenMeteo(http, InMemoryResponseStore(), { clock }), met(http), state)
+        service.fetch(at, foreground = true) // one real failure
+        repeat(5) { service.fetch(at, foreground = true) } // inside the back-off: no requests, no new failures
+        assertEquals(1, state.failures())
+        assertTrue(!state.useFallback())
+        assertTrue(http.calls.none { "api.met.no" in it.first })
     }
 
     @Test
