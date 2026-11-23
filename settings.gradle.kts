@@ -18,4 +18,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "overgrown"
 
+// The care database's own tools compile its YAML into the asset the app ships (brief section 3).
+includeBuild("overgrown-data/tools")
+
 include(":engine", ":engine-sim", ":weather", ":caredb", ":data", ":app")
