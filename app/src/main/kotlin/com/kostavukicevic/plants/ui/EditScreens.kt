@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.ui
 
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -18,14 +22,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.data.PlaceEntity
 import com.kostavukicevic.plants.data.PlantEntity
+import com.kostavukicevic.plants.engine.LightClass
+import com.kostavukicevic.plants.engine.WaterBalance
 import com.kostavukicevic.plants.weather.PlaceMatch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** A species or profile choice: (speciesSlug, archetypeId) and its label. */
@@ -180,6 +189,7 @@ fun EditPlaceScreen(placeId: Long?, onDone: () -> Unit) {
                 listOf("LOW" to stringResource(R.string.light_low), "MEDIUM" to stringResource(R.string.light_medium), "HIGH" to stringResource(R.string.light_high), "DIRECT" to stringResource(R.string.light_direct)),
                 light,
             ) { light = it }
+            LightCheck { light = it.name }
             SwitchRow(stringResource(R.string.field_dry_air), dryAir) { dryAir = it }
         }
 
@@ -201,3 +211,61 @@ fun EditPlaceScreen(placeId: Long?, onDone: () -> Unit) {
         }) { Text(stringResource(R.string.save)) }
     }
 }
+
+/**
+ * Suggests a light class from the ambient light sensor. Only the class is passed on, never the
+ * lux reading (D28). Shows nothing on a device without a light sensor.
+ */
+@Composable
+private fun LightCheck(onClass: (LightClass) -> Unit) {
+    val context = LocalContext.current
+    val sensors = remember { context.getSystemService(SensorManager::class.java) }
+    val sensor = remember { sensors?.getDefaultSensor(Sensor.TYPE_LIGHT) }
+    if (sensors == null || sensor == null) return
+    var run by remember { mutableIntStateOf(0) }
+    var checking by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<LightClass?>(null) }
+    var noReading by remember { mutableStateOf(false) }
+
+    LaunchedEffect(run) {
+        if (run == 0) return@LaunchedEffect
+        checking = true; noReading = false; result = null
+        val readings = mutableListOf<Float>()
+        // Registered without a handler, so events arrive on the main thread, like this effect.
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) { readings += event.values[0] }
+            override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit
+        }
+        sensors.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+        // Leaving the screen cancels the effect, which unregisters here too.
+        try { delay(LIGHT_CHECK_MS) } finally { sensors.unregisterListener(listener) }
+        checking = false
+        if (readings.isEmpty()) { noReading = true; return@LaunchedEffect }
+        val sorted = readings.sorted()
+        val mid = sorted.size / 2
+        val median = if (sorted.size % 2 == 1) sorted[mid].toDouble() else (sorted[mid - 1] + sorted[mid]) / 2.0
+        val cls = WaterBalance.lightClassOf(median)
+        result = cls
+        onClass(cls)
+    }
+
+    Text(stringResource(R.string.light_check_how), style = MaterialTheme.typography.bodySmall)
+    TextButton(onClick = { run++ }, enabled = !checking) {
+        Text(stringResource(if (checking) R.string.light_checking else R.string.light_check))
+    }
+    result?.let {
+        val label = stringResource(
+            when (it) {
+                LightClass.LOW -> R.string.light_low
+                LightClass.MEDIUM -> R.string.light_medium
+                LightClass.HIGH -> R.string.light_high
+                LightClass.DIRECT -> R.string.light_direct
+            },
+        )
+        Text(stringResource(R.string.light_check_result, label))
+    }
+    if (noReading) Text(stringResource(R.string.light_check_none), color = MaterialTheme.colorScheme.error)
+}
+
+/** Readings fluctuate with hand and cloud movement; the median of about 3 s of them is used. */
+private const val LIGHT_CHECK_MS = 3_000L
