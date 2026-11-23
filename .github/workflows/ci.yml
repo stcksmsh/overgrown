@@ -25,6 +25,10 @@ jobs:
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew build :engine:compileKotlinIosArm64 :engine:compileKotlinIosSimulatorArm64
+      - name: Simulation report is current
+        run: |
+          ./gradlew :engine-sim:simReport
+          git diff --exit-code docs/reports/
 
   reproducible:
     name: Build the release APK twice and compare
