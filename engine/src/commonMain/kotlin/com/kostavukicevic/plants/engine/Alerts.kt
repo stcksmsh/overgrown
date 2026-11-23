@@ -22,7 +22,8 @@ object Alerts {
                 if (day.tMaxC >= C.HEAT_ALERT_MAX_C) add(Alert(AlertType.HEAT, day.date))
                 if (day.precipitationMm >= C.HEAVY_RAIN_ALERT_MM) add(Alert(AlertType.HEAVY_RAIN, day.date))
                 val wind = day.meanWindMs
-                if (wind != null && wind >= C.WIND_ALERT_MEAN_MS) add(Alert(AlertType.WIND, day.date))
+                val windLimit = if (plant.profile.windSensitive) C.WIND_ALERT_SENSITIVE_MEAN_MS else C.WIND_ALERT_MEAN_MS
+                if (wind != null && wind >= windLimit) add(Alert(AlertType.WIND, day.date))
             }
         }
     }

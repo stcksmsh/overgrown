@@ -114,6 +114,15 @@ class RulesTest {
     }
 
     @Test
+    fun windSensitivePlantsAreWarnedEarlier() {
+        val jul = LocalDate(2026, Month.JULY, 24)
+        val breezy = listOf(day(jul, 18.0, 26.0, wind = 7.5))
+        assertTrue(Alerts.forecastAlerts(balconyPlant(), breezy).isEmpty())
+        val sensitive = balconyPlant().copy(profile = conifer.copy(windSensitive = true))
+        assertEquals(listOf(Alert(AlertType.WIND, jul)), Alerts.forecastAlerts(sensitive, breezy))
+    }
+
+    @Test
     fun indoorPlantsGetNoWeatherAlerts() {
         val plant = Plant(conifer, 30.0, Pot(5.0), Place.Indoor(44.8, LightClass.HIGH))
         assertTrue(Alerts.forecastAlerts(plant, listOf(day(june1, -20.0, 40.0, rain = 50.0, wind = 20.0))).isEmpty())

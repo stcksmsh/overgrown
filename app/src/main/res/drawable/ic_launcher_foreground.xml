@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- A water drop over a leaf, inside the adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFDDEFE2"
+        android:pathData="M54,30C54,30 40,46 40,56a14,14 0,0 0,28 0C68,46 54,30 54,30z" />
+    <path android:fillColor="#FF8FD3A0"
+        android:pathData="M36,78C46,64 62,62 74,64C66,74 50,80 36,78z" />
+</vector>

@@ -199,6 +199,9 @@ object Coefficients {
     const val HEAVY_RAIN_ALERT_MM = 20.0
     const val WIND_ALERT_MEAN_MS = 10.0
 
+    /** PRIOR: wind alert threshold for plants whose care data says they need shelter from wind. */
+    const val WIND_ALERT_SENSITIVE_MEAN_MS = 7.0
+
     // ---- Learning -----------------------------------------------------------------------
 
     /** PRIOR: start at K = 1 with standard deviation 0.5 in log units; clamp K to 0.3-3. */
