@@ -404,5 +404,21 @@ class GardenTest {
         assertEquals(LocalDate(2026, 10, 1), next(june, place = southern)[Reminder.FEED])
         // Already due: the day asked about.
         assertEquals(june, next(june)[Reminder.FEED])
+        // An interval that ends after the last feeding month waits for the next season.
+        assertEquals(LocalDate(2027, 4, 1), next(LocalDate(2026, 9, 20), listOf(fed(LocalDate(2026, 9, 20))))[Reminder.FEED])
+    }
+
+    @Test
+    fun theStatusNamesTheNextReminderAfterToday() {
+        val db = CareDb(
+            schemaVersion = CareDb.SUPPORTED_SCHEMA, dataVersion = 1, sourceCommit = "test",
+            archetypes = mapOf("test-archetype" to Archetype(name = "Test", defaults = CareGroups(season = feeding))),
+        )
+        val plant = fern.copy(archetypeId = "test-archetype", acquiredOn = june.plus(DatePeriod(days = -3)).toString())
+        fun status(events: List<EventEntity>) = Planner.status(plant, indoor("MEDIUM"), events, emptyList(), emptyList(), db, june)
+        // Due today and, unless fed, again tomorrow.
+        assertEquals(june.plus(DatePeriod(days = 1)), status(emptyList()).nextReminder)
+        assertEquals(june.plus(DatePeriod(days = 14)), status(listOf(fed(june))).nextReminder)
+        assertNull(Planner.status(plant, indoor("MEDIUM"), emptyList(), emptyList(), emptyList(), null, june).nextReminder)
     }
 }
