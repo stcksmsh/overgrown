@@ -5,8 +5,14 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.room.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.kostavukicevic.plants.caredb.CareDb
+import com.kostavukicevic.plants.caredb.CareGroups
+import com.kostavukicevic.plants.caredb.Species
+import com.kostavukicevic.plants.caredb.Taxon
+import com.kostavukicevic.plants.caredb.Toxicity
+import com.kostavukicevic.plants.caredb.Water
 import com.kostavukicevic.plants.engine.Action
 import com.kostavukicevic.plants.engine.Place
+import com.kostavukicevic.plants.engine.WaterStrategy
 import com.kostavukicevic.plants.weather.HttpResponse
 import com.kostavukicevic.plants.weather.HttpTransport
 import com.kostavukicevic.plants.weather.InMemoryResponseStore
@@ -100,6 +106,28 @@ class GardenTest {
         val high = depletion(indoor("HIGH"))
         assertTrue(high > low && high < 1.0, "low $low, high $high")
         assertTrue(depletion(indoor("MEDIUM", dryAir = true)) > depletion(indoor("MEDIUM")))
+    }
+
+    @Test
+    fun anIndoorPlaceUsesTheSpeciesIndoorCare() {
+        // Test fixture, not care data: only the per-context blocks differ.
+        val db = CareDb(
+            schemaVersion = CareDb.SUPPORTED_SCHEMA, dataVersion = 1, sourceCommit = "test",
+            species = mapOf(
+                "test-species" to Species(
+                    archetype = "test", taxon = Taxon(acceptedName = "Testus testus", rank = "species"),
+                    outdoorContainer = CareGroups(water = Water(waterStrategy = "evenly_moist")),
+                    indoor = CareGroups(water = Water(waterStrategy = "dry_out_fully")),
+                    toxicity = Toxicity(),
+                ),
+            ),
+        )
+        val plant = fern.copy(speciesSlug = "test-species")
+        val inside = Planner.status(plant, indoor("MEDIUM"), emptyList(), emptyList(), emptyList(), db, today)
+        assertEquals(CareSource.SPECIES, inside.careSource)
+        assertEquals(WaterStrategy.DRY_OUT_FULLY, inside.engine.profile.waterStrategy)
+        val outside = Planner.status(plant, indoor("MEDIUM").copy(outdoor = true), emptyList(), emptyList(), emptyList(), db, today)
+        assertEquals(WaterStrategy.EVENLY_MOIST, outside.engine.profile.waterStrategy)
     }
 
     @Test

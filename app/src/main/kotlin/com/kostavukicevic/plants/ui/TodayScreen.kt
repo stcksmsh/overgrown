@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -46,6 +47,7 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onSettings: () -> Un
     val c = LocalContext.current
     val tick = changeTick()
     val statuses by produceState<List<PlantStatus>?>(null, tick) { value = g.garden.statuses() }
+    val places by g.garden.places.collectAsState(null)
     val lastFetch by produceState<Pair<Long, String?>?>(null, tick) {
         value = statuses?.filter { it.place.outdoor }?.map { it.place.id }?.distinct()?.mapNotNull { g.garden.lastFetchOnce(it) }?.maxOrNull()?.let { it to g.garden.lastProvider() }
     }
@@ -73,8 +75,8 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onSettings: () -> Un
         }
 
         // Forecast age and the provider's credit, next to the weather it describes (Open-Meteo licence).
-        // Indoor plants use no weather, so a garden of only indoor plants shows none of this.
-        val indoorOnly = statuses?.let { it.isNotEmpty() && it.none { s -> s.place.outdoor } } == true
+        // Indoor places use no weather, so a garden of only indoor places shows none of this.
+        val indoorOnly = places?.let { it.isNotEmpty() && it.none { p -> p.outdoor } } == true
         val fetched = lastFetch
         if (!indoorOnly && fetched == null) {
             Text(stringResource(R.string.forecast_never), style = MaterialTheme.typography.bodySmall)
