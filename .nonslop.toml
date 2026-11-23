@@ -1,0 +1,40 @@
+# Overgrown wiring. Commands from .github/workflows/ci.yml.
+
+[commands]
+# CI job "check".
+test = "./gradlew build :engine:compileKotlinIosArm64 :engine:compileKotlinIosSimulatorArm64"
+# CI step "Simulation report is current": regenerate, then the diff of docs/reports/ must be empty.
+simreport = "./gradlew :engine-sim:simReport"
+lint = ""
+clean = "./gradlew clean"
+
+[slop]
+
+[done]
+branch_prefix = "claude/"
+require = ["clean_tree", "pushed", "pr"]
+# CI runs build, tests, licence check, iOS compile, report check and the double build on every pull request.
+run = []
+gate_timeout_s = 1800
+auto_clean = false
+min_free_gb = 0
+stop_retries = 2
+
+[state]
+file = "docs/STATE.md"
+
+[env]
+scratch = ".claude/tmp"
+
+[rules]
+notes = [
+  "The brief is the spec. Record every decision with its reason in docs/DECISIONS.md.",
+  "No dates, deadlines or time estimates in plans, issues or commit messages.",
+  ":engine is Kotlin Multiplatform commonMain only: no java.*, no Android types, permissive licences only.",
+  "Every model constant lives in engine Coefficients.kt, labelled FACT or PRIOR with its source.",
+  "No Google Play Services, Firebase, analytics or crash SDKs. Dependencies only from Google Maven and Maven Central.",
+  "Care data: a field without a verifiable quoted source is null. Never fill care data, names or ids from memory.",
+  "Never fetch or copy from rhs.org.uk, aspca.org, missouribotanicalgarden.org, perenual.com, ahdb.org.uk, or any commercial plant app.",
+  "Ask the owner before: making a repo public, releasing, publishing, posting, emailing, accepting terms, creating accounts, spending, changing a licence, departing from the brief.",
+  "Set PR bodies with `gh api -X PATCH repos/<owner>/<repo>/pulls/<n>`; `gh pr edit` fails on this machine.",
+]
