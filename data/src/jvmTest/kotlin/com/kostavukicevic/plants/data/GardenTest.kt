@@ -4,6 +4,7 @@ package com.kostavukicevic.plants.data
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.room.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import com.kostavukicevic.plants.caredb.Archetype
 import com.kostavukicevic.plants.caredb.CareDb
 import com.kostavukicevic.plants.caredb.CareGroups
 import com.kostavukicevic.plants.caredb.Season
@@ -306,6 +307,8 @@ class GardenTest {
         assertEquals(listOf(Reminder.FEED), remindersOn(LocalDate(2026, 12, 15), place = southern))
         assertEquals(listOf(Reminder.FEED), remindersOn(LocalDate(2026, 3, 15), place = southern))
         assertEquals(emptyList(), remindersOn(LocalDate(2026, 4, 15), place = southern))
+        // The equator itself counts as north.
+        assertEquals(listOf(Reminder.FEED), remindersOn(june, place = southern.copy(latitude = 0.0)))
     }
 
     @Test
@@ -375,5 +378,31 @@ class GardenTest {
         b.importJson(exported)
         assertEquals(listOf("FED"), dbs.last().dao().events(plantId).map { it.type })
         assertEquals(exported, b.exportJson("x"))
+    }
+
+    @Test
+    fun theArchetypeGivesTheSeasonWhenThereIsNoSpecies() {
+        val db = CareDb(
+            schemaVersion = CareDb.SUPPORTED_SCHEMA, dataVersion = 1, sourceCommit = "test",
+            archetypes = mapOf("test-archetype" to Archetype(name = "Test", defaults = CareGroups(season = feeding))),
+        )
+        val plant = fern.copy(archetypeId = "test-archetype")
+        assertEquals(feeding, Planner.season(plant, indoor("MEDIUM"), db))
+        assertEquals(listOf(Reminder.FEED), Planner.status(plant, indoor("MEDIUM"), emptyList(), emptyList(), emptyList(), db, june).reminders)
+    }
+
+    @Test
+    fun theNextReminderDateIsKnownAhead() {
+        val season = feeding.copy(repotIntervalMonths = 24)
+        val plant = fern.copy(acquiredOn = "2025-01-10")
+        fun next(from: LocalDate, events: List<EventEntity> = emptyList(), place: PlaceEntity = indoor("MEDIUM")) =
+            Planner.reminderDates(plant, place, events, season, from)
+        // Fed on 15 June: next feed two weeks later; repot two years after acquiring.
+        assertEquals(mapOf(Reminder.FEED to LocalDate(2026, 6, 29), Reminder.REPOT to LocalDate(2027, 1, 10)), next(june, listOf(fed(june))))
+        // Outside the feeding months the next feed is the first day of the next feeding month.
+        assertEquals(LocalDate(2027, 4, 1), next(LocalDate(2026, 10, 3))[Reminder.FEED])
+        assertEquals(LocalDate(2026, 10, 1), next(june, place = southern)[Reminder.FEED])
+        // Already due: the day asked about.
+        assertEquals(june, next(june)[Reminder.FEED])
     }
 }

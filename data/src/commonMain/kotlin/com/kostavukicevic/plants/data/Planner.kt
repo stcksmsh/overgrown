@@ -51,6 +51,8 @@ data class PlantStatus(
     val careSource: CareSource,
     /** Feeding and repotting due today, from the care data's season fields. */
     val reminders: List<Reminder> = emptyList(),
+    /** The first day after today a reminder is due, if nothing more is logged. */
+    val nextReminder: LocalDate? = null,
 )
 
 enum class CareSource { SPECIES, ARCHETYPE, GENERIC }
@@ -94,18 +96,25 @@ object Planner {
      * passed since the last repot, else since the plant was acquired. A missing field means no
      * reminder of that kind.
      */
-    fun reminders(plant: PlantEntity, place: PlaceEntity, events: List<EventEntity>, season: Season?, today: LocalDate): List<Reminder> {
-        val out = ArrayList<Reminder>()
+    fun reminders(plant: PlantEntity, place: PlaceEntity, events: List<EventEntity>, season: Season?, today: LocalDate): List<Reminder> =
+        reminderDates(plant, place, events, season, today).filterValues { it == today }.keys.toList()
+
+    /** The first day on or after [from] each reminder is due, if nothing more is logged. */
+    fun reminderDates(plant: PlantEntity, place: PlaceEntity, events: List<EventEntity>, season: Season?, from: LocalDate): Map<Reminder, LocalDate> {
+        val out = LinkedHashMap<Reminder, LocalDate>()
         val months = season?.feedingMonthsNorthernHemisphere
         val weeks = season?.feedingIntervalWeeks
         if (months != null && weeks != null) {
-            val local = if (place.latitude < 0) months.map { (it + 5) % 12 + 1 } else months
+            val local = (if (place.latitude < 0) months.map { (it + 5) % 12 + 1 } else months).toSet()
             val lastFed = events.filter { it.type == "FED" }.maxOfOrNull { LocalDate.parse(it.date) }
-            if (today.month.number in local && (lastFed == null || lastFed.plus(DatePeriod(days = weeks * 7)) <= today)) out += Reminder.FEED
+            var d = maxOf(from, lastFed?.plus(DatePeriod(days = weeks * 7)) ?: from)
+            // Within a year the date reaches a feeding month, if there is one.
+            repeat(12) { if (d.month.number !in local) d = LocalDate(d.year, d.month, 1).plus(DatePeriod(months = 1)) }
+            if (d.month.number in local) out[Reminder.FEED] = d
         }
         season?.repotIntervalMonths?.let { interval ->
             val since = LocalDate.parse(plant.lastRepotOn ?: plant.acquiredOn)
-            if (since.plus(DatePeriod(months = interval)) <= today) out += Reminder.REPOT
+            out[Reminder.REPOT] = maxOf(from, since.plus(DatePeriod(months = interval)))
         }
         return out
     }
@@ -171,6 +180,7 @@ object Planner {
         today: LocalDate,
     ): PlantStatus {
         val (profile, source) = profile(plant, place, db)
+        val season = season(plant, place, db)
         val enginePlant = enginePlant(plant, place, profile)
         val start = minOf(LocalDate.parse(plant.acquiredOn), today)
         val end = today.plus(DatePeriod(days = FORECAST_DAYS - 1))
@@ -221,7 +231,8 @@ object Planner {
             today = todayAction, alerts = rec?.alerts ?: emptyList(), nextPrompt = next, snoozedUntil = snoozedUntil,
             gapDays = series.count { it.date < today && it.quality == WeatherQuality.CLIMATOLOGY_FILL },
             careSource = source,
-            reminders = reminders(plant, place, events, season(plant, place, db), today),
+            reminders = reminders(plant, place, events, season, today),
+            nextReminder = reminderDates(plant, place, events, season, today.plus(DatePeriod(days = 1))).values.minOrNull(),
         )
     }
 }
