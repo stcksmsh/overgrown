@@ -62,7 +62,8 @@ sealed interface FetchResult {
     /** Nothing new: served from cache without a request, or the server answered 304. */
     data class Cached(val provider: ProviderId, val days: List<DailyWeather>, val fetchedAt: Instant) : FetchResult
 
-    data class RateLimited(val provider: ProviderId, val retryAfter: Instant) : FetchResult
+    /** @param local true when the client is waiting out its own back-off and sent nothing. */
+    data class RateLimited(val provider: ProviderId, val retryAfter: Instant, val local: Boolean = false) : FetchResult
     data class Failed(val provider: ProviderId, val reason: String) : FetchResult
 
     /** The provider may not be asked now (MET Norway outside the foreground). No request was made. */
