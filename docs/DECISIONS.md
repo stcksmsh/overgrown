@@ -124,3 +124,35 @@ Measured (simulation harness, stress days per plant-year, outdoor, engine with p
 | Edinburgh | 15.2 | 18.7 | 39.8 |
 
 Waterings of still-wet soil fell (Belgrade 0.6 to 0.3 a year). Stress days rose because the simulated person's answers are noisy and biased, and "too wet", which the brief says to act on at once, now moves K further. That is a real trade-off for the owner to weigh; G5's kitchen-scale data is the way to settle it. Reverting is a one-function change in `Learning.kt`.
+
+## D19. G3 storage: replay, not stored state
+
+Nothing the engine derives is stored. Each plant's state is replayed from its first day over the stored daily weather and its events. The engine is deterministic and a few years of days take milliseconds, so this costs nothing. It means an engine change, an import or a corrected event always gives a consistent result, and there is no state to migrate. Each day's last stored forecast is that day's pseudo-observation (brief section 7); gaps are filled from five-year monthly means from the Open-Meteo archive, fetched once per place in the foreground.
+
+## D20. HTTP without a library
+
+`:weather` defines a one-method `HttpTransport`; the app implements it with the platform's `HttpURLConnection`. All network rules live in shared code and are tested with a fake transport, and no HTTP library is added.
+
+## D21. Notifications through WorkManager, no exact alarms
+
+Prompts and alerts are planned ahead from the cached forecast at every fetch and every change, as WorkManager one-time jobs with a delay. No exact-alarm permission. WorkManager restores its jobs after a reboot, which covers "reschedule on boot". Each job re-checks that its prompt is still due when it fires. Times (PRIOR): prompts at 09:00; winter soil checks (November-March) at 12:00, the brief's midday window; weather alerts at 18:00 the evening before, so there is time to move or wrap a pot; each alert once per plant, type and day. If the newest forecast is 3 days old, one notification asks the person to open the app, where MET Norway may be used.
+
+## D22. "Watered" from a notification
+
+A notification cannot ask whether water ran out of the bottom. The dose shown already includes extra to run through a drained pot, so "Watered" from a notification records `ran out = yes` when the pot has drainage holes and `no` when it has none. In the app, the question is asked.
+
+## D23. Weather fetch limits
+
+Open-Meteo is asked at most once an hour per place, in any state; in the background once a day, at this install's own minute of the day (from a random number drawn once and kept). After 3 consecutive Open-Meteo failures, or any rate limit, the app falls back to MET Norway, only in the foreground, and probes Open-Meteo again before each MET request. MET Norway backs off 10 minutes, doubling to 6 hours, on errors; it honours `Retry-After` on 429, and waits 24 hours after a 403, which it reports as a bug.
+
+## D24. Before the care entry is reviewed
+
+The compiled asset holds only reviewed entries, and none is reviewed yet. Until then the app offers "General defaults (no care data)", the engine's own defaults (dry top part, no winter rules). As soon as an entry is reviewed and the submodule re-pinned, the species and its profile appear in the picker.
+
+## D25. Pot watering point for Chamaecyparis lawsoniana
+
+The owner did not choose between 50 % and 40 %. Kept at the archetype's 50 % (the brief's PRIOR for a conifer in a pot); the kitchen-scale log decides.
+
+## D26. Place entry
+
+Places are found by city name through Open-Meteo's geocoding API (CC BY 4.0, foreground, on the person's request), or by typing coordinates. No location permission is requested in G3. Only outdoor places are offered until G4 adds indoor ones.

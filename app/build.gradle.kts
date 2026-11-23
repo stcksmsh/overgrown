@@ -75,6 +75,9 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
+    implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.work.runtime.ktx)
+    implementation(libs.kotlinx.coroutines.core)
 }
 
 // ---- Care database asset ---------------------------------------------------------------
@@ -84,7 +87,7 @@ dependencies {
 val careTool: Configuration by configurations.creating
 
 dependencies {
-    careTool("overgrown.data:overgrown-data-tools")
+    careTool(libs.overgrown.data.tools)
 }
 
 abstract class CompileCareAsset @Inject constructor(private val exec: ExecOperations) : DefaultTask() {

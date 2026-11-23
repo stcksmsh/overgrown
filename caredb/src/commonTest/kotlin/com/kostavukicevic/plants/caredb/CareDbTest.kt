@@ -34,9 +34,11 @@ class CareDbTest {
               "engine" : { "basis" : "archetype_default", "dry_fraction" : 0.5, "drought_asymmetry" : "in_heat", "root_freeze_alerts" : true, "water_use_factor" : 1.0, "winter_rules" : true },
               "sources" : { "water" : [ "https://plantsservices.sc.egov.usda.gov/api/PlantCharacteristics/15030" ] },
               "taxon" : { "accepted_name" : "Chamaecyparis lawsoniana", "gbif_key" : 2683866, "rank" : "species", "wfo_id" : "wfo-0000599456" },
-              "temperature" : { "frost_class" : "very_hardy", "min_temp_c" : -24.4, "root_kill_temp_c" : null },
+              "temperature" : { "frost_class" : "hardy", "root_kill_temp_c" : null },
               "toxicity" : { "cats" : "unknown", "dogs" : "unknown", "horses" : "unknown", "humans" : "unknown" },
-              "water" : { "water_strategy" : "dry_top_part", "waterlogging_sensitive" : true }
+              "water" : { "water_strategy" : "dry_top_part", "waterlogging_sensitive" : true },
+              "site" : { "wind_sensitive" : true },
+              "in_ground" : { "temperature" : { "frost_class" : "very_hardy", "min_temp_c" : -24.4 }, "water" : { "water_strategy" : "evenly_moist" } }
             }
           }
         }
@@ -55,6 +57,16 @@ class CareDbTest {
         assertEquals(true, p.waterloggingSensitive)
         assertEquals(true, p.winterRules)
         assertEquals(true, p.rootFreezeAlerts)
+    }
+
+    @Test
+    fun contextBlocksApplyOnlyInTheirContext() {
+        val s = CareDb.parse(asset).species("chamaecyparis-lawsoniana")!!
+        assertEquals(true, s.groups.toProfile().windSensitive)
+        assertEquals(WaterStrategy.DRY_TOP_PART, s.groupsFor(Context.OUTDOOR_CONTAINER).toProfile().waterStrategy)
+        assertEquals(WaterStrategy.EVENLY_MOIST, s.groupsFor(Context.IN_GROUND).toProfile().waterStrategy)
+        assertEquals(-24.4, s.groupsFor(Context.IN_GROUND).temperature?.minTempC)
+        assertNull(s.groupsFor(Context.OUTDOOR_CONTAINER).temperature?.minTempC)
     }
 
     @Test

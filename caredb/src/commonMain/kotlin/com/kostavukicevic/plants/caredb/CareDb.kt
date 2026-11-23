@@ -49,13 +49,37 @@ data class Species(
     val water: Water? = null,
     val temperature: Temperature? = null,
     val season: Season? = null,
+    val site: Site? = null,
     val engine: EngineFields? = null,
+    /** Values that hold only for plants in the ground, in a pot outdoors, or indoors. */
+    @SerialName("in_ground") val inGround: CareGroups? = null,
+    @SerialName("outdoor_container") val outdoorContainer: CareGroups? = null,
+    val indoor: CareGroups? = null,
     val toxicity: Toxicity,
     /** Source URLs per group, for the "where does this come from" view and wrong-data reports. */
     val sources: Map<String, List<String>> = emptyMap(),
 ) {
-    val groups: CareGroups get() = CareGroups(light, water, temperature, season, engine)
+    val groups: CareGroups get() = CareGroups(light, water, temperature, season, site, engine)
+
+    /** Care values for one growing context: the context's block over the values that hold everywhere. */
+    fun groupsFor(context: Context): CareGroups {
+        val block = when (context) {
+            Context.IN_GROUND -> inGround
+            Context.OUTDOOR_CONTAINER -> outdoorContainer
+            Context.INDOOR -> indoor
+        } ?: return groups
+        return CareGroups(
+            light = block.light ?: light,
+            water = block.water ?: water,
+            temperature = block.temperature ?: temperature,
+            season = block.season ?: season,
+            site = block.site ?: site,
+            engine = block.engine ?: engine,
+        )
+    }
 }
+
+enum class Context { IN_GROUND, OUTDOOR_CONTAINER, INDOOR }
 
 @Serializable
 data class CareGroups(
@@ -63,8 +87,12 @@ data class CareGroups(
     val water: Water? = null,
     val temperature: Temperature? = null,
     val season: Season? = null,
+    val site: Site? = null,
     val engine: EngineFields? = null,
 )
+
+@Serializable
+data class Site(@SerialName("wind_sensitive") val windSensitive: Boolean? = null)
 
 @Serializable
 data class Taxon(
@@ -164,5 +192,6 @@ fun CareGroups.toProfile(): CareProfile {
         waterloggingSensitive = water?.waterloggingSensitive ?: false,
         winterRules = engine?.winterRules ?: false,
         rootFreezeAlerts = engine?.rootFreezeAlerts ?: false,
+        windSensitive = site?.windSensitive ?: false,
     )
 }

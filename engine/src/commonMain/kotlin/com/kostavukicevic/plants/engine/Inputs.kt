@@ -73,6 +73,8 @@ data class CareProfile(
     val winterRules: Boolean = false,
     /** Root-freeze alerts apply (potted woody plants left outside). */
     val rootFreezeAlerts: Boolean = false,
+    /** Needs shelter from wind: wind alerts come earlier. */
+    val windSensitive: Boolean = false,
 )
 
 data class Plant(

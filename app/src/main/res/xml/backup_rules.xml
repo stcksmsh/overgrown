@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- Auto Backup on Android 8 to 11. Same rules as data_extraction_rules.xml. -->
+<full-backup-content>
+    <exclude domain="file" path="caredb" />
+    <exclude domain="file" path="photos" />
+</full-backup-content>
