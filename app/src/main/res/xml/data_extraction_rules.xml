@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- Auto Backup: back up the person's data; never the bundled care asset or photos. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="caredb" />
+        <exclude domain="file" path="photos" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="caredb" />
+        <exclude domain="file" path="photos" />
+    </device-transfer>
+</data-extraction-rules>

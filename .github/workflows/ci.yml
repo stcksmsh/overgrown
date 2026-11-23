@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: GPL-3.0-only
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Build, tests, licences, iOS compile of :engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - run: ./gradlew build :engine:compileKotlinIosArm64 :engine:compileKotlinIosSimulatorArm64
+
+  reproducible:
+    name: Build the release APK twice and compare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: first
+          submodules: true
+      - uses: actions/checkout@v7
+        with:
+          path: second-build-in-another-dir
+          submodules: true
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      # No Gradle build cache: each build must produce the APK from scratch.
+      - name: First build
+        working-directory: first
+        run: ./gradlew --no-daemon --no-build-cache :app:assembleFossRelease
+      - name: Second build
+        working-directory: second-build-in-another-dir
+        run: ./gradlew --no-daemon --no-build-cache :app:assembleFossRelease
+      - name: Compare
+        run: >-
+          cmp
+          first/app/build/outputs/apk/foss/release/app-foss-release-unsigned.apk
+          second-build-in-another-dir/app/build/outputs/apk/foss/release/app-foss-release-unsigned.apk
