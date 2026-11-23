@@ -107,7 +107,7 @@ class Baseline(private val summerIntervalDays: (Plant) -> Double) : WateringMode
         }
         val fast = moisture == Moisture.TOO_WET && !plant.pot.drainageHoles
         val predicted = predictedDepletion(plant, state, date)
-        return state.copy(belief = Learning.update(state.belief, predicted, moisture, drySideFast, fast))
+        return state.copy(belief = Learning.update(state.belief, predicted, moisture, drySideFast, fast).belief)
     }
 
     override fun recommend(plant: Plant, state: BaselineState, upcoming: List<WeatherDay>): Recommendation {

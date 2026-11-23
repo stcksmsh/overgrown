@@ -22,14 +22,14 @@ Per plant per year unless stated, averaged over plants.
 
 | Scenario | Model | Stress days | Over-wet days | Wet waterings | Prompts | Still wet | Dry-out error, days | Dry-out error, rel. | Answers to accurate | Never accurate | Use error | Repot prompts |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| belgrade, outdoor | engine, provider ET0 | 14.6 | 0.2 | 0.6 | 61.9 | 28 % | 1.0 | 9 % | 8.0 | 0 % | 27 % | 0.2 |
-| belgrade, outdoor | engine, Hargreaves only | 19.2 | 0.3 | 0.9 | 62.2 | 28 % | 1.0 | 17 % | 8.0 | 0 % | 36 % | 0.1 |
-| belgrade, outdoor | baseline | 47.5 | 6.5 | 7.6 | 53.1 | 13 % | 2.0 | 50 % | 6.0 | 10 % | 64 % | 0.0 |
-| belgrade, indoor | engine, provider ET0 | 40.9 | 2.2 | 0.7 | 85.0 | 17 % | 1.0 | 8 % | 9.0 | 7 % | 30 % | 8.2 |
-| belgrade, indoor | baseline | 109.9 | 2.0 | 6.1 | 76.4 | 9 % | 1.0 | 25 % | 5.0 | 27 % | 39 % | 0.0 |
-| seville, outdoor | engine, provider ET0 | 16.8 | 0.3 | 0.5 | 80.0 | 29 % | 1.0 | 20 % | 12.0 | 0 % | 26 % | 0.0 |
-| seville, outdoor | engine, Hargreaves only | 19.1 | 0.2 | 0.6 | 79.9 | 29 % | 1.0 | 22 % | 9.5 | 0 % | 29 % | 0.0 |
-| seville, outdoor | baseline | 37.8 | 5.6 | 10.7 | 78.1 | 15 % | 1.0 | 37 % | 4.5 | 0 % | 45 % | 0.0 |
-| edinburgh, outdoor | engine, provider ET0 | 15.2 | 0.3 | 0.3 | 42.1 | 35 % | 1.0 | 17 % | 9.0 | 3 % | 26 % | 0.0 |
-| edinburgh, outdoor | engine, Hargreaves only | 26.8 | 0.4 | 0.8 | 40.6 | 34 % | 1.0 | 25 % | 8.0 | 3 % | 42 % | 0.0 |
-| edinburgh, outdoor | baseline | 32.9 | 6.6 | 4.3 | 33.6 | 13 % | 3.0 | 50 % | 5.0 | 20 % | 53 % | 0.0 |
+| belgrade, outdoor | engine, provider ET0 | 18.2 | 0.1 | 0.3 | 62.8 | 30 % | 1.0 | 11 % | 10.0 | 0 % | 27 % | 0.3 |
+| belgrade, outdoor | engine, Hargreaves only | 22.2 | 0.2 | 0.6 | 62.3 | 29 % | 1.0 | 17 % | 9.0 | 0 % | 36 % | 0.2 |
+| belgrade, outdoor | baseline | 50.4 | 6.2 | 7.2 | 52.7 | 12 % | 2.0 | 50 % | 6.0 | 10 % | 65 % | 0.0 |
+| belgrade, indoor | engine, provider ET0 | 38.6 | 1.8 | 0.7 | 86.8 | 18 % | 1.0 | 7 % | 8.0 | 7 % | 29 % | 11.4 |
+| belgrade, indoor | baseline | 103.6 | 2.1 | 5.3 | 80.2 | 9 % | 1.0 | 25 % | 4.0 | 20 % | 36 % | 0.0 |
+| seville, outdoor | engine, provider ET0 | 22.9 | 0.0 | 0.3 | 80.3 | 31 % | 1.0 | 25 % | 11.0 | 0 % | 27 % | 0.0 |
+| seville, outdoor | engine, Hargreaves only | 25.5 | 0.1 | 0.5 | 80.6 | 31 % | 1.0 | 25 % | 12.5 | 0 % | 30 % | 0.0 |
+| seville, outdoor | baseline | 39.7 | 5.1 | 10.6 | 78.6 | 15 % | 1.0 | 38 % | 5.0 | 0 % | 45 % | 0.0 |
+| edinburgh, outdoor | engine, provider ET0 | 18.7 | 0.2 | 0.3 | 42.8 | 36 % | 1.0 | 20 % | 13.0 | 10 % | 29 % | 0.0 |
+| edinburgh, outdoor | engine, Hargreaves only | 31.3 | 0.3 | 0.6 | 40.8 | 35 % | 1.0 | 25 % | 11.0 | 7 % | 44 % | 0.0 |
+| edinburgh, outdoor | baseline | 39.8 | 5.4 | 3.3 | 32.2 | 13 % | 3.0 | 50 % | 5.5 | 13 % | 53 % | 0.0 |

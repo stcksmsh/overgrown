@@ -74,20 +74,17 @@ All in `Coefficients.kt` with their reasons:
 
 ## D14. Learning: how three of the brief's rules are read
 
-1. **"If the predicted depletion lies inside the reported band, do not update."** K is not moved, but the variance shrinks as for an observation with zero error. Without this the engine never becomes confident and keeps asking: in the first harness run it prompted twice as often as the baseline and 57 % of answers were "still wet".
-2. **"Increase variance after a surprising answer."** Surprising means any disagreement while the engine is confident, or a disagreement larger than two standard deviations at any time. Without the first test, agreeing answers shrink the variance until real errors can no longer move K, and the engine kept disagreeing with the person indefinitely.
-3. **"Require two consistent answers before increasing water."** Two answers asking for the same direction of change. An agreeing answer in between does not cancel a pending one; an opposite one does.
+1. **"If the predicted depletion lies inside the reported band, do not update."** K is not moved, but the variance shrinks, no further than the band's width allows (see D18). Without the shrink the engine never becomes confident and keeps asking: in the first harness run it prompted twice as often as the baseline and 57 % of answers were "still wet".
+2. **"Increase variance after a surprising answer."** Surprising means any disagreement while the engine is confident, or a disagreement larger than two standard deviations at any time. Without the first test, agreeing answers shrink the variance until real errors can no longer move K.
+3. **"Require two consistent answers before increasing water."** Two answers asking for the same direction of change. An agreeing answer in between does not cancel a pending one; an opposite one does. While K waits, the bucket is still set to what the person reported.
 
 Process noise was lowered from 0.0005 to 0.0001 per day: at 0.0005 a year without answers returns the standard deviation almost to its starting value.
 
-## D15. Limits of learning from four answer bands (for the owner)
+## D15. Limits of learning from four answer bands
 
-Found by the property tests, not designed in:
-- **Dead zones.** Updates move log K only to the nearest band edge, and not at all when the answer agrees. Where the truth and the prediction share a band at the prompt, K stops. For dry fractions in the middle of the "ok" band (0.4-0.6), K can stay off by up to about a factor of two while every answer agrees. Near a band edge, corrections shrink towards zero. The plant is not harmed (harmful answers stop within 21 answers in 1000 random plants), but K is not exact.
-- **Wet-feet plants cannot learn from answers.** They are prompted at depletion 0.3, the edge between "too wet" and "ok", so no answer disagrees with the prediction.
-- The kitchen-scale calibration is what pins K down further.
+Found by the property tests. With the brief's rule (move log K to the nearest band edge), corrections shrank towards zero near band edges, K could stay off by up to about a factor of two, and wet-feet plants (prompted at 0.3, the edge between "too wet" and "ok") could not learn at all. The owner was asked and allowed a change to the plan: see D18.
 
-Possible changes, none made because each departs from the brief: update towards the middle of the reported band instead of its edge; a fifth answer band, or a finer scale for wet-feet plants; occasional check-ins at a deliberately chosen depletion where answers are informative.
+What remains after D18: an answer that agrees does not move K, so where truth and prediction share a band at the prompt, K can still stay up to about a factor of two off (in 1000 random plants: median final error 7 %, 90th percentile a factor of 1.6, worst a factor of 2). Wet-feet plants learn from "too wet" and "dry" answers but not from "ok". The kitchen scale is what pins K down further.
 
 ## D16. Simulation harness design
 
@@ -100,3 +97,30 @@ Possible changes, none made because each departs from the brief: update towards 
 ## D17. Feeding and repotting reminders are not in G1
 
 They are rule-based reminders that need the care database's feeding months, so they come with G2/G3 instead of the engine gate.
+
+## D18. Learning update: interval likelihood instead of nearest band edge (departs from brief 5.7, approved by the owner)
+
+The owner allowed a change to the brief's learning rule when the dead zones in D15 were reported.
+
+A disagreeing answer is now treated as what it says: the true depletion lies somewhere in the band. If the engine predicted depletion d, the true depletion is about d x exp(delta), where delta is the error in log K, so the answer bounds delta to [ln(low/d), ln(high/d)], blurred by the person's error (observation noise 0.5). The normal belief about delta is multiplied by that likelihood and summarised again by its mean and variance (moment matching, by quadrature on 801 points; deterministic and `commonMain`-only). "Bone dry" is open above, because an empty pot hides how long it has been empty.
+
+An agreeing answer keeps K where it is (the brief's rule) and shrinks the variance only as far as the same likelihood allows. Moving K towards the band's middle on agreeing answers was tried and rejected: K crept until the plant was reported too wet, again and again.
+
+Everything else is kept: the asymmetry and the two-answer rule, the surprise rule, the clamps, "watered" without an answer never changing K.
+
+Measured (property test, 1000 random plants mis-specified by a factor of two):
+
+| | Nearest band edge (brief) | Interval likelihood (now) |
+|---|---|---|
+| Harmful answers stop by | answer 21 | answer 9 |
+| Wet-feet plants learn | no | partly |
+
+Measured (simulation harness, stress days per plant-year, outdoor, engine with provider ET0):
+
+| | Nearest band edge | Interval likelihood | Baseline |
+|---|---:|---:|---:|
+| Belgrade | 14.6 | 18.2 | 50.4 |
+| Seville | 16.8 | 22.9 | 39.7 |
+| Edinburgh | 15.2 | 18.7 | 39.8 |
+
+Waterings of still-wet soil fell (Belgrade 0.6 to 0.3 a year). Stress days rose because the simulated person's answers are noisy and biased, and "too wet", which the brief says to act on at once, now moves K further. That is a real trade-off for the owner to weigh; G5's kitchen-scale data is the way to settle it. Reverting is a one-function change in `Learning.kt`.

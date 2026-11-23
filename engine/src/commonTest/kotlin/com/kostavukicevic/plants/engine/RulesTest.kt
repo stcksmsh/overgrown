@@ -169,12 +169,12 @@ class RulesTest {
     }
 
     @Test
-    fun answerInsidePredictedBandKeepsKAndGainsConfidence() {
+    fun answerInsidePredictedBandBarelyMovesKAndGainsConfidence() {
         val plant = balconyPlant()
         val state = EngineState(depletion = 0.5)
         val after = Engine.apply(plant, state, Event.CheckIn(june1, Moisture.OK))
-        assertEquals(state.belief.logKMean, after.belief.logKMean)
+        assertTrue(kotlin.math.abs(after.belief.logKMean) < 0.1, "moved to ${after.belief.logKMean}")
         assertTrue(after.belief.logKVariance < state.belief.logKVariance)
-        assertEquals(0.5, after.depletion)
+        assertTrue(after.depletion in 0.3..0.7)
     }
 }

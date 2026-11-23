@@ -74,11 +74,8 @@ object Engine : WateringModel<EngineState> {
             DroughtAsymmetry.IN_HEAT -> inHeat(state)
         }
         val fast = moisture == Moisture.TOO_WET && !plant.pot.drainageHoles
-        return state.copy(
-            belief = Learning.update(state.belief, state.depletion, moisture, drySideFast, fast),
-            depletion = Learning.observedDepletion(state.depletion, moisture),
-            lastSoilCheck = date,
-        )
+        val update = Learning.update(state.belief, state.depletion, moisture, drySideFast, fast)
+        return state.copy(belief = update.belief, depletion = update.depletion, lastSoilCheck = date)
     }
 
     private fun inWinterMode(state: EngineState): Boolean =

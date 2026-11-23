@@ -46,8 +46,11 @@ import kotlin.test.assertTrue
 class PropertyTest {
 
     private companion object {
-        /** Measured over 1000 random plants: harmful answers stopped by answer 21 at worst (median 0, 90th percentile 10). */
-        const val HARMLESS_AFTER = 30
+        /**
+         * Measured over 1000 random plants: harmful answers stopped by answer 9 at worst (90th
+         * percentile 0). Final error in K: median 7 %, 90th percentile a factor of 1.6.
+         */
+        const val HARMLESS_AFTER = 15
     }
 
     private fun dbl(lo: Double, hi: Double) = Arb.double(lo, hi, includeNaNs = false)
@@ -154,7 +157,7 @@ class PropertyTest {
         checkAll(answers, Arb.boolean()) { sequence, drySideFast ->
             var b = KBelief()
             for ((m, predicted) in sequence) {
-                b = Learning.update(b, predicted, m, drySideFast)
+                b = Learning.update(b, predicted, m, drySideFast).belief
                 assertTrue(b.k in Coefficients.K_MIN - 1e-9..Coefficients.K_MAX + 1e-9, "k = ${b.k}")
                 assertTrue(b.logKVariance in 0.0..Coefficients.LOGK_INITIAL_SD * Coefficients.LOGK_INITIAL_SD + 1e-12)
             }
@@ -178,14 +181,13 @@ class PropertyTest {
      * - harmless: after [HARMLESS_AFTER] answers the person never reports soil two bands drier
      *   than the band the plant's dry fraction lies in (one band drier is expected: a daily
      *   prompt overshoots the dry fraction by up to a day's use), nor "too wet" when told to
-     *   water now;
+     *   water now (except wet-feet plants, which are prompted at the edge of "too wet");
      * - K moves toward the truth, never past it by more than it started off, and never the
      *   wrong way.
      *
-     * What it does not guarantee: K reaching the truth. Updates move log K only to the nearest
-     * band edge and not at all when the answer agrees, so where the truth and the prediction
-     * share a band at the prompt, K stops, up to about a factor of two off for dry fractions in
-     * the middle of the "ok" band. See docs/DECISIONS.md.
+     * What it does not guarantee: K reaching the truth. An answer that agrees with the prediction
+     * does not move K, so where the truth and the prediction share a band at the prompt, K can
+     * stay up to about a factor of two off. See docs/DECISIONS.md D18.
      */
     @Test
     fun misSpecifiedByFactorTwoConverges() { runBlocking {
@@ -194,10 +196,6 @@ class PropertyTest {
             .map { it.copy(place = Place.Indoor(44.82, LightClass.MEDIUM), profile = it.profile.copy(winterRules = false)) }
             // A daily prompt cannot protect a pot that loses more than 15 % of its water a day.
             .filter { WaterBalance.dailyUseMl(it, day, 2.0) / WaterBalance.capacityMl(it.pot) <= 0.15 }
-            // Wet-feet plants are prompted at depletion 0.3, the edge between "too wet" and "ok",
-            // so no answer can disagree with the prediction: they cannot learn from answers.
-            // Open question for the owner; see docs/DECISIONS.md.
-            .filter { it.profile.waterStrategy != WaterStrategy.WET_FEET }
         checkAll(indoorPlants, Arb.element(2.0, 0.5)) { plant, trueK ->
             val capacity = WaterBalance.capacityMl(plant.pot)
             val intended = bandOf(WaterBalance.dryFraction(plant.profile))
@@ -212,7 +210,9 @@ class PropertyTest {
                     val answer = bandOf(truth)
                     answers++
                     val tooDry = answer.ordinal >= intended.ordinal + 2
-                    val wateredWet = answer == Moisture.TOO_WET && action is Action.WaterNow && intended != Moisture.TOO_WET
+                    // Told to water while clearly wet. A plant prompted at the "too wet" edge (wet feet) is meant to be wet.
+                    val wateredWet = answer == Moisture.TOO_WET && action is Action.WaterNow &&
+                        WaterBalance.dryFraction(plant.profile) > Coefficients.BAND_TOO_WET_MAX + 0.05
                     if (tooDry || wateredWet) lastHarm = answers
                     if (answer == Moisture.DRY || answer == Moisture.BONE_DRY || action is Action.WaterNow) {
                         s = Engine.apply(plant, s, Event.Watered(day.date, ranOutOfBottom = true, moisture = answer))
