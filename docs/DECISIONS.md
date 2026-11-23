@@ -45,3 +45,82 @@ The brief allows "GitHub issue or the owner's address" for commercial enquiries 
 ## D10. CLA is signed by a pull-request comment
 
 A comment naming the commit of `CLA.md` and the contributor's full name is the simplest record that needs no third-party service or account. Subject to the owner's legal review.
+
+## D11. Open-Meteo provides ET0, radiation and history (checks the brief's UNVERIFIED items)
+
+Checked against the live API and its licence page (https://open-meteo.com/en/licence):
+(a) daily FAO-56 Penman-Monteith reference evapotranspiration, `et0_fao_evapotranspiration`, is available on the forecast and the historical API; (b) daily `shortwave_radiation_sum` is available; (c) a historical archive exists at `archive-api.open-meteo.com`, with reanalysis from the Copernicus Climate Change Service. All API data is under CC BY 4.0. The licence asks for a link "next to any location Open-Meteo data are displayed", so the app's weather screens must carry "Weather data by Open-Meteo.com" with a link, not only the About screen.
+
+Consequences: the engine uses the provider's ET0 when it is present and Hargreaves-Samani otherwise (MET Norway fallback). The simulation harness runs on real 2015-2024 history for three climates, committed under `engine-sim/src/main/resources/weather/` with attribution.
+
+Still open: how Open-Meteo counts its daily limit (per address or per application).
+
+## D12. Pot height and available water
+
+The brief gives the height effect as -1.5 to -2.5 percentage points of container capacity per cm between 4 and 15 cm. Available water is roughly half of container capacity, so the engine applies +0.01 available-water fraction per cm below 15 cm, inside 4-15 cm only, clamped to 0.20-0.35. A pot 15 cm or taller has 0.30. Shapes without a measurement map to 8 cm (shallow), 15 cm (standard) and 25 cm (tall). All PRIOR. Pot-top area, needed for rain capture, is substrate volume divided by height.
+
+## D13. Values the brief does not give, chosen as PRIORs
+
+All in `Coefficients.kt` with their reasons:
+- Dry fraction for wet-feet plants 0.3 and for epiphyte soak 0.6.
+- Light-class typical lux when there is no reading: geometric mean of the class bounds (540, 2415, 7637), and 21 600 for direct.
+- Indoor light-term floor 0.15; temperature effect 3 % per degC from 21 degC; dry-air factor 1.15; both bounded at +/-20 %.
+- Winter mode: mean temperature of the last 7 days below 5 degC. Winter rules apply only to outdoor plants whose care profile says so (evergreen containers).
+- Winter floor: no rain refill for 14 days and no soil check for 14 days. The brief's "dry, windy, sunny spell" is reduced to "dry", because there is no solar radiation from MET Norway and the check is a safety net.
+- Root-freeze alerts 2 degC earlier for pots under 10 litres or wind-exposed places.
+- Waterlogging caution after 3 consecutive days of at least 2 mm on an open, undrained pot.
+- Rain hold: "water now" is held for a day when tomorrow's expected rain refill covers at least half the deficit.
+- Observation noise 0.5 log units, 0.4 when an undrained pot is reported too wet; variance bump 0.10 after a move or repot, 0.05 after 3 gap-filled days, 0.05 after a surprising answer; "water now" instead of "check the soil" below a log-K standard deviation of 0.2.
+
+## D14. Learning: how three of the brief's rules are read
+
+1. **"If the predicted depletion lies inside the reported band, do not update."** K is not moved, but the variance shrinks, no further than the band's width allows (see D18). Without the shrink the engine never becomes confident and keeps asking: in the first harness run it prompted twice as often as the baseline and 57 % of answers were "still wet".
+2. **"Increase variance after a surprising answer."** Surprising means any disagreement while the engine is confident, or a disagreement larger than two standard deviations at any time. Without the first test, agreeing answers shrink the variance until real errors can no longer move K.
+3. **"Require two consistent answers before increasing water."** Two answers asking for the same direction of change. An agreeing answer in between does not cancel a pending one; an opposite one does. While K waits, the bucket is still set to what the person reported.
+
+Process noise was lowered from 0.0005 to 0.0001 per day: at 0.0005 a year without answers returns the standard deviation almost to its starting value.
+
+## D15. Limits of learning from four answer bands
+
+Found by the property tests. With the brief's rule (move log K to the nearest band edge), corrections shrank towards zero near band edges, K could stay off by up to about a factor of two, and wet-feet plants (prompted at 0.3, the edge between "too wet" and "ok") could not learn at all. The owner was asked and allowed a change to the plan: see D18.
+
+What remains after D18: an answer that agrees does not move K, so where truth and prediction share a band at the prompt, K can still stay up to about a factor of two off (in 1000 random plants: median final error 7 %, 90th percentile a factor of 1.6, worst a factor of 2). Wet-feet plants learn from "too wet" and "dry" answers but not from "ok". The kitchen scale is what pins K down further.
+
+## D16. Simulation harness design
+
+- Truth richer than the engine: hourly demand shaped by sun angle and vapour-pressure deficit and scaled by Penman-Monteith ET0; random plant coefficient (0.35-1.2), available water (0.25-0.35), terracotta wall loss, rain capture and wind sensitivity; uptake falls as soil dries; rain at a pseudo-random hour, with the first millimetre intercepted.
+- Person: answers with a personal bias (sd 0.08) and noise (sd 0.12), acts on 90 % of prompts, and gives a moisture answer with 25 % of waterings.
+- The baseline's summer interval is the engine's own dry-out time for the plant on the site's mean July day at K = 1, so both start from the same knowledge. The brief gives the baseline's rules but not where its summer interval comes from; the care database has no "water every N days" field by design.
+- The models see a perfect 7-day forecast. Real forecasts are worse; the harness shows robustness, not real-world accuracy.
+- "Check-ins until accurate" is reported as answers (check-ins plus answers given when watering), because the baseline never asks for a check-in.
+
+## D17. Feeding and repotting reminders are not in G1
+
+They are rule-based reminders that need the care database's feeding months, so they come with G2/G3 instead of the engine gate.
+
+## D18. Learning update: interval likelihood instead of nearest band edge (departs from brief 5.7, approved by the owner)
+
+The owner allowed a change to the brief's learning rule when the dead zones in D15 were reported.
+
+A disagreeing answer is now treated as what it says: the true depletion lies somewhere in the band. If the engine predicted depletion d, the true depletion is about d x exp(delta), where delta is the error in log K, so the answer bounds delta to [ln(low/d), ln(high/d)], blurred by the person's error (observation noise 0.5). The normal belief about delta is multiplied by that likelihood and summarised again by its mean and variance (moment matching, by quadrature on 801 points; deterministic and `commonMain`-only). "Bone dry" is open above, because an empty pot hides how long it has been empty.
+
+An agreeing answer keeps K where it is (the brief's rule) and shrinks the variance only as far as the same likelihood allows. Moving K towards the band's middle on agreeing answers was tried and rejected: K crept until the plant was reported too wet, again and again.
+
+Everything else is kept: the asymmetry and the two-answer rule, the surprise rule, the clamps, "watered" without an answer never changing K.
+
+Measured (property test, 1000 random plants mis-specified by a factor of two):
+
+| | Nearest band edge (brief) | Interval likelihood (now) |
+|---|---|---|
+| Harmful answers stop by | answer 21 | answer 9 |
+| Wet-feet plants learn | no | partly |
+
+Measured (simulation harness, stress days per plant-year, outdoor, engine with provider ET0):
+
+| | Nearest band edge | Interval likelihood | Baseline |
+|---|---:|---:|---:|
+| Belgrade | 14.6 | 18.2 | 50.4 |
+| Seville | 16.8 | 22.9 | 39.7 |
+| Edinburgh | 15.2 | 18.7 | 39.8 |
+
+Waterings of still-wet soil fell (Belgrade 0.6 to 0.3 a year). Stress days rose because the simulated person's answers are noisy and biased, and "too wet", which the brief says to act on at once, now moves K further. That is a real trade-off for the owner to weigh; G5's kitchen-scale data is the way to settle it. Reverting is a one-function change in `Learning.kt`.
