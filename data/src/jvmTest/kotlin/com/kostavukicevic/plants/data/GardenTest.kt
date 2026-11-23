@@ -116,6 +116,49 @@ class GardenTest {
         val s = g.status(plantId)!!
         assertEquals(Action.None, s.today)
         assertEquals(today.plus(DatePeriod(days = 1)), s.snoozedUntil)
+        assertEquals(today.plus(DatePeriod(days = 1)), s.nextPrompt?.first)
+
+        // The next day the prompt is back: a snooze lasts one day.
+        clock += kotlin.time.Duration.parse("24h")
+        val next = g.status(plantId)!!
+        assertNull(next.snoozedUntil)
+        assertTrue(next.today != Action.None)
+    }
+
+    @Test
+    fun wateringEndsASnooze() = runTest {
+        val g = garden("w")
+        val plantId = g.seed()
+        g.snooze(plantId)
+        g.watered(plantId, ranOutOfBottom = true)
+        assertNull(g.status(plantId)!!.snoozedUntil)
+    }
+
+    @Test
+    fun aBadImportChangesNothing() = runTest {
+        val g = garden("h")
+        val plantId = g.seed()
+        val before = g.exportJson("x")
+        val broken = before.replace("\"acquiredOn\": \"", "\"acquiredOn\": \"not-a-date")
+        assertIs<IllegalArgumentException>(runCatching { g.importJson(broken) }.exceptionOrNull())
+        assertEquals(before, g.exportJson("x"))
+        assertEquals("Cypress", g.plant(plantId)?.name)
+    }
+
+    @Test
+    fun importClearsClimatologyAndDeletesCascade() = runTest {
+        val g = garden("i")
+        val plantId = g.seed()
+        val placeId = g.plant(plantId)!!.placeId
+        val dao = dbs.last().dao()
+        dao.upsertClimatology(listOf(ClimatologyEntity(placeId, 1, 0.0, 5.0, 1.0)))
+        g.checkIn(plantId, "OK")
+        g.importJson(g.exportJson("x"))
+        assertTrue(dao.climatology(placeId).isEmpty())
+
+        g.deletePlace(placeId)
+        assertNull(g.plant(plantId))
+        assertTrue(dao.events(plantId).isEmpty())
     }
 
     @Test

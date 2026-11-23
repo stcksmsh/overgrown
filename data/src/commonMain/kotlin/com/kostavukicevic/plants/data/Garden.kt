@@ -8,6 +8,12 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import com.kostavukicevic.plants.caredb.CareDb
+import com.kostavukicevic.plants.engine.LightClass
+import com.kostavukicevic.plants.engine.Moisture
+import com.kostavukicevic.plants.engine.PotMaterial
+import com.kostavukicevic.plants.engine.PotShape
+import com.kostavukicevic.plants.engine.RainExposure
+import com.kostavukicevic.plants.engine.WindExposure
 import com.kostavukicevic.plants.weather.CachedResponse
 import com.kostavukicevic.plants.weather.Climatology
 import com.kostavukicevic.plants.weather.Coordinates
@@ -20,6 +26,8 @@ import com.kostavukicevic.plants.weather.WeatherService
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -56,8 +64,8 @@ class Garden(
     suspend fun plant(id: Long) = dao.plant(id)
     suspend fun savePlace(p: PlaceEntity) = dao.upsertPlace(p).let { if (p.id != 0L) p.id else it }
     suspend fun savePlant(p: PlantEntity) = dao.upsertPlant(p).let { if (p.id != 0L) p.id else it }
-    suspend fun deletePlant(id: Long) = dao.deletePlant(id)
-    suspend fun deletePlace(id: Long) = dao.deletePlace(id)
+    suspend fun deletePlant(id: Long) = dao.deletePlantFully(id)
+    suspend fun deletePlace(id: Long) = dao.deletePlaceFully(id)
     suspend fun deleteEvent(id: Long) = dao.deleteEvent(id)
 
     suspend fun watered(plantId: Long, ranOutOfBottom: Boolean, moisture: String? = null) =
@@ -81,8 +89,15 @@ class Garden(
         dao.insertCalibration(CalibrationEntity(plantId = plantId, atEpochMs = now().toEpochMilliseconds(), grams = grams, note = note))
     }
 
-    /** Fetches weather for every outdoor place. In the background only Open-Meteo is asked. */
-    suspend fun refreshWeather(foreground: Boolean): Map<Long, FetchResult> {
+    private val refreshing = Mutex()
+
+    /**
+     * Fetches weather for every outdoor place. In the background only Open-Meteo is asked.
+     * One refresh at a time, so two quick triggers never ask a provider twice.
+     */
+    suspend fun refreshWeather(foreground: Boolean): Map<Long, FetchResult> = refreshing.withLock { refreshAll(foreground) }
+
+    private suspend fun refreshAll(foreground: Boolean): Map<Long, FetchResult> {
         val out = LinkedHashMap<Long, FetchResult>()
         for (place in dao.allPlaces()) {
             val at = Coordinates.of(place.latitude, place.longitude)
@@ -140,7 +155,40 @@ class Garden(
         val e = json.decodeFromString(Export.serializer(), text)
         require(e.format == Export.FORMAT) { "not an Overgrown export" }
         require(e.version <= Export.VERSION) { "export version ${e.version} is newer than this app" }
+        validate(e) // before anything is replaced: a bad file changes nothing
         dao.replaceAll(e.places, e.plants, e.events, e.weather, e.calibration)
+    }
+
+    /** Every value the planner will parse, checked now; throws IllegalArgumentException naming the first bad one. */
+    private fun validate(e: Export) {
+        fun date(s: String?, what: String) = require(s != null && runCatching { LocalDate.parse(s) }.isSuccess) { "bad date in $what: $s" }
+        val placeIds = e.places.map { it.id }.toSet()
+        for (p in e.places) {
+            require(p.latitude in -90.0..90.0 && p.longitude in -180.0..180.0) { "bad coordinates for place ${p.id}" }
+            require(runCatching { RainExposure.valueOf(p.rainExposure); WindExposure.valueOf(p.windExposure) }.isSuccess) { "bad exposure for place ${p.id}" }
+            p.lightClass?.let { require(runCatching { LightClass.valueOf(it) }.isSuccess) { "bad light class for place ${p.id}" } }
+        }
+        val plantIds = e.plants.map { it.id }.toSet()
+        for (p in e.plants) {
+            require(p.placeId in placeIds) { "plant ${p.id} refers to a missing place" }
+            require(p.canopyWidthCm > 0 && p.potVolumeL > 0) { "plant ${p.id} has a non-positive size" }
+            require(runCatching { PotShape.valueOf(p.potShape); PotMaterial.valueOf(p.potMaterial) }.isSuccess) { "bad pot for plant ${p.id}" }
+            date(p.acquiredOn, "plant ${p.id}")
+            p.lastRepotOn?.let { date(it, "plant ${p.id}") }
+        }
+        for (ev in e.events) {
+            require(ev.plantId in plantIds) { "event ${ev.id} refers to a missing plant" }
+            date(ev.date, "event ${ev.id}")
+            require(ev.type in setOf("WATERED", "CHECK_IN", "MOVED", "REPOTTED", "SNOOZED")) { "unknown event type ${ev.type}" }
+            if (ev.type == "CHECK_IN") require(ev.moisture != null) { "check-in ${ev.id} has no answer" }
+            ev.moisture?.let { require(runCatching { Moisture.valueOf(it) }.isSuccess) { "bad answer in event ${ev.id}" } }
+            ev.snoozedUntil?.let { date(it, "event ${ev.id}") }
+        }
+        for (w in e.weather) {
+            require(w.placeId in placeIds) { "weather refers to a missing place" }
+            date(w.date, "weather")
+        }
+        for (c in e.calibration) require(c.plantId in plantIds && c.grams > 0) { "bad calibration reading ${c.id}" }
     }
 
     suspend fun calibrationCsv(): String = buildString {

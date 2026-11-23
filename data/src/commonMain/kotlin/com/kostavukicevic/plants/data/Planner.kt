@@ -41,6 +41,7 @@ data class PlantStatus(
     val alerts: List<Alert>,
     /** The first day, from today, the engine expects to prompt, if within the forecast. */
     val nextPrompt: Pair<LocalDate, Action>?,
+    /** Prompts return on this day. */
     val snoozedUntil: LocalDate?,
     /** Days of the replay filled from climatology, for the "data is stale" hint. */
     val gapDays: Int,
@@ -138,7 +139,10 @@ object Planner {
         eventsByDate[today]?.forEach { e -> event(e)?.let { state = Engine.apply(enginePlant, state, it) } }
 
         val upcoming: List<WeatherDay> = series.filter { it.date >= today }
-        val snoozedUntil = events.filter { it.type == "SNOOZED" }.mapNotNull { it.snoozedUntil?.let(LocalDate::parse) }.maxOrNull()?.takeIf { it >= today }
+        // A snooze holds prompts until the day it names (the day they return); a later watering ends it.
+        val lastSnooze = events.lastOrNull { it.type == "SNOOZED" }
+        val wateredSince = lastSnooze != null && events.any { it.type == "WATERED" && it.id > lastSnooze.id }
+        val snoozedUntil = lastSnooze?.takeIf { !wateredSince }?.snoozedUntil?.let(LocalDate::parse)?.takeIf { it > today }
         val rec = if (upcoming.isNotEmpty()) Engine.recommend(enginePlant, state, upcoming) else null
         val todayAction = when {
             rec == null -> Action.None
@@ -151,7 +155,7 @@ object Planner {
         for (i in upcoming.indices) {
             val day = upcoming[i]
             val a = Engine.recommend(enginePlant, s, upcoming.drop(i)).action
-            if (a.isPrompt() && (snoozedUntil == null || day.date > snoozedUntil)) { next = day.date to a; break }
+            if (a.isPrompt() && (snoozedUntil == null || day.date >= snoozedUntil)) { next = day.date to a; break }
             s = Engine.advance(enginePlant, s, day)
         }
 

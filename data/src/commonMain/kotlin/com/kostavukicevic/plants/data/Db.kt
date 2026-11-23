@@ -167,6 +167,25 @@ interface GardenDao {
     @Query("DELETE FROM event") suspend fun clearEvents()
     @Query("DELETE FROM weather_day") suspend fun clearWeather()
     @Query("DELETE FROM calibration") suspend fun clearCalibration()
+    @Query("DELETE FROM climatology") suspend fun clearClimatology()
+    @Query("DELETE FROM event WHERE plantId = :plantId") suspend fun deleteEventsOf(plantId: Long)
+    @Query("DELETE FROM calibration WHERE plantId = :plantId") suspend fun deleteCalibrationOf(plantId: Long)
+    @Query("SELECT id FROM plant WHERE placeId = :placeId") suspend fun plantIdsAt(placeId: Long): List<Long>
+    @Query("DELETE FROM weather_day WHERE placeId = :placeId") suspend fun deleteWeatherAt(placeId: Long)
+    @Query("DELETE FROM climatology WHERE placeId = :placeId") suspend fun deleteClimatologyAt(placeId: Long)
+
+    /** A plant and everything recorded about it. */
+    @Transaction
+    suspend fun deletePlantFully(plantId: Long) {
+        deleteEventsOf(plantId); deleteCalibrationOf(plantId); deletePlant(plantId)
+    }
+
+    /** A place, its plants and its weather. */
+    @Transaction
+    suspend fun deletePlaceFully(placeId: Long) {
+        for (id in plantIdsAt(placeId)) deletePlantFully(id)
+        deleteWeatherAt(placeId); deleteClimatologyAt(placeId); deletePlace(placeId)
+    }
 
     /** Import: everything replaced, or nothing. */
     @Transaction
@@ -174,7 +193,8 @@ interface GardenDao {
         places: List<PlaceEntity>, plants: List<PlantEntity>, events: List<EventEntity>,
         weather: List<WeatherDayEntity>, calibration: List<CalibrationEntity>,
     ) {
-        clearCalibration(); clearEvents(); clearWeather(); clearPlants(); clearPlaces()
+        // Climatology is keyed by place id and not exported: an imported place 1 may be another city.
+        clearCalibration(); clearEvents(); clearWeather(); clearClimatology(); clearPlants(); clearPlaces()
         importPlaces(places); importPlants(plants); importEvents(events); upsertWeather(weather); importCalibration(calibration)
     }
 }

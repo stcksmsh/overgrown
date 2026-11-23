@@ -12,6 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -46,7 +47,7 @@ class OpenMeteo(
             return FetchResult.Cached(ProviderId.OPEN_METEO, parseDaily(cached.body), cached.fetchedAt)
         }
         val response = http.call(forecastUrl(at), emptyMap()).getOrElse {
-            store.save(key, failed(cached))
+            store.save(key, failed(cached, t))
             return FetchResult.Failed(ProviderId.OPEN_METEO, it.message ?: "network error")
         }
         return when (response.status) {
@@ -54,7 +55,7 @@ class OpenMeteo(
                 val days = try {
                     parseDaily(response.body)
                 } catch (e: IllegalArgumentException) {
-                    store.save(key, failed(cached))
+                    store.save(key, failed(cached, t))
                     return FetchResult.Failed(ProviderId.OPEN_METEO, "unreadable response: ${e.message}")
                 }
                 store.save(key, CachedResponse(body = response.body, fetchedAt = t))
@@ -62,11 +63,11 @@ class OpenMeteo(
             }
             429 -> {
                 val until = t + retryAfter(response)
-                store.save(key, failed(cached).copy(notBefore = until))
+                store.save(key, failed(cached, t).copy(notBefore = until))
                 FetchResult.RateLimited(ProviderId.OPEN_METEO, until)
             }
             else -> {
-                store.save(key, failed(cached))
+                store.save(key, failed(cached, t))
                 FetchResult.Failed(ProviderId.OPEN_METEO, "HTTP ${response.status}")
             }
         }
@@ -89,10 +90,12 @@ class OpenMeteo(
         }
     }
 
-    /** Keeps the last good body, counts the failure. */
-    private fun failed(cached: CachedResponse?) =
-        cached?.copy(consecutiveFailures = cached.consecutiveFailures + 1)
-            ?: CachedResponse(body = "", fetchedAt = Instant.DISTANT_PAST, consecutiveFailures = 1)
+    /** Keeps the last good body, counts the failure, and waits before asking again: 10 minutes, doubling, at most 6 hours. */
+    private fun failed(cached: CachedResponse?, t: Instant): CachedResponse {
+        val failures = (cached?.consecutiveFailures ?: 0) + 1
+        val wait = (10.minutes * (1 shl (failures - 1).coerceIn(0, 6))).coerceAtMost(6.hours)
+        return (cached ?: CachedResponse(body = "", fetchedAt = Instant.DISTANT_PAST)).copy(consecutiveFailures = failures, notBefore = t + wait)
+    }
 
     private fun retryAfter(response: HttpResponse): Duration =
         response.headers["retry-after"]?.toLongOrNull()?.seconds ?: 1.hours

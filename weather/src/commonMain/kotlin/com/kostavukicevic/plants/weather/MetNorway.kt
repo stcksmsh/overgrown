@@ -48,7 +48,9 @@ class MetNorway(
         val cached = store.load(key)
         val t = now()
         cached?.notBefore?.let { if (t < it) return FetchResult.RateLimited(ProviderId.MET_NORWAY, it) }
-        if (cached != null && cached.body.isNotEmpty() && cached.expires != null && t < cached.expires) {
+        // Never before Expires; and without an Expires header, not more than once an hour.
+        val fresh = cached?.expires ?: cached?.fetchedAt?.plus(1.hours)
+        if (cached != null && cached.body.isNotEmpty() && fresh != null && t < fresh) {
             return FetchResult.Cached(ProviderId.MET_NORWAY, aggregate(cached.body), cached.fetchedAt)
         }
 
@@ -57,7 +59,8 @@ class MetNorway(
             cached?.lastModified?.let { put("If-Modified-Since", it) }
         }
         val response = http.call(url(at), headers).getOrElse {
-            store.save(key, backOff(cached, t, failures = (cached?.consecutiveFailures ?: 0) + 1))
+            val failures = (cached?.consecutiveFailures ?: 0) + 1
+            store.save(key, backOff(cached, t, failures).copy(notBefore = t + backOffFor(failures)))
             return FetchResult.Failed(ProviderId.MET_NORWAY, it.message ?: "network error")
         }
         val expires = response.headers["expires"]?.let(::parseHttpDate)
@@ -66,6 +69,8 @@ class MetNorway(
                 val days = try {
                     aggregate(response.body)
                 } catch (e: IllegalArgumentException) {
+                    val failures = (cached?.consecutiveFailures ?: 0) + 1
+                    store.save(key, backOff(cached, t, failures).copy(notBefore = t + backOffFor(failures)))
                     return FetchResult.Failed(ProviderId.MET_NORWAY, "unreadable response: ${e.message}")
                 }
                 store.save(key, CachedResponse(response.body, t, expires, response.headers["last-modified"]))

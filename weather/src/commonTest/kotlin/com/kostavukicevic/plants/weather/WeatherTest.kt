@@ -109,6 +109,31 @@ class WeatherTest {
     }
 
     @Test
+    fun withoutExpiresMetNorwayIsAskedAtMostHourly() = runTest {
+        val http = FakeHttp { _, _ -> ok(metBody) }
+        val client = met(http)
+        client.forecast(at, true)
+        clock += 30.minutes
+        assertIs<FetchResult.Cached>(client.forecast(at, true))
+        clock += 31.minutes
+        client.forecast(at, true)
+        assertEquals(2, http.calls.size)
+    }
+
+    @Test
+    fun errorsBackOffForBothProviders() = runTest {
+        val http = FakeHttp { _, _ -> HttpResponse(500, emptyMap(), "") }
+        val om = OpenMeteo(http, InMemoryResponseStore(), { clock })
+        assertIs<FetchResult.Failed>(om.forecast(at))
+        clock += 5.minutes
+        assertIs<FetchResult.RateLimited>(om.forecast(at))
+        val client = met(http)
+        assertIs<FetchResult.Failed>(client.forecast(at, true))
+        assertIs<FetchResult.RateLimited>(client.forecast(at, true))
+        assertEquals(2, http.calls.size)
+    }
+
+    @Test
     fun forbiddenIsReportedAsABug() = runTest {
         val result = met(FakeHttp { _, _ -> HttpResponse(403, emptyMap(), "") }).forecast(at, true)
         assertTrue(assertIs<FetchResult.Failed>(result).reason.contains("bug"))

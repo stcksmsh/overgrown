@@ -105,8 +105,9 @@ object Notifier {
         post(c, promptId(plantId), n)
     }
 
-    fun postAlert(c: Context, id: Int, plantId: Long, plantName: String, text: String) {
-        if (!allowed(c)) return
+    /** True if the alert was shown. */
+    fun postAlert(c: Context, id: Int, plantId: Long, plantName: String, text: String): Boolean {
+        if (!allowed(c)) return false
         val n = NotificationCompat.Builder(c, CHANNEL_ALERTS)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(c.getString(R.string.notif_alert_title, plantName))
@@ -115,7 +116,7 @@ object Notifier {
             .setContentIntent(openApp(c, plantId))
             .setAutoCancel(true)
             .build()
-        post(c, id, n)
+        return post(c, id, n)
     }
 
     fun postStale(c: Context) {
@@ -133,11 +134,16 @@ object Notifier {
     const val STALE_ID = 1
 
     /** The person can revoke the permission at any moment; a missed reminder is better than a crash. */
-    private fun post(c: Context, id: Int, n: android.app.Notification) {
-        try {
-            post(c, id, n)
+    private fun post(c: Context, id: Int, n: android.app.Notification): Boolean {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(c, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return false
+        return try {
+            NotificationManagerCompat.from(c).notify(id, n)
+            true
         } catch (e: SecurityException) {
             android.util.Log.w("Overgrown", "notification permission revoked", e)
+            false
         }
     }
 }
@@ -186,9 +192,10 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             }
             KIND_ALERT -> {
                 val key = inputData.getString(KEY) ?: return Result.success()
-                if (g.scheduler.markAlertPosted(key)) {
+                // Remembered only once actually shown, so a refused permission does not lose the alert.
+                if (!g.scheduler.alertPosted(key) &&
                     Notifier.postAlert(c, key.hashCode(), inputData.getLong(PLANT, -1), inputData.getString(NAME) ?: "", inputData.getString(TEXT) ?: "")
-                }
+                ) g.scheduler.markAlertPosted(key)
             }
             KIND_STALE -> Notifier.postStale(c)
         }
@@ -262,12 +269,10 @@ class Scheduler(private val context: Context, private val graph: Graph) {
         }
     }
 
-    /** True the first time; alerts are posted once per plant, type and day. */
-    fun markAlertPosted(key: String): Boolean {
-        if (prefs.contains(key)) return false
-        prefs.edit { putBoolean(key, true) }
-        return true
-    }
+    /** Alerts are posted once per plant, type and day. */
+    fun alertPosted(key: String): Boolean = prefs.contains(key)
+
+    fun markAlertPosted(key: String) = prefs.edit { putBoolean(key, true) }
 
     /** Winter soil checks around midday (the winter watering window); other prompts in the morning. */
     private fun promptTime(date: LocalDate, action: Action): LocalTime =

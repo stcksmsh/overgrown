@@ -44,7 +44,7 @@
         <item quantity="one">%1$d day without rain reaching the pot.</item>
         <item quantity="other">%1$d days without rain reaching the pot.</item>
     </plurals>
-    <string name="snoozed_until">Snoozed until %1$s</string>
+    <string name="snoozed_until">Snoozed: reminders return on %1$s</string>
     <string name="next_prompt">Next: %1$s on %2$s</string>
     <string name="next_prompt_none">No prompt expected in the next 10 days.</string>
 
