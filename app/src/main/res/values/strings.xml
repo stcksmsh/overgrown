@@ -121,6 +121,9 @@
 
     <!-- Edit place -->
     <string name="edit_place_title">Place</string>
+    <string name="field_place_kind">Where</string>
+    <string name="place_outdoor">Outdoors (balcony, terrace)</string>
+    <string name="place_indoor">Indoors (room, windowsill)</string>
     <string name="field_city">City</string>
     <string name="city_search">Search</string>
     <string name="city_none">No match. Check the spelling or enter coordinates.</string>
@@ -136,6 +139,13 @@
     <string name="wind_sheltered">Sheltered</string>
     <string name="wind_normal">Normal</string>
     <string name="wind_exposed">Exposed</string>
+    <string name="location_indoor">Indoors the location only sets the day length; no weather is fetched for this place.</string>
+    <string name="field_light">Light</string>
+    <string name="light_low">Low (far from a window, north-facing)</string>
+    <string name="light_medium">Medium (bright room, no sun on the plant)</string>
+    <string name="light_high">High (near a bright window)</string>
+    <string name="light_direct">Direct sun on the plant</string>
+    <string name="field_dry_air">Dry air (heating on)</string>
     <string name="invalid_coordinates">Pick a city or enter valid coordinates.</string>
 
     <!-- Settings and about -->

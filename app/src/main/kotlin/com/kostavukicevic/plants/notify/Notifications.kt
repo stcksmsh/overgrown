@@ -262,8 +262,9 @@ class Scheduler(private val context: Context, private val graph: Graph) {
             }
         }
         // If the forecast gets old, ask the person to open the app (where MET Norway may be used).
-        val lastFetch = statuses.map { it.place.id }.distinct().mapNotNull { graph.garden.lastFetchOnce(it) }.maxOrNull()
-        if (statuses.isNotEmpty()) {
+        val outdoor = statuses.filter { it.place.outdoor }
+        val lastFetch = outdoor.map { it.place.id }.distinct().mapNotNull { graph.garden.lastFetchOnce(it) }.maxOrNull()
+        if (outdoor.isNotEmpty()) {
             val staleAt = (lastFetch?.let { Instant.fromEpochMilliseconds(it) } ?: now) + STALE_AFTER
             enqueue("stale", staleAt - now, workDataOf(NotifyWorker.KIND to NotifyWorker.KIND_STALE))
         }

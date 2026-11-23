@@ -155,4 +155,10 @@ The owner did not choose between 50 % and 40 %. Kept at the archetype's 50 % (th
 
 ## D26. Place entry
 
-Places are found by city name through Open-Meteo's geocoding API (CC BY 4.0, foreground, on the person's request), or by typing coordinates. No location permission is requested in G3. Only outdoor places are offered until G4 adds indoor ones.
+Places are found by city name through Open-Meteo's geocoding API (CC BY 4.0, foreground, on the person's request), or by typing coordinates. No location permission is requested in G3.
+
+## D27. Indoor places
+
+From G4 the place editor offers Indoors or Outdoors. An indoor place takes a light class (low, medium, high, direct; medium preselected so one is always stored) and a dry-air switch, and hides rain and wind exposure. Indoor places reuse the same city search and coordinate fields as outdoor ones: the engine still needs the latitude for day length, and one location input is less to build and to learn than a second one. No weather is fetched for an indoor place, so a garden of only indoor places makes no network request and the Today screen shows no forecast age, credit or refresh for it.
+
+Indoors the engine reads only each day's date, so the planner replays an indoor plant over one day per date at the indoor reference temperature (`INDOOR_TEMP_REFERENCE_C`), which keeps the temperature-based heat and winter rules neutral, instead of over stored weather. Weather stored for a place that is switched from outdoors to indoors stays in the database but is not used while the place is indoors.

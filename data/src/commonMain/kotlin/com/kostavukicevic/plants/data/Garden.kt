@@ -99,7 +99,8 @@ class Garden(
 
     private suspend fun refreshAll(foreground: Boolean): Map<Long, FetchResult> {
         val out = LinkedHashMap<Long, FetchResult>()
-        for (place in dao.allPlaces()) {
+        // Indoor advice needs no weather: an indoor-only garden makes no request.
+        for (place in dao.allPlaces().filter { it.outdoor }) {
             val at = Coordinates.of(place.latitude, place.longitude)
             val result = weather.fetch(at, foreground)
             when (result) {

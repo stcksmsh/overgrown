@@ -47,7 +47,7 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onSettings: () -> Un
     val tick = changeTick()
     val statuses by produceState<List<PlantStatus>?>(null, tick) { value = g.garden.statuses() }
     val lastFetch by produceState<Pair<Long, String?>?>(null, tick) {
-        value = statuses?.map { it.place.id }?.distinct()?.mapNotNull { g.garden.lastFetchOnce(it) }?.maxOrNull()?.let { it to g.garden.lastProvider() }
+        value = statuses?.filter { it.place.outdoor }?.map { it.place.id }?.distinct()?.mapNotNull { g.garden.lastFetchOnce(it) }?.maxOrNull()?.let { it to g.garden.lastProvider() }
     }
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -73,10 +73,12 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onSettings: () -> Un
         }
 
         // Forecast age and the provider's credit, next to the weather it describes (Open-Meteo licence).
+        // Indoor plants use no weather, so a garden of only indoor plants shows none of this.
+        val indoorOnly = statuses?.let { it.isNotEmpty() && it.none { s -> s.place.outdoor } } == true
         val fetched = lastFetch
-        if (fetched == null) {
+        if (!indoorOnly && fetched == null) {
             Text(stringResource(R.string.forecast_never), style = MaterialTheme.typography.bodySmall)
-        } else {
+        } else if (!indoorOnly && fetched != null) {
             val at = Instant.fromEpochMilliseconds(fetched.first)
             val age = Clock.System.now() - at
             Text(stringResource(R.string.forecast_fetched, Texts.dateTime(at)), style = MaterialTheme.typography.bodySmall)
@@ -89,7 +91,7 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onSettings: () -> Un
                 modifier = Modifier.clickable { uri.openUri(if (met) MetNorway.CREDIT_URL else OpenMeteo.CREDIT_URL) },
             )
         }
-        TextButton(
+        if (!indoorOnly) TextButton(
             enabled = !refreshing,
             onClick = {
                 refreshing = true

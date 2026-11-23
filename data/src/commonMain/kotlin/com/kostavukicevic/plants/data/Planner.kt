@@ -7,6 +7,7 @@ import com.kostavukicevic.plants.caredb.toProfile
 import com.kostavukicevic.plants.engine.Action
 import com.kostavukicevic.plants.engine.Alert
 import com.kostavukicevic.plants.engine.CareProfile
+import com.kostavukicevic.plants.engine.Coefficients
 import com.kostavukicevic.plants.engine.Engine
 import com.kostavukicevic.plants.engine.EngineState
 import com.kostavukicevic.plants.engine.Event
@@ -109,6 +110,21 @@ object Planner {
         })
     }
 
+    /**
+     * Indoors the engine reads only each day's date (for day length), so no weather is needed:
+     * one day per date at the indoor reference temperature, which keeps the heat and winter
+     * rules that read temperature neutral. Stored weather for the place, if any, is ignored.
+     */
+    fun indoorDays(from: LocalDate, to: LocalDate): List<WeatherDay> {
+        val out = ArrayList<WeatherDay>()
+        var d = from
+        while (d <= to) {
+            out += WeatherDay(d, Coefficients.INDOOR_TEMP_REFERENCE_C, Coefficients.INDOOR_TEMP_REFERENCE_C, 0.0)
+            d = d.plus(DatePeriod(days = 1))
+        }
+        return out
+    }
+
     fun status(
         plant: PlantEntity,
         place: PlaceEntity,
@@ -121,11 +137,16 @@ object Planner {
         val (profile, source) = profile(plant, place, db)
         val enginePlant = enginePlant(plant, place, profile)
         val start = minOf(LocalDate.parse(plant.acquiredOn), today)
-        val series = Series.build(
-            weather.associate { LocalDate.parse(it.date) to daily(it) },
-            from = start, to = today.plus(DatePeriod(days = FORECAST_DAYS - 1)), today = today,
-            climatology = climatology(climatology),
-        )
+        val end = today.plus(DatePeriod(days = FORECAST_DAYS - 1))
+        val series = if (place.outdoor) {
+            Series.build(
+                weather.associate { LocalDate.parse(it.date) to daily(it) },
+                from = start, to = end, today = today,
+                climatology = climatology(climatology),
+            )
+        } else {
+            indoorDays(start, end)
+        }
         val byDate = series.associateBy { it.date }
         val eventsByDate = events.groupBy { LocalDate.parse(it.date) }
 
