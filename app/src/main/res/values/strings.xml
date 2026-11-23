@@ -67,6 +67,9 @@
     <string name="plant_snooze">Snooze a day</string>
     <string name="plant_moved">Moved</string>
     <string name="plant_repotted">Repotted</string>
+    <string name="plant_fed">Fed</string>
+    <string name="reminder_feed">Time to feed.</string>
+    <string name="reminder_repot">Time to repot.</string>
     <string name="plant_state">Soil water used: %1$d %%</string>
     <string name="plant_confidence_high">The app knows this plant well.</string>
     <string name="plant_confidence_medium">The app is still learning this plant.</string>
@@ -82,6 +85,7 @@
     <string name="history_check_in">%1$s: soil %2$s</string>
     <string name="history_moved">%1$s: moved</string>
     <string name="history_repotted">%1$s: repotted</string>
+    <string name="history_fed">%1$s: fed</string>
     <string name="history_snoozed">%1$s: snoozed</string>
     <string name="cold_in_ground">In the ground it survives about %1$s °C. Roots in a pot freeze far sooner.</string>
 
@@ -181,6 +185,7 @@
     <string name="notif_water_title">%1$s needs water</string>
     <string name="notif_check_title">Check the soil of %1$s</string>
     <string name="notif_repot_title">%1$s needs a bigger pot</string>
+    <string name="notif_reminder_title">%1$s needs care</string>
     <string name="notif_alert_title">%1$s: weather alert</string>
     <string name="notif_stale_title">Open Overgrown to refresh the forecast</string>
     <string name="notif_stale_text">Reminders use a forecast that is several days old.</string>

@@ -112,13 +112,14 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onSettings: () -> Un
             Button(onClick = onAdd) { Text(stringResource(R.string.add_plant)) }
             return@Page
         }
-        if (list.none { it.today != Action.None || it.alerts.isNotEmpty() }) Text(stringResource(R.string.today_all_fine))
-        for (s in list.sortedByDescending { it.today != Action.None }) {
+        if (list.none { it.today != Action.None || it.alerts.isNotEmpty() || it.reminders.isNotEmpty() }) Text(stringResource(R.string.today_all_fine))
+        for (s in list.sortedByDescending { it.today != Action.None || it.reminders.isNotEmpty() }) {
             Card(Modifier.fillMaxWidth().clickable { onPlant(s.plant.id) }) {
                 Column(Modifier.padding(16.dp)) {
                     Text(s.plant.name, style = MaterialTheme.typography.titleMedium)
                     Text(Texts.action(c, s.today))
                     Texts.reason(c, s)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    for (r in s.reminders) Text(Texts.reminder(c, r))
                     for (a in s.alerts) Text(Texts.alert(c, a), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
             }

@@ -28,6 +28,8 @@ import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.MainActivity
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
+import com.kostavukicevic.plants.data.PlantStatus
+import com.kostavukicevic.plants.data.Reminder
 import com.kostavukicevic.plants.data.isPrompt
 import com.kostavukicevic.plants.engine.Action
 import com.kostavukicevic.plants.graph
@@ -86,23 +88,34 @@ object Notifier {
 
     fun promptId(plantId: Long) = (plantId * 100).toInt()
 
-    fun postPrompt(c: Context, plantId: Long, plantName: String, action: Action) {
-        if (!allowed(c)) return
+    /**
+     * One notification per plant: a watering prompt, the feeding and repotting reminders due today,
+     * or both together. True if it was shown.
+     */
+    fun postPrompt(c: Context, plantId: Long, plantName: String, action: Action, reminders: List<Reminder>): Boolean {
+        if (!allowed(c)) return false
+        val prompt = action.isPrompt()
+        if (!prompt && reminders.isEmpty()) return false
         val title = when (action) {
             is Action.WaterNow -> c.getString(R.string.notif_water_title, plantName)
             is Action.CheckSoil -> c.getString(R.string.notif_check_title, plantName)
-            else -> c.getString(R.string.notif_repot_title, plantName)
+            Action.RepotOrWaterDaily -> c.getString(R.string.notif_repot_title, plantName)
+            else -> c.getString(R.string.notif_reminder_title, plantName)
         }
-        val n = NotificationCompat.Builder(c, CHANNEL_PROMPTS)
+        val text = (listOfNotNull(if (prompt) Texts.action(c, action) else null) + reminders.map { Texts.reminder(c, it) }).joinToString(" ")
+        val b = NotificationCompat.Builder(c, CHANNEL_PROMPTS)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
-            .setContentText(Texts.action(c, action))
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(openApp(c, plantId))
             .setAutoCancel(true)
-            .addAction(0, c.getString(R.string.notif_action_watered), actionIntent(c, ActionReceiver.ACTION_WATERED, plantId))
-            .addAction(0, c.getString(R.string.notif_action_snooze), actionIntent(c, ActionReceiver.ACTION_SNOOZE, plantId))
-            .build()
-        post(c, promptId(plantId), n)
+        // Watered and Snooze answer a watering prompt; a reminder alone opens the plant.
+        if (prompt) {
+            b.addAction(0, c.getString(R.string.notif_action_watered), actionIntent(c, ActionReceiver.ACTION_WATERED, plantId))
+                .addAction(0, c.getString(R.string.notif_action_snooze), actionIntent(c, ActionReceiver.ACTION_SNOOZE, plantId))
+        }
+        return post(c, promptId(plantId), b.build())
     }
 
     /** True if the alert was shown. */
@@ -188,7 +201,23 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             KIND_PROMPT -> {
                 val plantId = inputData.getLong(PLANT, -1)
                 val status = g.garden.status(plantId) ?: return Result.success()
-                if (status.today.isPrompt()) Notifier.postPrompt(c, plantId, status.plant.name, status.today)
+                val key = Scheduler.remindersKey(plantId, g.garden.today())
+                // A watering prompt carries the day's reminders, so the plant gets one notification.
+                if (status.today.isPrompt() &&
+                    Notifier.postPrompt(c, plantId, status.plant.name, status.today, status.reminders) && status.reminders.isNotEmpty()
+                ) g.scheduler.markAlertPosted(key)
+            }
+            KIND_REMINDER -> {
+                val plantId = inputData.getLong(PLANT, -1)
+                // Recomputed now: a feed or repot logged since scheduling clears the reminder.
+                val status = g.garden.status(plantId) ?: return Result.success()
+                val key = Scheduler.remindersKey(plantId, g.garden.today())
+                // Reminders only, once a day. With a watering prompt due today, the prompt's own job carries them.
+                if (!status.today.isPrompt() && status.reminders.isNotEmpty() && !g.scheduler.alertPosted(key) &&
+                    Notifier.postPrompt(c, plantId, status.plant.name, Action.None, status.reminders)
+                ) g.scheduler.markAlertPosted(key)
+                // Re-armed here, so the next reminder needs no refresh or network.
+                g.scheduler.scheduleReminder(status, g.garden.today(), includeToday = false)
             }
             KIND_ALERT -> {
                 val key = inputData.getString(KEY) ?: return Result.success()
@@ -204,7 +233,7 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
     companion object {
         const val KIND = "kind"; const val PLANT = "plant"; const val KEY = "key"; const val NAME = "name"; const val TEXT = "text"
-        const val KIND_PROMPT = "prompt"; const val KIND_ALERT = "alert"; const val KIND_STALE = "stale"
+        const val KIND_PROMPT = "prompt"; const val KIND_REMINDER = "reminder"; const val KIND_ALERT = "alert"; const val KIND_STALE = "stale"
     }
 }
 
@@ -242,11 +271,13 @@ class Scheduler(private val context: Context, private val graph: Graph) {
         val zone = TimeZone.currentSystemDefault()
         work.cancelAllWorkByTag(TAG)
         val statuses = graph.garden.statuses()
+        val today = graph.garden.today()
         for (s in statuses) {
             s.nextPrompt?.let { (date, action) ->
                 val at = date.atTime(promptTime(date, action)).toInstant(zone)
                 enqueue("prompt-${s.plant.id}", at - now, workDataOf(NotifyWorker.KIND to NotifyWorker.KIND_PROMPT, NotifyWorker.PLANT to s.plant.id))
             }
+            scheduleReminder(s, today, includeToday = true)
             for (alert in s.alerts) {
                 val key = "${s.plant.id}-${alert.type}-${alert.date}"
                 if (prefs.contains(key)) continue
@@ -270,7 +301,19 @@ class Scheduler(private val context: Context, private val graph: Graph) {
         }
     }
 
-    /** Alerts are posted once per plant, type and day. */
+    /**
+     * Reminders are scheduled ahead, like prompts, at 09:00: today's while they are due and not yet
+     * shown (at once if 09:00 has passed), else on the next day one is due. The job is named by day
+     * so the worker can queue the next one while it runs.
+     */
+    fun scheduleReminder(s: PlantStatus, today: LocalDate, includeToday: Boolean) {
+        val shownToday = prefs.contains(remindersKey(s.plant.id, today))
+        val day = if (includeToday && s.reminders.isNotEmpty() && !shownToday) today else s.nextReminder ?: return
+        val at = day.atTime(REMINDER_TIME).toInstant(TimeZone.currentSystemDefault())
+        enqueue("reminder-${s.plant.id}-$day", at - Clock.System.now(), workDataOf(NotifyWorker.KIND to NotifyWorker.KIND_REMINDER, NotifyWorker.PLANT to s.plant.id))
+    }
+
+    /** Alerts are posted once per plant, type and day; reminders alone once per plant and day. */
     fun alertPosted(key: String): Boolean = prefs.contains(key)
 
     fun markAlertPosted(key: String) = prefs.edit { putBoolean(key, true) }
@@ -291,6 +334,8 @@ class Scheduler(private val context: Context, private val graph: Graph) {
     companion object {
         private const val TAG = "notify"
         val STALE_AFTER = 3.days
+        private val REMINDER_TIME = LocalTime(9, 0)
+        fun remindersKey(plantId: Long, date: LocalDate) = "reminders-$plantId-$date"
         private val WINTER_MONTHS = setOf(Month.NOVEMBER, Month.DECEMBER, Month.JANUARY, Month.FEBRUARY, Month.MARCH)
     }
 }
