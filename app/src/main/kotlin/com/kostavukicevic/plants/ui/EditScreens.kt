@@ -135,15 +135,21 @@ fun EditPlaceScreen(placeId: Long?, onDone: () -> Unit) {
     var lon by remember { mutableStateOf("") }
     var rain by remember { mutableStateOf("OPEN") }
     var wind by remember { mutableStateOf("NORMAL") }
+    var outdoor by remember { mutableStateOf(true) }
+    // Preselected so an indoor place is never saved without a light class.
+    var light by remember { mutableStateOf("MEDIUM") }
+    var dryAir by remember { mutableStateOf(false) }
     var showErrors by remember { mutableStateOf(false) }
 
     LaunchedEffect(placeId) {
         val p = placeId?.let { g.garden.place(it) } ?: return@LaunchedEffect
         loaded = p; name = p.name; lat = p.latitude.toString(); lon = p.longitude.toString(); rain = p.rainExposure; wind = p.windExposure
+        outdoor = p.outdoor; light = p.lightClass ?: "MEDIUM"; dryAir = p.dryAir
     }
 
     Page(stringResource(R.string.edit_place_title), onBack = onDone) {
         OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.field_name)) }, isError = showErrors && name.isBlank(), modifier = Modifier.fillMaxWidth())
+        Choice(stringResource(R.string.field_place_kind), listOf(true to stringResource(R.string.place_outdoor), false to stringResource(R.string.place_indoor)), outdoor) { outdoor = it }
         OutlinedTextField(query, { query = it }, label = { Text(stringResource(R.string.field_city)) }, modifier = Modifier.fillMaxWidth())
         TextButton(onClick = {
             scope.launch {
@@ -163,21 +169,33 @@ fun EditPlaceScreen(placeId: Long?, onDone: () -> Unit) {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
         OutlinedTextField(lon, { lon = it }, label = { Text(stringResource(R.string.field_longitude)) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
-        Text(stringResource(R.string.location_privacy), style = MaterialTheme.typography.bodySmall)
+        Text(stringResource(if (outdoor) R.string.location_privacy else R.string.location_indoor), style = MaterialTheme.typography.bodySmall)
 
-        Choice(stringResource(R.string.field_rain), listOf("OPEN" to stringResource(R.string.rain_open), "PARTIAL" to stringResource(R.string.rain_partial), "COVERED" to stringResource(R.string.rain_covered)), rain) { rain = it }
-        Choice(stringResource(R.string.field_wind), listOf("SHELTERED" to stringResource(R.string.wind_sheltered), "NORMAL" to stringResource(R.string.wind_normal), "EXPOSED" to stringResource(R.string.wind_exposed)), wind) { wind = it }
+        if (outdoor) {
+            Choice(stringResource(R.string.field_rain), listOf("OPEN" to stringResource(R.string.rain_open), "PARTIAL" to stringResource(R.string.rain_partial), "COVERED" to stringResource(R.string.rain_covered)), rain) { rain = it }
+            Choice(stringResource(R.string.field_wind), listOf("SHELTERED" to stringResource(R.string.wind_sheltered), "NORMAL" to stringResource(R.string.wind_normal), "EXPOSED" to stringResource(R.string.wind_exposed)), wind) { wind = it }
+        } else {
+            Choice(
+                stringResource(R.string.field_light),
+                listOf("LOW" to stringResource(R.string.light_low), "MEDIUM" to stringResource(R.string.light_medium), "HIGH" to stringResource(R.string.light_high), "DIRECT" to stringResource(R.string.light_direct)),
+                light,
+            ) { light = it }
+            SwitchRow(stringResource(R.string.field_dry_air), dryAir) { dryAir = it }
+        }
 
         val la = lat.replace(',', '.').toDoubleOrNull()?.takeIf { it in -90.0..90.0 }
         val lo = lon.replace(',', '.').toDoubleOrNull()?.takeIf { it in -180.0..180.0 }
         if (showErrors && (la == null || lo == null)) Text(stringResource(R.string.invalid_coordinates), color = MaterialTheme.colorScheme.error)
         Button(onClick = {
             if (name.isBlank() || la == null || lo == null) { showErrors = true; return@Button }
-            val entity = (loaded ?: PlaceEntity(name = "", outdoor = true, latitude = la, longitude = lo))
-                .copy(name = name.trim(), outdoor = true, latitude = la, longitude = lo, rainExposure = rain, windExposure = wind)
+            val entity = (loaded ?: PlaceEntity(name = "", outdoor = outdoor, latitude = la, longitude = lo))
+                .copy(
+                    name = name.trim(), outdoor = outdoor, latitude = la, longitude = lo, rainExposure = rain, windExposure = wind,
+                    lightClass = if (outdoor) loaded?.lightClass else light, dryAir = if (outdoor) loaded?.dryAir ?: false else dryAir,
+                )
             scope.launch {
                 g.garden.savePlace(entity)
-                g.garden.refreshWeather(foreground = true)
+                if (outdoor) g.garden.refreshWeather(foreground = true)
                 g.scheduler.reschedule(); g.changed(); onDone()
             }
         }) { Text(stringResource(R.string.save)) }

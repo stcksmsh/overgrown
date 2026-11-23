@@ -5,7 +5,14 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.room.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.kostavukicevic.plants.caredb.CareDb
+import com.kostavukicevic.plants.caredb.CareGroups
+import com.kostavukicevic.plants.caredb.Species
+import com.kostavukicevic.plants.caredb.Taxon
+import com.kostavukicevic.plants.caredb.Toxicity
+import com.kostavukicevic.plants.caredb.Water
 import com.kostavukicevic.plants.engine.Action
+import com.kostavukicevic.plants.engine.Place
+import com.kostavukicevic.plants.engine.WaterStrategy
 import com.kostavukicevic.plants.weather.HttpResponse
 import com.kostavukicevic.plants.weather.HttpTransport
 import com.kostavukicevic.plants.weather.InMemoryResponseStore
@@ -39,14 +46,14 @@ class GardenTest {
 
     private val noNetwork = HttpTransport { _, _ -> HttpResponse(503, emptyMap(), "") }
 
-    private fun garden(name: String, careDb: CareDb? = null): Garden {
+    private fun garden(name: String, careDb: CareDb? = null, http: HttpTransport = noNetwork): Garden {
         val db = Room.inMemoryDatabaseBuilder<GardenDb>()
             .setDriver(BundledSQLiteDriver())
             .setQueryCoroutineContext(Dispatchers.Default)
             .build().also { dbs += it }
         val settings = Settings(PreferenceDataStoreFactory.createWithPath { dir.resolve("$name.preferences_pb").toOkioPath() })
-        val om = OpenMeteo(noNetwork, InMemoryResponseStore(), { clock })
-        val met = MetNorway(noNetwork, InMemoryResponseStore(), { clock }, "test", TimeZone.UTC)
+        val om = OpenMeteo(http, InMemoryResponseStore(), { clock })
+        val met = MetNorway(http, InMemoryResponseStore(), { clock }, "test", TimeZone.UTC)
         return Garden(db, settings, WeatherService(om, met, settings), om, { careDb }, { clock }, { TimeZone.UTC })
     }
 
@@ -74,6 +81,82 @@ class GardenTest {
         b.importJson(exported)
         assertEquals(exported, b.exportJson("0.1.0"))
         assertEquals("Cypress", b.plant(plantId)?.name)
+    }
+
+    private fun indoor(light: String, dryAir: Boolean = false, lux: Double? = null) =
+        PlaceEntity(id = 1, name = "Living room", outdoor = false, latitude = 44.8167, longitude = 20.4589, lightClass = light, lux = lux, dryAir = dryAir)
+
+    private val fern = PlantEntity(
+        id = 1, name = "Fern", placeId = 1, canopyWidthCm = 30.0, potVolumeL = 10.0,
+        acquiredOn = today.plus(DatePeriod(days = -3)).toString(),
+    )
+
+    private fun depletion(place: PlaceEntity) =
+        Planner.status(fern, place, emptyList(), emptyList(), emptyList(), null, today).state.depletion
+
+    @Test
+    fun indoorUseFollowsLightAndDryAirWithoutWeather() {
+        val s = Planner.status(fern, indoor("MEDIUM"), emptyList(), emptyList(), emptyList(), null, today)
+        assertIs<Place.Indoor>(s.engine.place)
+        // Without weather an outdoor plant would not advance at all; indoors it uses water every day.
+        assertTrue(s.state.depletion > 0.0, "depletion ${s.state.depletion}")
+        assertEquals(0.0, depletion(indoor("MEDIUM").copy(outdoor = true)))
+
+        val low = depletion(indoor("LOW"))
+        val high = depletion(indoor("HIGH"))
+        assertTrue(high > low && high < 1.0, "low $low, high $high")
+        assertTrue(depletion(indoor("MEDIUM", dryAir = true)) > depletion(indoor("MEDIUM")))
+    }
+
+    @Test
+    fun anIndoorPlaceUsesTheSpeciesIndoorCare() {
+        // Test fixture, not care data: only the per-context blocks differ.
+        val db = CareDb(
+            schemaVersion = CareDb.SUPPORTED_SCHEMA, dataVersion = 1, sourceCommit = "test",
+            species = mapOf(
+                "test-species" to Species(
+                    archetype = "test", taxon = Taxon(acceptedName = "Testus testus", rank = "species"),
+                    outdoorContainer = CareGroups(water = Water(waterStrategy = "evenly_moist")),
+                    indoor = CareGroups(water = Water(waterStrategy = "dry_out_fully")),
+                    toxicity = Toxicity(),
+                ),
+            ),
+        )
+        val plant = fern.copy(speciesSlug = "test-species")
+        val inside = Planner.status(plant, indoor("MEDIUM"), emptyList(), emptyList(), emptyList(), db, today)
+        assertEquals(CareSource.SPECIES, inside.careSource)
+        assertEquals(WaterStrategy.DRY_OUT_FULLY, inside.engine.profile.waterStrategy)
+        val outside = Planner.status(plant, indoor("MEDIUM").copy(outdoor = true), emptyList(), emptyList(), emptyList(), db, today)
+        assertEquals(WaterStrategy.EVENLY_MOIST, outside.engine.profile.waterStrategy)
+    }
+
+    @Test
+    fun exportAndImportKeepAnIndoorPlace() = runTest {
+        val a = garden("indoor-a")
+        val placeId = a.savePlace(indoor("HIGH", dryAir = true, lux = 6200.0).copy(id = 0))
+        val b = garden("indoor-b")
+        b.importJson(a.exportJson("x"))
+        val p = b.place(placeId)!!
+        assertEquals(false, p.outdoor)
+        assertEquals("HIGH", p.lightClass)
+        assertEquals(6200.0, p.lux)
+        assertEquals(true, p.dryAir)
+    }
+
+    @Test
+    fun indoorOnlyGardenFetchesNoWeather() = runTest {
+        var requests = 0
+        val counting = HttpTransport { _, _ -> requests++; HttpResponse(503, emptyMap(), "") }
+        val g = garden("indoor-only", http = counting)
+        g.savePlace(indoor("MEDIUM").copy(id = 0))
+        assertTrue(g.refreshWeather(foreground = false).isEmpty())
+        assertTrue(g.refreshWeather(foreground = true).isEmpty())
+        assertEquals(0, requests)
+
+        // The same garden with an outdoor place does ask, so the count above means something.
+        g.savePlace(PlaceEntity(name = "Balcony", outdoor = true, latitude = 44.8167, longitude = 20.4589))
+        g.refreshWeather(foreground = true)
+        assertTrue(requests > 0)
     }
 
     @Test
