@@ -17,12 +17,12 @@ Handover for the next session. The brief (owner's project brief, section numbers
 | G1 Engine | Done. 20 engine tests, 9 property tests, simulation report `docs/reports/sim-report.md` (CI checks it is current). Learning uses an interval likelihood instead of the brief's nearest band edge, approved by the owner (D18). |
 | G2 Care data | Waiting on the owner. Schema v1 with `in_ground`, `outdoor_container`, `indoor` contexts and `site.wind_sensitive`; validator, compiler, two-draft pipeline (`docs/PIPELINE.md` in the data repo); `hardy-potted-conifer` archetype; `species/chamaecyparis-lawsoniana.yaml` from seven sources. **Exit condition left: the owner reviews the entry.** |
 | G3 Outdoor app | Code merged (PR #4). Weather (Open-Meteo, MET Norway foreground only), Room storage with engine replay, export/import, Compose screens, notifications through WorkManager, calibration mode. **Exit condition left: the owner's cypress running on his phone over ADB.** |
-| G4 Indoor | In progress. Owner has no indoor plants (decided: cover common houseplants; nothing to test on his phone). Slices: `claude/g4-indoor-places` (app), `claude/g4-indoor-archetypes` (data repo: succulent, tropical foliage, moisture-loving, orchid archetypes). Next: light-sensor check. |
+| G4 Indoor | App merged: indoor places with light class and dry-air (PR #7), light-sensor check that sets a class and stores no lux (PR #8, D28). Data: four indoor archetypes (succulent, tropical foliage, moisture-loving, orchid) in overgrown-data PR #4, reviewed clean, waiting for the owner to merge (the nonslop merge hook checks PR numbers against this repo, so it refuses data-repo merges). Owner has no indoor plants: nothing to test on his phone. Left: indoor species entries (snake plant first; it does not fit the succulent archetype on light), export/import round-trip on a device. |
 | G5-G7 | Not started. |
 
 ## Open
 
-- G4 slices above; PR #5 merged (8f30bbc).
+- overgrown-data PR #4 (indoor archetypes): owner to merge; then re-pin the `overgrown-data` submodule here. Archetypes stay draft until the owner reviews them.
 
 ## Waiting on the owner
 
@@ -34,8 +34,8 @@ Handover for the next session. The brief (owner's project brief, section numbers
 ## Next work, in order
 
 1. Close G2 and G3 with the owner (above).
-2. **G4 Indoor**: indoor places (light class, light-sensor check reporting a class only, dry-air toggle), indoor demand path in the app, more archetypes and species (a few per archetype, through the pipeline), export/import round-trip on device.
-3. Feeding and repotting reminders from simple rules (D17; needs feeding data in the care database, none sourced yet).
+2. **G4 rest**: re-pin the data submodule after data PR #4; indoor species through the pipeline (a few per archetype); export/import round-trip on a device. Light-class labels in the place editor are the builder's wording: owner to confirm.
+3. Feeding and repotting reminders from simple rules (D17). Feeding data now exists in the draft indoor archetypes (not the tropical-foliage one); none reaches the app until the owner reviews.
 4. The owner asked about plants in the ground: the data side is ready (`in_ground` context); the engine needs a soil model. Out of v1 scope; raise after G3/G4.
 5. G5 proof (baseline comparison with real scale data and the archetype test), G6 hardening.
 
