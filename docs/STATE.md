@@ -17,11 +17,12 @@ Handover for the next session. The brief (owner's project brief, section numbers
 | G1 Engine | Done. 20 engine tests, 9 property tests, simulation report `docs/reports/sim-report.md` (CI checks it is current). Learning uses an interval likelihood instead of the brief's nearest band edge, approved by the owner (D18). |
 | G2 Care data | Waiting on the owner. Schema v1 with `in_ground`, `outdoor_container`, `indoor` contexts and `site.wind_sensitive`; validator, compiler, two-draft pipeline (`docs/PIPELINE.md` in the data repo); `hardy-potted-conifer` archetype; `species/chamaecyparis-lawsoniana.yaml` from seven sources. **Exit condition left: the owner reviews the entry.** |
 | G3 Outdoor app | Code merged (PR #4). Weather (Open-Meteo, MET Norway foreground only), Room storage with engine replay, export/import, Compose screens, notifications through WorkManager, calibration mode. **Exit condition left: the owner's cypress running on his phone over ADB.** |
-| G4-G7 | Not started. |
+| G4 Indoor | In progress. Owner has no indoor plants (decided: cover common houseplants; nothing to test on his phone). Slices: `claude/g4-indoor-places` (app), `claude/g4-indoor-archetypes` (data repo: succulent, tropical foliage, moisture-loving, orchid archetypes). Next: light-sensor check. |
+| G5-G7 | Not started. |
 
 ## Open
 
-- PR #5 `claude/weather-fallback-count`: verified, reviewed clean, CI was running. Merge when green.
+- G4 slices above; PR #5 merged (8f30bbc).
 
 ## Waiting on the owner
 
@@ -32,7 +33,7 @@ Handover for the next session. The brief (owner's project brief, section numbers
 
 ## Next work, in order
 
-1. Merge PR #5. Close G2 and G3 with the owner (above).
+1. Close G2 and G3 with the owner (above).
 2. **G4 Indoor**: indoor places (light class, light-sensor check reporting a class only, dry-air toggle), indoor demand path in the app, more archetypes and species (a few per archetype, through the pipeline), export/import round-trip on device.
 3. Feeding and repotting reminders from simple rules (D17; needs feeding data in the care database, none sourced yet).
 4. The owner asked about plants in the ground: the data side is ready (`in_ground` context); the engine needs a soil model. Out of v1 scope; raise after G3/G4.
