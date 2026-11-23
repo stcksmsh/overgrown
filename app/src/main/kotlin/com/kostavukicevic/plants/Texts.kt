@@ -3,6 +3,7 @@ package com.kostavukicevic.plants
 
 import android.content.Context
 import com.kostavukicevic.plants.data.PlantStatus
+import com.kostavukicevic.plants.data.Reminder
 import com.kostavukicevic.plants.engine.Action
 import com.kostavukicevic.plants.engine.Alert
 import com.kostavukicevic.plants.engine.AlertType
@@ -69,6 +70,13 @@ object Texts {
             AlertType.WATERLOGGING -> c.getString(R.string.alert_waterlogging)
         }
     }
+
+    fun reminder(c: Context, r: Reminder): String = c.getString(
+        when (r) {
+            Reminder.FEED -> R.string.reminder_feed
+            Reminder.REPOT -> R.string.reminder_repot
+        },
+    )
 
     fun moisture(c: Context, m: Moisture) = c.getString(
         when (m) {

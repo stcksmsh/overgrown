@@ -63,6 +63,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
         if (s == null) return@Page
         Text(Texts.action(c, s.today), style = MaterialTheme.typography.titleLarge)
         Texts.reason(c, s)?.let { Text(it) }
+        for (r in s.reminders) Text(Texts.reminder(c, r))
         for (a in s.alerts) Text(Texts.alert(c, a), color = MaterialTheme.colorScheme.error)
         s.snoozedUntil?.let { Text(stringResource(R.string.snoozed_until, Texts.date(it))) }
         Text(
@@ -96,6 +97,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { act { g.garden.moved(plantId) } }) { Text(stringResource(R.string.plant_moved)) }
             OutlinedButton(onClick = { act { g.garden.repotted(plantId) } }) { Text(stringResource(R.string.plant_repotted)) }
+            OutlinedButton(onClick = { act { g.garden.fed(plantId) } }) { Text(stringResource(R.string.plant_fed)) }
         }
 
         HorizontalDivider()
@@ -173,6 +175,7 @@ private fun historyLine(c: android.content.Context, e: EventEntity): String {
         "CHECK_IN" -> c.getString(R.string.history_check_in, d, e.moisture?.let { Texts.moisture(c, Moisture.valueOf(it)) } ?: "")
         "MOVED" -> c.getString(R.string.history_moved, d)
         "REPOTTED" -> c.getString(R.string.history_repotted, d)
+        "FED" -> c.getString(R.string.history_fed, d)
         else -> c.getString(R.string.history_snoozed, d)
     }
 }

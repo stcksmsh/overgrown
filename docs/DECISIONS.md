@@ -168,3 +168,14 @@ Indoors the engine reads only each day's date, so the planner replays an indoor 
 On an indoor place, "Check the light" reads the phone's ambient light sensor (`Sensor.TYPE_LIGHT`, framework API, no permission) for about 3 seconds, takes the median of the readings, and selects `WaterBalance.lightClassOf(median)` in the light choice, where the person can still change it. The message names the class and never shows a lux number. A device without a light sensor does not show the action; no reading within the 3 seconds shows "No reading; try again" and changes nothing. A second check replaces the first selection.
 
 The reading is not stored: the check sets `lightClass` only and leaves `lux` null. A single momentary reading is not a day's light (time of day, clouds, the angle the phone is held at), so it must not replace the class's typical lux in the engine. For the same reason the class chosen in the editor is authoritative: saving an indoor place sets `lux` to null, so a lux value stored earlier (for example by an import) cannot silently override the class the person picked. The 3-second window is a UI choice, not a model constant, so it lives in the app beside the check.
+
+## D29. Feeding and repotting reminders
+
+Reminders come from the care database's season fields (D17), resolved like the watering profile: the species' block for the plant's context (indoor or outdoor container), else its archetype's defaults. A field that is missing gives no reminder of that kind; feeding needs both the months and the interval.
+
+- Feeding is due when the current month is a feeding month and there is no FED event within `feeding_interval_weeks` (or none at all). South of the equator (place latitude below 0) the northern-hemisphere months are shifted by six months.
+- Repotting is due when `lastRepotOn`, else the plant's acquired date, plus `repot_interval_months` is on or before today. The existing "Repotted" action clears it.
+
+Feeding is recorded with a new event type, FED, logged by a "Fed" button on the plant screen. It is a new value of the existing `type` column, so there is no schema change; it changes no watering state, and export and import carry it. The owner accepted that older builds cannot import an export that contains FED ("Older builds are allowed to be broken, noone is using it").
+
+The owner chose to show reminders both on the Today list and in the notification. A due reminder appears on the plant's Today card and on its screen. In the background a plant gets one notification: when a watering prompt is due today it carries that day's reminders; otherwise the reminders alone are posted once a day at 09:00 (or soon after, if later), without the Watered and Snooze buttons. The shipped asset has no reviewed entry with feeding data yet, so no reminder appears on a device until one is reviewed.

@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.kostavukicevic.plants.caredb.CareDb
 import com.kostavukicevic.plants.caredb.CareGroups
+import com.kostavukicevic.plants.caredb.Season
 import com.kostavukicevic.plants.caredb.Species
 import com.kostavukicevic.plants.caredb.Taxon
 import com.kostavukicevic.plants.caredb.Toxicity
@@ -263,5 +264,116 @@ class GardenTest {
         store.save("k", v)
         assertEquals(v, store.load("k"))
         assertTrue(g.statuses().isEmpty())
+    }
+
+    // ---- Feeding and repotting reminders ------------------------------------------------
+    // Test fixtures, not care data.
+
+    private val feeding = Season(feedingMonthsNorthernHemisphere = listOf(4, 5, 6, 7, 8, 9), feedingIntervalWeeks = 2)
+    private val june = LocalDate(2026, 6, 15)
+    private val southern = indoor("MEDIUM").copy(latitude = -33.9)
+
+    private fun fed(on: LocalDate, id: Long = 1) = EventEntity(id = id, plantId = 1, date = on.toString(), type = "FED")
+
+    private fun remindersOn(day: LocalDate, events: List<EventEntity> = emptyList(), season: Season? = feeding, place: PlaceEntity = indoor("MEDIUM")) =
+        Planner.reminders(fern, place, events, season, day)
+
+    @Test
+    fun feedingIsDueInAFeedingMonthWithoutAFeed() {
+        assertEquals(listOf(Reminder.FEED), remindersOn(june))
+    }
+
+    @Test
+    fun feedingClearsAfterAFeedUntilTheIntervalPasses() {
+        assertEquals(emptyList(), remindersOn(june, listOf(fed(june))))
+        assertEquals(emptyList(), remindersOn(june.plus(DatePeriod(days = 13)), listOf(fed(june))))
+        assertEquals(listOf(Reminder.FEED), remindersOn(june.plus(DatePeriod(days = 14)), listOf(fed(june))))
+        // The latest feed counts, not the first.
+        assertEquals(emptyList(), remindersOn(june, listOf(fed(LocalDate(2026, 4, 1)), fed(june, id = 2))))
+    }
+
+    @Test
+    fun feedingIsNotDueOutsideTheFeedingMonths() {
+        assertEquals(emptyList(), remindersOn(LocalDate(2026, 12, 15)))
+        assertEquals(emptyList(), remindersOn(LocalDate(2026, 3, 31)))
+        assertEquals(listOf(Reminder.FEED), remindersOn(LocalDate(2026, 4, 1)))
+    }
+
+    @Test
+    fun feedingMonthsShiftSixMonthsSouthOfTheEquator() {
+        // April-September in the north is October-March in the south.
+        assertEquals(emptyList(), remindersOn(june, place = southern))
+        assertEquals(listOf(Reminder.FEED), remindersOn(LocalDate(2026, 12, 15), place = southern))
+        assertEquals(listOf(Reminder.FEED), remindersOn(LocalDate(2026, 3, 15), place = southern))
+        assertEquals(emptyList(), remindersOn(LocalDate(2026, 4, 15), place = southern))
+    }
+
+    @Test
+    fun noReminderWhenTheFieldsAreMissing() {
+        assertEquals(emptyList(), remindersOn(june, season = null))
+        assertEquals(emptyList(), remindersOn(june, season = feeding.copy(feedingMonthsNorthernHemisphere = null)))
+        assertEquals(emptyList(), remindersOn(june, season = feeding.copy(feedingIntervalWeeks = null)))
+        assertEquals(emptyList(), remindersOn(june, season = Season(repotIntervalMonths = null)))
+    }
+
+    @Test
+    fun repottingIsDueFromTheLastRepotElseTheAcquiredDate() {
+        val season = Season(repotIntervalMonths = 24)
+        val plant = fern.copy(acquiredOn = "2023-01-10", lastRepotOn = "2024-06-15")
+        fun on(day: LocalDate, p: PlantEntity = plant) = Planner.reminders(p, indoor("MEDIUM"), emptyList(), season, day)
+        assertEquals(emptyList(), on(LocalDate(2026, 6, 14)))
+        assertEquals(listOf(Reminder.REPOT), on(LocalDate(2026, 6, 15)))
+        // No repot recorded: counted from the day the plant was acquired.
+        val never = plant.copy(lastRepotOn = null)
+        assertEquals(emptyList(), on(LocalDate(2025, 1, 9), never))
+        assertEquals(listOf(Reminder.REPOT), on(LocalDate(2025, 1, 10), never))
+    }
+
+    private fun seasonDb(season: Season) = CareDb(
+        schemaVersion = CareDb.SUPPORTED_SCHEMA, dataVersion = 1, sourceCommit = "test",
+        species = mapOf(
+            "test-species" to Species(
+                archetype = "test", taxon = Taxon(acceptedName = "Testus testus", rank = "species"),
+                indoor = CareGroups(season = season),
+                toxicity = Toxicity(),
+            ),
+        ),
+    )
+
+    private suspend fun Garden.indoorPlant(acquiredOn: LocalDate): Long {
+        val placeId = savePlace(indoor("MEDIUM").copy(id = 0))
+        return savePlant(fern.copy(id = 0, placeId = placeId, speciesSlug = "test-species", acquiredOn = acquiredOn.toString()))
+    }
+
+    @Test
+    fun repottedClearsARepotReminder() = runTest {
+        val g = garden("repot", careDb = seasonDb(Season(repotIntervalMonths = 12)))
+        val plantId = g.indoorPlant(today.plus(DatePeriod(years = -2)))
+        assertEquals(listOf(Reminder.REPOT), g.status(plantId)!!.reminders)
+        g.repotted(plantId)
+        assertEquals(emptyList(), g.status(plantId)!!.reminders)
+    }
+
+    @Test
+    fun aFeedIsLoggedAndClearsTheReminder() = runTest {
+        // Feeding every month, so the fixed test date is always in season.
+        val g = garden("feed", careDb = seasonDb(Season(feedingMonthsNorthernHemisphere = (1..12).toList(), feedingIntervalWeeks = 4)))
+        val plantId = g.indoorPlant(today.plus(DatePeriod(days = -3)))
+        assertEquals(listOf(Reminder.FEED), g.status(plantId)!!.reminders)
+        g.fed(plantId)
+        assertEquals(listOf("FED"), dbs.last().dao().events(plantId).map { it.type })
+        assertEquals(emptyList(), g.status(plantId)!!.reminders)
+    }
+
+    @Test
+    fun exportAndImportKeepAFeed() = runTest {
+        val a = garden("fed-a")
+        val plantId = a.seed()
+        a.fed(plantId)
+        val exported = a.exportJson("x")
+        val b = garden("fed-b")
+        b.importJson(exported)
+        assertEquals(listOf("FED"), dbs.last().dao().events(plantId).map { it.type })
+        assertEquals(exported, b.exportJson("x"))
     }
 }

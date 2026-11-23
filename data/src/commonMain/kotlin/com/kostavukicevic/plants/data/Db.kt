@@ -63,7 +63,7 @@ data class EventEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val plantId: Long,
     val date: String,
-    /** WATERED, CHECK_IN, MOVED, REPOTTED, SNOOZED */
+    /** WATERED, CHECK_IN, MOVED, REPOTTED, SNOOZED, FED */
     val type: String,
     val ranOutOfBottom: Boolean? = null,
     val moisture: String? = null,

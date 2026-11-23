@@ -79,6 +79,8 @@ class Garden(
 
     suspend fun moved(plantId: Long) = dao.insertEvent(EventEntity(plantId = plantId, date = today().toString(), type = "MOVED"))
 
+    suspend fun fed(plantId: Long) = dao.insertEvent(EventEntity(plantId = plantId, date = today().toString(), type = "FED"))
+
     suspend fun repotted(plantId: Long) {
         dao.insertEvent(EventEntity(plantId = plantId, date = today().toString(), type = "REPOTTED"))
         dao.plant(plantId)?.let { dao.upsertPlant(it.copy(lastRepotOn = today().toString())) }
@@ -180,7 +182,7 @@ class Garden(
         for (ev in e.events) {
             require(ev.plantId in plantIds) { "event ${ev.id} refers to a missing plant" }
             date(ev.date, "event ${ev.id}")
-            require(ev.type in setOf("WATERED", "CHECK_IN", "MOVED", "REPOTTED", "SNOOZED")) { "unknown event type ${ev.type}" }
+            require(ev.type in setOf("WATERED", "CHECK_IN", "MOVED", "REPOTTED", "SNOOZED", "FED")) { "unknown event type ${ev.type}" }
             if (ev.type == "CHECK_IN") require(ev.moisture != null) { "check-in ${ev.id} has no answer" }
             ev.moisture?.let { require(runCatching { Moisture.valueOf(it) }.isSuccess) { "bad answer in event ${ev.id}" } }
             ev.snoozedUntil?.let { date(it, "event ${ev.id}") }

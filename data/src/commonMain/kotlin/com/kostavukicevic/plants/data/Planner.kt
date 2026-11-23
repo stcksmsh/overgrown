@@ -3,6 +3,7 @@ package com.kostavukicevic.plants.data
 
 import com.kostavukicevic.plants.caredb.CareDb
 import com.kostavukicevic.plants.caredb.Context
+import com.kostavukicevic.plants.caredb.Season
 import com.kostavukicevic.plants.caredb.toProfile
 import com.kostavukicevic.plants.engine.Action
 import com.kostavukicevic.plants.engine.Alert
@@ -29,6 +30,7 @@ import com.kostavukicevic.plants.weather.Series
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Month
+import kotlinx.datetime.number
 import kotlinx.datetime.plus
 
 /** Everything the app shows about one plant today. */
@@ -47,9 +49,13 @@ data class PlantStatus(
     /** Days of the replay filled from climatology, for the "data is stale" hint. */
     val gapDays: Int,
     val careSource: CareSource,
+    /** Feeding and repotting due today, from the care data's season fields. */
+    val reminders: List<Reminder> = emptyList(),
 )
 
 enum class CareSource { SPECIES, ARCHETYPE, GENERIC }
+
+enum class Reminder { FEED, REPOT }
 
 /**
  * Turns stored facts into the engine's view of a plant. Nothing derived is stored: the engine
@@ -74,6 +80,36 @@ object Planner {
         return CareProfile(WaterStrategy.DRY_TOP_PART) to CareSource.GENERIC
     }
 
+    /** Season fields, resolved like [profile]: species for the plant's context, else its archetype. */
+    fun season(plant: PlantEntity, place: PlaceEntity, db: CareDb?): Season? {
+        val context = if (place.outdoor) Context.OUTDOOR_CONTAINER else Context.INDOOR
+        plant.speciesSlug?.let { slug -> db?.species(slug)?.let { return it.groupsFor(context).season } }
+        plant.archetypeId?.let { id -> db?.archetypes?.get(id)?.let { return it.defaults.season } }
+        return null
+    }
+
+    /**
+     * Feeding is due in a feeding month (shifted six months south of the equator) when there has
+     * been no FED event within the feeding interval. Repotting is due once the repot interval has
+     * passed since the last repot, else since the plant was acquired. A missing field means no
+     * reminder of that kind.
+     */
+    fun reminders(plant: PlantEntity, place: PlaceEntity, events: List<EventEntity>, season: Season?, today: LocalDate): List<Reminder> {
+        val out = ArrayList<Reminder>()
+        val months = season?.feedingMonthsNorthernHemisphere
+        val weeks = season?.feedingIntervalWeeks
+        if (months != null && weeks != null) {
+            val local = if (place.latitude < 0) months.map { (it + 5) % 12 + 1 } else months
+            val lastFed = events.filter { it.type == "FED" }.maxOfOrNull { LocalDate.parse(it.date) }
+            if (today.month.number in local && (lastFed == null || lastFed.plus(DatePeriod(days = weeks * 7)) <= today)) out += Reminder.FEED
+        }
+        season?.repotIntervalMonths?.let { interval ->
+            val since = LocalDate.parse(plant.lastRepotOn ?: plant.acquiredOn)
+            if (since.plus(DatePeriod(months = interval)) <= today) out += Reminder.REPOT
+        }
+        return out
+    }
+
     fun enginePlant(plant: PlantEntity, place: PlaceEntity, profile: CareProfile) = Plant(
         profile = profile,
         canopyWidthCm = plant.canopyWidthCm,
@@ -96,7 +132,7 @@ object Planner {
             "CHECK_IN" -> Event.CheckIn(date, Moisture.valueOf(requireNotNull(e.moisture) { "check-in without an answer" }))
             "MOVED" -> Event.Moved(date)
             "REPOTTED" -> Event.Repotted(date)
-            else -> null // SNOOZED changes no state
+            else -> null // SNOOZED and FED change no watering state
         }
     }
 
@@ -185,6 +221,7 @@ object Planner {
             today = todayAction, alerts = rec?.alerts ?: emptyList(), nextPrompt = next, snoozedUntil = snoozedUntil,
             gapDays = series.count { it.date < today && it.quality == WeatherQuality.CLIMATOLOGY_FILL },
             careSource = source,
+            reminders = reminders(plant, place, events, season(plant, place, db), today),
         )
     }
 }
