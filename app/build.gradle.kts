@@ -76,3 +76,65 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
 }
+
+// ---- Care database asset ---------------------------------------------------------------
+// The YAML in the pinned overgrown-data submodule is the source form; this task compiles it,
+// with the data repository's own tool, into assets/caredb.json, the object form.
+
+val careTool: Configuration by configurations.creating
+
+dependencies {
+    careTool("overgrown.data:overgrown-data-tools")
+}
+
+abstract class CompileCareAsset @Inject constructor(private val exec: ExecOperations) : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val dataFiles: ConfigurableFileCollection
+
+    @get:Internal
+    abstract val dataRoot: DirectoryProperty
+
+    @get:Classpath
+    abstract val toolClasspath: ConfigurableFileCollection
+
+    /** The submodule commit the asset was built from. Pinned, so builds stay reproducible. */
+    @get:Input
+    abstract val sourceCommit: Property<String>
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun compile() {
+        val out = outputDir.get().file("caredb.json").asFile
+        exec.javaexec {
+            classpath = toolClasspath
+            mainClass.set("overgrown.data.MainKt")
+            args("--root", dataRoot.get().asFile.path, "compile", "--out", out.path, "--commit", sourceCommit.get())
+        }
+    }
+}
+
+val dataDir = rootProject.layout.projectDirectory.dir("overgrown-data")
+
+val compileCareAsset = tasks.register<CompileCareAsset>("compileCareAsset") {
+    dataRoot.set(dataDir)
+    dataFiles.from(fileTree(dataDir) {
+        include("species/**", "archetypes/**", "schema/**", "provenance/snapshots/**", "redirects.yaml", "DATA_VERSION")
+    })
+    toolClasspath.from(careTool)
+    sourceCommit.set(
+        providers.exec {
+            workingDir = dataDir.asFile
+            commandLine("git", "rev-parse", "HEAD")
+        }.standardOutput.asText.map { it.trim() },
+    )
+    outputDir.set(layout.buildDirectory.dir("generated/caredb"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(compileCareAsset, CompileCareAsset::outputDir)
+    }
+}
