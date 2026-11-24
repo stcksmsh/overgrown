@@ -6,6 +6,8 @@ import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 
 /** What an alert card is about. Root-freeze caution and strong are one kind; the event carries the severity. */
 enum class AlertKind { COLD, HEAT, HEAVY_RAIN, WIND, WATERLOGGING }
@@ -34,8 +36,8 @@ data class AlertEvent(
     val plants: List<PlantEntity>,
 ) {
     /**
-     * Names the event for "notify once". Unlike the overlap match of [AlertAck], it changes when the event gets
-     * more severe or reaches another plant, which are exactly the cases that must notify again.
+     * Names this version of the event within one day, for the screen and the scheduled work. It changes with
+     * severity and plants, and also as the start moves to today, so "notify once" uses [alreadyPosted] instead.
      */
     val key: String get() = "event-$kind-$start-$severity-${plants.map { it.id }.sorted().joinToString(",")}"
 }
@@ -116,3 +118,34 @@ fun applyAcks(events: List<AlertEvent>, acks: List<AlertAck>, today: LocalDate):
 /** The acks after Done or Dismiss on [e]: a new ack replaces any earlier one of the same type for the same event. */
 fun acked(acks: List<AlertAck>, e: AlertEvent, dismissedOn: LocalDate?): List<AlertAck> =
     acks.filterNot { (it.dismissedOn == null) == (dismissedOn == null) && it.overlaps(e) } + AlertAck.of(e, dismissedOn)
+
+/**
+ * Whether the notifications already posted ([posted], stored as acks without a dismissal) told the person
+ * about [e]. Matched by overlap, as the acks are, so the event keeps its identity while its start moves to today
+ * or a refresh shifts it; it notifies again only once it is more severe or reaches a plant none of them named.
+ */
+fun alreadyPosted(posted: List<AlertAck>, e: AlertEvent): Boolean {
+    val same = posted.filter { it.overlaps(e) }
+    return same.isNotEmpty() && same.maxOf { it.severity.rank() } >= e.severity.rank() &&
+        same.flatMap { it.plantIds }.containsAll(e.plants.map { it.id })
+}
+
+private val ackListSerializer = ListSerializer(AlertAck.serializer())
+
+fun encodeAckList(acks: List<AlertAck>): String = Json.encodeToString(ackListSerializer, acks)
+
+/** An unreadable value reads as none. */
+fun decodeAckList(text: String?): List<AlertAck> =
+    text?.let { runCatching { Json.decodeFromString(ackListSerializer, it) }.getOrNull() } ?: emptyList()
+
+private val legacyKey = Regex("""^(\d+)-([A-Z_]+)-(\d{4}-\d{2}-\d{2})$""")
+
+/**
+ * A per-plant alert posted before alerts were grouped into events ("<plant id>-<type>-<date>"), as a posted
+ * record, so the first run after the update does not notify again. Null for any other key.
+ */
+fun legacyPosted(key: String): AlertAck? {
+    val (id, type, date) = legacyKey.matchEntire(key)?.destructured ?: return null
+    val t = AlertType.entries.find { it.name == type } ?: return null
+    return AlertAck(t.kind(), date, date, t, setOf(id.toLong()))
+}

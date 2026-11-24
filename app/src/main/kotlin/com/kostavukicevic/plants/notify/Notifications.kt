@@ -29,7 +29,12 @@ import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.MainActivity
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
+import com.kostavukicevic.plants.data.AlertAck
 import com.kostavukicevic.plants.data.AlertEvent
+import com.kostavukicevic.plants.data.alreadyPosted
+import com.kostavukicevic.plants.data.decodeAckList
+import com.kostavukicevic.plants.data.encodeAckList
+import com.kostavukicevic.plants.data.legacyPosted
 import com.kostavukicevic.plants.data.PlantStatus
 import com.kostavukicevic.plants.data.Reminder
 import com.kostavukicevic.plants.data.isPrompt
@@ -99,8 +104,11 @@ object Notifier {
             if (moisture != null) putExtra(ActionReceiver.EXTRA_MOISTURE, moisture.name)
         }
 
-    private fun eventAction(c: Context, action: String, key: String) =
-        actionIntent(c, 31 * eventId(key) + action.hashCode(), action, "event/$key") { putExtra(ActionReceiver.EXTRA_EVENT, key) }
+    /** The action carries the posted event's kind, range, severity and plants, matched later as [alreadyPosted] does. */
+    private fun eventAction(c: Context, action: String, posted: AlertAck): PendingIntent {
+        val record = encodeAckList(listOf(posted))
+        return actionIntent(c, 31 * alertId(posted) + action.hashCode(), action, "event/${Uri.encode(record)}") { putExtra(ActionReceiver.EXTRA_EVENT, record) }
+    }
 
     /** The soil answers a notification offers, as on Today. "Dry" covers Dry and Bone dry (D31.4). */
     private val answers = listOf(R.string.answer_wet to Moisture.TOO_WET, R.string.answer_ok to Moisture.OK, R.string.answer_dry to Moisture.DRY_OR_BONE_DRY)
@@ -142,7 +150,11 @@ object Notifier {
         return post(c, promptId(plantId), b.build())
     }
 
-    fun eventId(key: String) = key.hashCode()
+    /** Alert notifications are tagged, so their ids never meet [promptId] or [STALE_ID]. */
+    const val ALERT_TAG = "alert"
+
+    /** One posted event's notification: the same kind and first day replace it. */
+    fun alertId(posted: AlertAck) = "${posted.kind}-${posted.start}".hashCode()
 
     /** One notification per weather event, naming all its plants: "Frost Mon-Wed: Boris". True if it was shown. */
     fun postAlert(c: Context, e: AlertEvent, today: LocalDate): Boolean {
@@ -155,14 +167,14 @@ object Notifier {
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(openApp(c, null))
             .setAutoCancel(true)
-            .addAction(0, c.getString(R.string.alert_done), eventAction(c, ActionReceiver.ACTION_DONE, e.key))
-            .addAction(0, c.getString(R.string.alert_dismiss), eventAction(c, ActionReceiver.ACTION_DISMISS, e.key))
+            .addAction(0, c.getString(R.string.alert_done), eventAction(c, ActionReceiver.ACTION_DONE, AlertAck.of(e)))
+            .addAction(0, c.getString(R.string.alert_dismiss), eventAction(c, ActionReceiver.ACTION_DISMISS, AlertAck.of(e)))
             .build()
-        return post(c, eventId(e.key), n)
+        return post(c, alertId(AlertAck.of(e)), n, ALERT_TAG)
     }
 
-    /** Takes down the event's notification, after Done or Dismiss on Today. */
-    fun cancelAlert(c: Context, e: AlertEvent) = NotificationManagerCompat.from(c).cancel(eventId(e.key))
+    /** Takes down the notification posted for [posted]. */
+    fun cancelAlert(c: Context, posted: AlertAck) = NotificationManagerCompat.from(c).cancel(ALERT_TAG, alertId(posted))
 
     fun postStale(c: Context) {
         if (!allowed(c)) return
@@ -179,12 +191,12 @@ object Notifier {
     const val STALE_ID = 1
 
     /** The person can revoke the permission at any moment; a missed reminder is better than a crash. */
-    private fun post(c: Context, id: Int, n: android.app.Notification): Boolean {
+    private fun post(c: Context, id: Int, n: android.app.Notification, tag: String? = null): Boolean {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(c, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) return false
         return try {
-            NotificationManagerCompat.from(c).notify(id, n)
+            NotificationManagerCompat.from(c).notify(tag, id, n)
             true
         } catch (e: SecurityException) {
             android.util.Log.w("Overgrown", "notification permission revoked", e)
@@ -201,13 +213,13 @@ class ActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
         val plantId = intent.getLongExtra(EXTRA_PLANT, -1).takeIf { it > 0 }
-        val eventKey = intent.getStringExtra(EXTRA_EVENT)
+        val posted = decodeAckList(intent.getStringExtra(EXTRA_EVENT)).singleOrNull()
         // Only the three quick answers; anything else in the extra is ignored.
         val moisture = intent.getStringExtra(EXTRA_MOISTURE)?.let { m -> QUICK_ANSWERS.find { it.name == m } }
         val valid = when (action) {
             ACTION_WATERED, ACTION_SNOOZE -> plantId != null
             ACTION_ANSWER -> plantId != null && moisture != null
-            ACTION_DONE, ACTION_DISMISS -> eventKey != null
+            ACTION_DONE, ACTION_DISMISS -> posted != null
             else -> false
         }
         if (!valid) return
@@ -225,11 +237,12 @@ class ActionReceiver : BroadcastReceiver() {
                         ACTION_ANSWER -> if (moisture != null) g.garden.checkIn(plantId, moisture.name)
                     }
                     NotificationManagerCompat.from(context).cancel(Notifier.promptId(plantId))
-                } else if (eventKey != null) {
-                    // An event already gone (Done on Today, or changed by a refresh) has nothing to store.
-                    val e = g.garden.alertEvents().find { it.key == eventKey }
+                } else if (posted != null) {
+                    // Matched by overlap, so a tap on a later day still finds the event. One already gone (Done on
+                    // Today) or now worse than the notification said has nothing to store: the person did not see it.
+                    val e = g.garden.alertEvents().find { alreadyPosted(listOf(posted), it) }
                     if (e != null) if (action == ACTION_DONE) g.garden.done(e) else g.garden.dismiss(e)
-                    NotificationManagerCompat.from(context).cancel(Notifier.eventId(eventKey))
+                    Notifier.cancelAlert(context, posted)
                 }
                 g.scheduler.reschedule()
                 g.changed()
@@ -279,7 +292,7 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 // Re-armed here, so the next reminder needs no refresh or network.
                 g.scheduler.scheduleReminder(status, g.garden.today(), includeToday = false)
             }
-            KIND_ALERT -> g.scheduler.postEvent(inputData.getString(KEY) ?: return Result.success())
+            KIND_ALERT -> decodeAckList(inputData.getString(KEY)).singleOrNull()?.let { g.scheduler.postEvent(it) }
             KIND_STALE -> Notifier.postStale(c)
         }
         return Result.success()
@@ -335,10 +348,11 @@ class Scheduler(private val context: Context, private val graph: Graph) {
         }
         // Events marked Done or dismissed today are not visible, so they are not scheduled.
         for (e in graph.garden.alertEvents(statuses)) {
-            if (prefs.contains(e.key)) continue
+            if (eventPosted(e, today)) continue
             // The evening before, so there is time to move or wrap the pots.
             val at = e.start.minus(DatePeriod(days = 1)).atTime(LocalTime(18, 0)).toInstant(zone)
-            enqueue("alert-${e.key}", at - now, workDataOf(NotifyWorker.KIND to NotifyWorker.KIND_ALERT, NotifyWorker.KEY to e.key))
+            val record = encodeAckList(listOf(AlertAck.of(e)))
+            enqueue("alert-${e.key}", at - now, workDataOf(NotifyWorker.KIND to NotifyWorker.KIND_ALERT, NotifyWorker.KEY to record))
         }
         // If the forecast gets old, ask the person to open the app (where MET Norway may be used).
         val outdoor = statuses.filter { it.place.outdoor }
@@ -362,22 +376,57 @@ class Scheduler(private val context: Context, private val graph: Graph) {
     }
 
     /**
-     * Posts the alert event named [key] if it is still visible and not yet posted. Checked again when it comes due:
-     * Done or Dismiss since scheduling, or a forecast that changed it, means nothing is posted. Remembered only once
-     * actually shown, so a refused permission does not lose the alert. True if it was shown.
+     * Posts the visible alert event that overlaps [scheduled], unless [eventPosted]. Checked again when it comes
+     * due: Done or Dismiss since scheduling means nothing is posted. Remembered only once actually shown, so a
+     * refused permission does not lose the alert. True if it was shown.
      */
-    suspend fun postEvent(key: String): Boolean {
-        if (alertPosted(key)) return false
-        val e = graph.garden.alertEvents().find { it.key == key } ?: return false
-        if (!Notifier.postAlert(context, e, graph.garden.today())) return false
-        markAlertPosted(key)
+    suspend fun postEvent(scheduled: AlertAck): Boolean {
+        val today = graph.garden.today()
+        val e = graph.garden.alertEvents().find { scheduled.overlaps(it) } ?: return false
+        if (eventPosted(e, today)) return false
+        // A milder notification of the same event is replaced, not left beside the new one.
+        val earlier = postedEvents(today).filter { it.overlaps(e) }
+        for (a in earlier) Notifier.cancelAlert(context, a)
+        if (!Notifier.postAlert(context, e, today)) return false
+        savePosted(postedEvents(today) + AlertAck.of(e))
         return true
     }
 
     /**
-     * Alert events are posted once per [AlertEvent.key], so one that gets more severe or reaches another plant
-     * posts again; reminders alone once per plant and day.
+     * Whether [e] was already posted, matched by overlap ([alreadyPosted]) so it is posted once over its whole
+     * range. A posted event that a refresh extended keeps its record to the new end.
      */
+    fun eventPosted(e: AlertEvent, today: LocalDate): Boolean {
+        val posted = postedEvents(today)
+        if (!alreadyPosted(posted, e)) return false
+        val extended = posted.map { if (it.overlaps(e) && LocalDate.parse(it.end) < e.end) it.copy(end = e.end.toString()) else it }
+        if (extended != posted) savePosted(extended)
+        return true
+    }
+
+    /** Takes down the notifications posted for [e], after Done or Dismiss on Today. */
+    fun cancelEvent(e: AlertEvent) {
+        for (a in postedEvents(graph.garden.today()).filter { it.overlaps(e) }) Notifier.cancelAlert(context, a)
+    }
+
+    /**
+     * The alert events posted, as acks, without those that have ended. Keys of per-plant alerts posted before
+     * events existed become records here once, so the update does not notify about them again.
+     */
+    private fun postedEvents(today: LocalDate): List<AlertAck> {
+        val legacy = prefs.all.keys.mapNotNull { k -> legacyPosted(k)?.let { k to it } }
+        val all = decodeAckList(prefs.getString(POSTED_EVENTS, null)) + legacy.map { it.second }
+        val kept = all.filter { LocalDate.parse(it.end) >= today }
+        if (kept.size != all.size || legacy.isNotEmpty()) prefs.edit {
+            for ((k, _) in legacy) remove(k)
+            putString(POSTED_EVENTS, encodeAckList(kept))
+        }
+        return kept
+    }
+
+    private fun savePosted(posted: List<AlertAck>) = prefs.edit { putString(POSTED_EVENTS, encodeAckList(posted)) }
+
+    /** Reminders alone are posted once per plant and day. */
     fun alertPosted(key: String): Boolean = prefs.contains(key)
 
     fun markAlertPosted(key: String) = prefs.edit { putBoolean(key, true) }
@@ -400,6 +449,7 @@ class Scheduler(private val context: Context, private val graph: Graph) {
         val STALE_AFTER = 3.days
         private val REMINDER_TIME = LocalTime(9, 0)
         fun remindersKey(plantId: Long, date: LocalDate) = "reminders-$plantId-$date"
+        private const val POSTED_EVENTS = "events"
         private val WINTER_MONTHS = setOf(Month.NOVEMBER, Month.DECEMBER, Month.JANUARY, Month.FEBRUARY, Month.MARCH)
     }
 }

@@ -95,6 +95,39 @@ class AlertEventsTest {
     }
 
     @Test
+    fun aPostedEventStaysPostedAsItsStartMovesToTodayUntilItWorsensOrReachesAnotherPlant() {
+        val frost = arrayOf(ROOT_FREEZE_CAUTION to mon, ROOT_FREEZE_CAUTION to tue, ROOT_FREEZE_CAUTION to wed)
+        // Posted on Sunday for Monday to Wednesday.
+        val posted = listOf(AlertAck.of(alertEvents(listOf(boris(*frost)), mon.plus(DatePeriod(days = -1))).single()))
+        for (today in listOf(mon, tue, wed)) {
+            val e = alertEvents(listOf(boris(*frost)), today).single()
+            assertEquals(today, e.start)
+            assertTrue(alreadyPosted(posted, e), "seen on $today")
+        }
+        assertTrue(!alreadyPosted(posted, alertEvents(listOf(boris(ROOT_FREEZE_CAUTION to mon, ROOT_FREEZE_STRONG to tue)), tue).single()))
+        assertTrue(!alreadyPosted(posted, alertEvents(listOf(boris(*frost), fern(ROOT_FREEZE_CAUTION to wed)), tue).single()))
+        assertTrue(!alreadyPosted(posted, alertEvents(listOf(boris(HEAT to tue)), tue).single()))
+        assertTrue(!alreadyPosted(emptyList(), alertEvents(listOf(boris(*frost)), mon).single()))
+    }
+
+    @Test
+    fun postedRecordsSurviveStorageAndOldPerPlantKeysReadAsPosted() {
+        val acks = listOf(AlertAck.of(alertEvents(listOf(boris(HEAT to mon)), mon).single()))
+        assertEquals(acks, decodeAckList(encodeAckList(acks)))
+        assertEquals(emptyList(), decodeAckList("not json"))
+        assertEquals(emptyList(), decodeAckList(null))
+
+        val old = legacyPosted("1-ROOT_FREEZE_CAUTION-$tue")!!
+        assertEquals(AlertAck(AlertKind.COLD, tue.toString(), tue.toString(), ROOT_FREEZE_CAUTION, setOf(1L)), old)
+        assertTrue(alreadyPosted(listOf(old), alertEvents(listOf(boris(ROOT_FREEZE_CAUTION to tue)), mon).single()))
+        // Two plants each told on their own before the update are told together now.
+        val both = listOf(old, legacyPosted("2-ROOT_FREEZE_CAUTION-$tue")!!)
+        assertTrue(alreadyPosted(both, alertEvents(listOf(boris(ROOT_FREEZE_CAUTION to tue), fern(ROOT_FREEZE_CAUTION to tue)), mon).single()))
+        assertEquals(null, legacyPosted("reminders-1-$tue"))
+        assertEquals(null, legacyPosted("1-NOT_A_TYPE-$tue"))
+    }
+
+    @Test
     fun differentKindsAreSeparateEvents() {
         val events = alertEvents(listOf(boris(ROOT_FREEZE_CAUTION to mon, WIND to mon)), mon)
         assertEquals(listOf("COLD $mon..$mon ROOT_FREEZE_CAUTION [Boris]", "WIND $mon..$mon WIND [Boris]"), events.summary())

@@ -32,6 +32,7 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
+import com.kostavukicevic.plants.data.AlertAck
 import com.kostavukicevic.plants.data.AlertEvent
 import com.kostavukicevic.plants.data.AlertKind
 import com.kostavukicevic.plants.data.Garden
@@ -158,8 +159,8 @@ class TodayAlertTest {
         val nm = shadowOf(app.getSystemService(NotificationManager::class.java))
         heatWave(g, "Boris")
         val posted = visible().single()
-        assertTrue(runBlocking { g.scheduler.postEvent(posted.key) })
-        assertNotNull(nm.getNotification(Notifier.eventId(posted.key)))
+        assertTrue(runBlocking { g.scheduler.postEvent(AlertAck.of(posted)) })
+        assertNotNull(nm.getNotification(Notifier.ALERT_TAG, Notifier.alertId(AlertAck.of(posted))))
 
         // A second event, not yet posted, so its scheduled notification is what Done must block.
         heatWave(g, "Fern", place = "Terrace", from = 5)
@@ -171,11 +172,11 @@ class TodayAlertTest {
             compose.onAllNodes(hasText(s(R.string.alert_done)))[0].performScrollTo().performClick()
             compose.waitUntil(10_000) { visibleWhileOpen()?.size == 1 - n }
         }
-        compose.waitUntil(10_000) { nm.getNotification(Notifier.eventId(posted.key)) == null }
+        compose.waitUntil(10_000) { nm.getNotification(Notifier.ALERT_TAG, Notifier.alertId(AlertAck.of(posted))) == null }
         var postedLater: Boolean? = null
-        compose.waitUntil(10_000) { whileOpen { g.scheduler.postEvent(later.key) }.also { postedLater = it } != null }
+        compose.waitUntil(10_000) { whileOpen { g.scheduler.postEvent(AlertAck.of(later)) }.also { postedLater = it } != null }
         assertEquals(false, postedLater)
-        assertNull(nm.getNotification(Notifier.eventId(later.key)))
+        assertNull(nm.getNotification(Notifier.ALERT_TAG, Notifier.alertId(AlertAck.of(later))))
         assertTrue(nm.allNotifications.isEmpty())
     }
 }

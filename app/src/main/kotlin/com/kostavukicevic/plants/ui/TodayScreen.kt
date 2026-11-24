@@ -99,8 +99,8 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
             onWatered = { s -> act { waterFromToday(g.garden, s.plant) } },
             onAnswer = { s, m -> act { g.garden.checkIn(s.plant.id, m.name) } },
             events = visible,
-            onDone = { e -> answered += e.key; act { g.garden.done(e); Notifier.cancelAlert(c, e) } },
-            onDismiss = { e -> answered += e.key; act { g.garden.dismiss(e); Notifier.cancelAlert(c, e) } },
+            onDone = { e -> answered += e.key; act { g.garden.done(e); g.scheduler.cancelEvent(e) } },
+            onDismiss = { e -> answered += e.key; act { g.garden.dismiss(e); g.scheduler.cancelEvent(e) } },
         ) {
             // Indoor places use no weather, so a garden of only indoor plants shows none of this.
             if (list.any { it.place.outdoor }) WeatherStatus(lastFetch, Clock.System.now(), refreshing, failed) {

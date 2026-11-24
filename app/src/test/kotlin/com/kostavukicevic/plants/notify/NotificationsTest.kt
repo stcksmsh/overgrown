@@ -10,6 +10,8 @@ import androidx.test.core.app.ApplicationProvider
 import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
+import com.kostavukicevic.plants.data.AlertAck
+import com.kostavukicevic.plants.data.Garden
 import com.kostavukicevic.plants.engine.Action
 import com.kostavukicevic.plants.engine.PromptReason
 import com.kostavukicevic.plants.ui.heatWave
@@ -27,6 +29,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Instant
 
 /** What the notifications offer and what their actions store, through the real ActionReceiver. */
 @RunWith(RobolectricTestRunner::class)
@@ -59,6 +64,13 @@ class NotificationsTest {
             shadowOf(Looper.getMainLooper()).idle()
             Thread.sleep(20)
         }
+    }
+
+    /** Moves the garden's clock [days] ahead, as if the person came back to the app later. */
+    private fun passDays(days: Int) {
+        val at = Clock.System.now() + days.days
+        val now: () -> Instant = { at }
+        Garden::class.java.getDeclaredField("now").apply { isAccessible = true }.set(g.garden, now)
     }
 
     private fun answers(plantId: Long) = runBlocking { g.garden.events(plantId).first() }.filter { it.type == "CHECK_IN" }.sortedBy { it.id }.map { it.moisture }
@@ -119,11 +131,11 @@ class NotificationsTest {
         allow()
         heatWave(g, "Boris", "Fern")
         val e = runBlocking { g.garden.alertEvents() }.single()
-        assertTrue(runBlocking { g.scheduler.postEvent(e.key) })
+        assertTrue(runBlocking { g.scheduler.postEvent(AlertAck.of(e)) })
         // Once per event: the same event does not post again.
-        assertFalse(runBlocking { g.scheduler.postEvent(e.key) })
+        assertFalse(runBlocking { g.scheduler.postEvent(AlertAck.of(e)) })
         assertEquals(1, nm.allNotifications.size)
-        val n = nm.getNotification(Notifier.eventId(e.key))
+        val n = nm.getNotification(Notifier.ALERT_TAG, Notifier.alertId(AlertAck.of(e)))
         val title = n.extras.getString(Notification.EXTRA_TITLE)!!
         assertEquals(Texts.eventTitle(app, e, g.garden.today()), title)
         assertTrue(title, title.startsWith("Heat ") && title.endsWith(": Boris and Fern"))
@@ -141,8 +153,8 @@ class NotificationsTest {
         allow()
         heatWave(g, "Boris")
         val e = runBlocking { g.garden.alertEvents() }.single()
-        assertTrue(runBlocking { g.scheduler.postEvent(e.key) })
-        tap(nm.getNotification(Notifier.eventId(e.key)).actions[1])
+        assertTrue(runBlocking { g.scheduler.postEvent(AlertAck.of(e)) })
+        tap(nm.getNotification(Notifier.ALERT_TAG, Notifier.alertId(AlertAck.of(e))).actions[1])
         waitUntil("Dismiss is stored") { runBlocking { g.garden.alertEvents() }.isEmpty() }
         assertEquals(g.garden.today().toString(), runBlocking { g.settings.alertAcks() }.single().dismissedOn)
     }
@@ -152,13 +164,13 @@ class NotificationsTest {
         allow()
         val ids = heatWave(g, "Boris")
         val first = runBlocking { g.garden.alertEvents() }.single()
-        assertTrue(runBlocking { g.scheduler.postEvent(first.key) })
+        assertTrue(runBlocking { g.scheduler.postEvent(AlertAck.of(first)) })
         runBlocking { g.garden.done(first) }
         // Fern joins Boris's place, so the same heat now reaches a plant that was not in it at Done time.
         plant(g, "Fern", runBlocking { g.garden.plant(ids.single())!!.placeId })
         val back = runBlocking { g.garden.alertEvents() }.single()
         assertTrue(back.key != first.key)
-        assertTrue(runBlocking { g.scheduler.postEvent(back.key) })
+        assertTrue(runBlocking { g.scheduler.postEvent(AlertAck.of(back)) })
     }
 
     @Test
@@ -166,8 +178,60 @@ class NotificationsTest {
         allow(granted = false)
         heatWave(g, "Boris")
         val e = runBlocking { g.garden.alertEvents() }.single()
-        assertFalse(runBlocking { g.scheduler.postEvent(e.key) })
-        assertFalse(g.scheduler.alertPosted(e.key))
+        assertFalse(runBlocking { g.scheduler.postEvent(AlertAck.of(e)) })
+        assertFalse(g.scheduler.eventPosted(e, g.garden.today()))
         assertTrue(nm.allNotifications.isEmpty())
+    }
+
+    @Test
+    fun anEventPostedTheEveningBeforeIsNotPostedAgainOnItsLaterDays() {
+        allow()
+        heatWave(g, "Boris")
+        val first = runBlocking { g.garden.alertEvents() }.single()
+        assertTrue(runBlocking { g.scheduler.postEvent(AlertAck.of(first)) })
+        for (day in 1..3) {
+            passDays(day)
+            val e = runBlocking { g.garden.alertEvents() }.single()
+            // Its start is now today, so it is not the event that was posted by its own day-bound key.
+            assertEquals(g.garden.today(), e.start)
+            assertFalse("day $day", runBlocking { g.scheduler.postEvent(AlertAck.of(e)) })
+            runBlocking { g.scheduler.reschedule() }
+        }
+        assertEquals(1, nm.allNotifications.size)
+    }
+
+    @Test
+    fun doneFromYesterdaysNotificationStillStoresDone() {
+        allow()
+        heatWave(g, "Boris")
+        val e = runBlocking { g.garden.alertEvents() }.single()
+        assertTrue(runBlocking { g.scheduler.postEvent(AlertAck.of(e)) })
+        val n = nm.getNotification(Notifier.ALERT_TAG, Notifier.alertId(AlertAck.of(e)))
+        passDays(1)
+        tap(n.actions[0])
+        waitUntil("Done is stored") { runBlocking { g.garden.alertEvents() }.isEmpty() }
+        waitUntil("the notification is taken down") { nm.allNotifications.isEmpty() }
+    }
+
+    @Test
+    fun aPerPlantAlertPostedBeforeTheUpdateIsNotPostedAgain() {
+        allow()
+        val boris = heatWave(g, "Boris").single()
+        val e = runBlocking { g.garden.alertEvents() }.single()
+        // The key the per-plant alerts used: plant, alert type, day.
+        app.getSharedPreferences("posted_alerts", 0).edit().putBoolean("$boris-HEAT-${e.start}", true).commit()
+        assertFalse(runBlocking { g.scheduler.postEvent(AlertAck.of(e)) })
+        assertTrue(nm.allNotifications.isEmpty())
+    }
+
+    @Test
+    fun alertsArePostedUnderTheirOwnTagSoNoIdMeetsAPrompt() {
+        allow()
+        heatWave(g, "Boris")
+        val e = runBlocking { g.garden.alertEvents() }.single()
+        assertTrue(runBlocking { g.scheduler.postEvent(AlertAck.of(e)) })
+        val id = Notifier.alertId(AlertAck.of(e))
+        assertNull(nm.getNotification(id))
+        assertTrue(nm.getNotification(Notifier.ALERT_TAG, id) != null)
     }
 }
