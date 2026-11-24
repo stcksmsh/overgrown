@@ -30,8 +30,28 @@
 
     <!-- Today -->
     <string name="today_title">Today</string>
-    <string name="today_empty">No plants yet. Add your first plant to get watering reminders.</string>
-    <string name="today_all_fine">Nothing needs doing today.</string>
+    <string name="today_empty">Overgrown tells you when each of your potted plants needs water, from its pot and the weather where it stands.</string>
+    <string name="today_add_first">Add your first plant</string>
+    <string name="today_all_fine">Nothing to water today.</string>
+    <string name="today_nothing_to_water">Nothing to water.</string>
+    <string name="today_alert_frost">Frost %1$s.</string>
+    <string name="today_alert_heat">Heat %1$s.</string>
+    <string name="today_alert_heavy_rain">Heavy rain %1$s.</string>
+    <string name="today_alert_wind">Wind %1$s.</string>
+    <string name="today_alert_waterlogging">Roots may be waterlogged.</string>
+    <string name="today_day_range">%1$s-%2$s</string>
+    <string name="today_water_dose">Water about %1$d ml</string>
+    <string name="today_soil_question">How does the soil feel?</string>
+    <string name="today_level">%1$s\u00A0· %2$d\u00A0%%</string>
+    <string name="level_wet">Wet</string>
+    <string name="level_moist">Moist</string>
+    <string name="level_getting_dry">Getting dry</string>
+    <string name="level_dry">Dry</string>
+    <string name="answer_wet">Wet</string>
+    <string name="answer_ok">OK</string>
+    <string name="answer_dry">Dry</string>
+    <string name="tile_fine">Fine.</string>
+    <string name="tile_fine_check">Fine. Check %1$s.</string>
     <string name="forecast_fetched">Forecast fetched %1$s</string>
     <string name="forecast_never">No forecast yet. Connect to the internet and open the app.</string>
     <plurals name="forecast_stale">
