@@ -9,11 +9,14 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.kostavukicevic.plants.caredb.CareDb
+import com.kostavukicevic.plants.engine.Coefficients
+import com.kostavukicevic.plants.engine.Engine
 import com.kostavukicevic.plants.engine.LightClass
 import com.kostavukicevic.plants.engine.Moisture
 import com.kostavukicevic.plants.engine.PotMaterial
 import com.kostavukicevic.plants.engine.PotShape
 import com.kostavukicevic.plants.engine.RainExposure
+import com.kostavukicevic.plants.engine.WeatherQuality
 import com.kostavukicevic.plants.engine.WindExposure
 import com.kostavukicevic.plants.weather.CachedResponse
 import com.kostavukicevic.plants.weather.Climatology
@@ -23,6 +26,7 @@ import com.kostavukicevic.plants.weather.FallbackState
 import com.kostavukicevic.plants.weather.FetchResult
 import com.kostavukicevic.plants.weather.OpenMeteo
 import com.kostavukicevic.plants.weather.ResponseStore
+import com.kostavukicevic.plants.weather.Series
 import com.kostavukicevic.plants.weather.WeatherService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -51,6 +55,13 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import kotlin.time.Instant
+
+class EventDateFuture(date: LocalDate) : IllegalArgumentException("date is in the future: $date")
+class EventDateBeforeAcquired(date: LocalDate, val acquiredOn: LocalDate) :
+    IllegalArgumentException("date $date is before the plant was acquired on $acquiredOn")
+
+/** One day of the plant screen's strip; [waterLeft] is 0..1 at the start of the day. */
+data class OutlookDay(val date: LocalDate, val waterLeft: Double, val frost: Boolean, val rain: Boolean, val heat: Boolean)
 
 /** The app's single entry to stored data, weather and the engine. */
 class Garden(
@@ -91,7 +102,38 @@ class Garden(
         dao.deletePlaceFully(id)
         deleteFiles(photos.map { it.file })
     }
-    suspend fun deleteEvent(id: Long) = dao.deleteEvent(id)
+    suspend fun deleteEvent(id: Long) {
+        val stored = dao.event(id)
+        dao.deleteEvent(id)
+        if (stored?.type == "REPOTTED") syncLastRepot(stored.plantId)
+    }
+
+    /**
+     * Changes a logged event's date, answer and drained flag; its plant, type and snooze end stay.
+     * Refuses a future date, a date before the plant was acquired (the planner starts there and would
+     * drop the entry), a check-in without an answer and an answer the planner could not parse, as
+     * import does. Throws [EventDateFuture], [EventDateBeforeAcquired] or IllegalArgumentException.
+     */
+    suspend fun updateEvent(edited: EventEntity) {
+        val stored = requireNotNull(dao.event(edited.id)) { "no event ${edited.id}" }
+        val plant = requireNotNull(dao.plant(stored.plantId)) { "no plant ${stored.plantId}" }
+        // Both parse calls throw IllegalArgumentException on a bad value.
+        val date = LocalDate.parse(edited.date)
+        if (date > today()) throw EventDateFuture(date)
+        val acquiredOn = LocalDate.parse(plant.acquiredOn)
+        if (date < acquiredOn) throw EventDateBeforeAcquired(date, acquiredOn)
+        if (stored.type == "CHECK_IN") require(edited.moisture != null) { "a check-in needs an answer" }
+        edited.moisture?.let(Moisture::valueOf)
+        dao.updateEvent(stored.copy(date = edited.date, moisture = edited.moisture, ranOutOfBottom = edited.ranOutOfBottom))
+        if (stored.type == "REPOTTED") syncLastRepot(stored.plantId)
+    }
+
+    /** Keeps the plant's last repot on its latest repot entry, or none, so the reminder follows the history. */
+    private suspend fun syncLastRepot(plantId: Long) {
+        val plant = dao.plant(plantId) ?: return
+        val last = dao.events(plantId).lastOrNull { it.type == "REPOTTED" }?.date
+        dao.upsertPlant(plant.copy(lastRepotOn = last))
+    }
 
     suspend fun watered(plantId: Long, ranOutOfBottom: Boolean, moisture: String? = null) =
         dao.insertEvent(EventEntity(plantId = plantId, date = today().toString(), type = "WATERED", ranOutOfBottom = ranOutOfBottom, moisture = moisture))
@@ -201,6 +243,34 @@ class Garden(
     }
 
     suspend fun statuses(): List<PlantStatus> = dao.allPlants().mapNotNull { status(it.id) }
+
+    /**
+     * The next [Planner.FORECAST_DAYS] days from today if nothing more is logged: water left at the
+     * start of each day, and frost, rain and heat marks from a fetched forecast only, so none
+     * indoors or on days filled from climatology.
+     */
+    suspend fun outlook(status: PlantStatus): List<OutlookDay> {
+        val today = today()
+        val end = today.plus(DatePeriod(days = Planner.FORECAST_DAYS - 1))
+        val place = status.place
+        val days = if (place.outdoor) {
+            val stored = dao.weather(place.id).associate { LocalDate.parse(it.date) to Planner.daily(it) }
+            Series.build(stored, from = today, to = end, today = today, climatology = Planner.climatology(dao.climatology(place.id)))
+        } else {
+            Planner.indoorDays(today, end)
+        }
+        var state = status.state
+        return days.map { day ->
+            val forecast = place.outdoor && day.quality == WeatherQuality.FORECAST
+            OutlookDay(
+                date = day.date,
+                waterLeft = 1 - state.depletion,
+                frost = forecast && day.tMinC <= Coefficients.FROST_HOLD_MIN_C,
+                rain = forecast && day.precipitationMm >= Coefficients.RAIN_MIN_MM,
+                heat = forecast && day.tMaxC >= Coefficients.HEAT_ALERT_MAX_C,
+            ).also { state = Engine.advance(status.engine, state, day) }
+        }
+    }
 
     /** Today's alert events, one per weather event, without those the person marked Done or dismissed today. */
     suspend fun alertEvents(): List<AlertEvent> = alertEvents(statuses())

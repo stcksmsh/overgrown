@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
+import com.kostavukicevic.plants.data.AlertEvent
 import com.kostavukicevic.plants.data.PlantStatus
 import com.kostavukicevic.plants.notify.Notifier
 import com.kostavukicevic.plants.ui.theme.Overgrown
@@ -53,6 +54,11 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
     val c = LocalContext.current
     val tick = changeTick()
     val statuses by produceState<List<PlantStatus>?>(null, tick) { value = g.garden.statuses() }
+    // Without the events marked Done or dismissed today, which the notifications also follow. Keyed on the tick too:
+    // Done from a notification changes no status, only the stored answers.
+    val events by produceState<List<AlertEvent>?>(null, tick, statuses) { value = statuses?.let { g.garden.alertEvents(it) } }
+    // Done and Dismiss hide the card at once, until the reload that follows them stores and shows the answer.
+    var answered by remember(events) { mutableStateOf(emptySet<String>()) }
     // Keyed on the statuses too: a fetch that ends before they first load must still show.
     val lastFetch by produceState<Pair<Long, String?>?>(null, tick, statuses) {
         value = statuses?.filter { it.place.outdoor }?.map { it.place.id }?.distinct()?.mapNotNull { g.garden.lastFetchOnce(it) }?.maxOrNull()?.let { it to g.garden.lastProvider() }
@@ -76,6 +82,7 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
         },
     ) {
         val list = statuses ?: return@Page
+        val visible = (events ?: return@Page).filterNot { it.key in answered }
         if (list.isNotEmpty() && !notifAllowed && Build.VERSION.SDK_INT >= 33) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(Spacing.cardPadding)) {
@@ -91,6 +98,9 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
             onAdd = onAdd,
             onWatered = { s -> act { waterFromToday(g.garden, s.plant) } },
             onAnswer = { s, m -> act { g.garden.checkIn(s.plant.id, m.name) } },
+            events = visible,
+            onDone = { e -> answered += e.key; act { g.garden.done(e); g.scheduler.cancelEvent(e) } },
+            onDismiss = { e -> answered += e.key; act { g.garden.dismiss(e); g.scheduler.cancelEvent(e) } },
         ) {
             // Indoor places use no weather, so a garden of only indoor plants shows none of this.
             if (list.any { it.place.outdoor }) WeatherStatus(lastFetch, Clock.System.now(), refreshing, failed) {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,17 +20,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
+import com.kostavukicevic.plants.data.AlertEvent
 import com.kostavukicevic.plants.data.Garden
 import com.kostavukicevic.plants.data.PlantEntity
 import com.kostavukicevic.plants.data.PlantStatus
+import com.kostavukicevic.plants.data.alertEvents
 import com.kostavukicevic.plants.engine.Action
 import com.kostavukicevic.plants.engine.Moisture
 import com.kostavukicevic.plants.ui.theme.LightColors
@@ -47,9 +56,8 @@ import kotlinx.datetime.LocalDate
 /** An action that asks the person for something today: a "Do now" card. Holds wait, so they are not. */
 private val Action.isDoNow get() = this is Action.WaterNow || this is Action.CheckSoil || this == Action.RepotOrWaterDaily
 
-/** Today's plants in the order they are shown: weather alerts, then "Do now", then "All fine". */
+/** Today's plants in the order they are shown, below the alert cards: "Do now", then "All fine". */
 internal class TodayGroups(list: List<PlantStatus>) {
-    val alerts = list.filter { it.alerts.isNotEmpty() }
     val doNow = list.filter { it.today.isDoNow }
     val fine = list.filterNot { it.today.isDoNow }
 }
@@ -68,7 +76,8 @@ private val answers = listOf(R.string.answer_wet to Moisture.TOO_WET, R.string.a
 
 /**
  * The Today screen below its top bar. With no plants, one sentence and one button and nothing else. Otherwise
- * alerts, "Do now" cards and "All fine" tiles, then [weather], which the caller leaves empty where no weather applies.
+ * one alert card per visible [events] entry, "Do now" cards and "All fine" tiles, then [weather], which the caller
+ * leaves empty where no weather applies. [events] defaults to every event in [list], with no Done or Dismiss applied.
  */
 @Composable
 internal fun TodayContent(
@@ -78,6 +87,9 @@ internal fun TodayContent(
     onAdd: () -> Unit,
     onWatered: (PlantStatus) -> Unit,
     onAnswer: (PlantStatus, Moisture) -> Unit,
+    events: List<AlertEvent> = alertEvents(list, today),
+    onDone: (AlertEvent) -> Unit = {},
+    onDismiss: (AlertEvent) -> Unit = {},
     weather: @Composable () -> Unit,
 ) {
     if (list.isEmpty()) {
@@ -87,12 +99,11 @@ internal fun TodayContent(
     val c = LocalContext.current
     val groups = TodayGroups(list)
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.cardGap)) {
-        for (s in groups.alerts) AlertBlock(s, onOpen = { onPlant(s.plant.id) })
+        for (e in events) AlertCard(e, today, onDone = { onDone(e) }, onDismiss = { onDismiss(e) })
         if (groups.doNow.isEmpty()) {
-            val alerts = groups.alerts.flatMap { it.alerts }
             Text(
-                if (alerts.isEmpty()) stringResource(R.string.today_all_fine)
-                else "${stringResource(R.string.today_nothing_to_water)} ${Texts.alertSummary(c, alerts, today)}",
+                if (events.isEmpty()) stringResource(R.string.today_all_fine)
+                else "${stringResource(R.string.today_nothing_to_water)} ${Texts.eventSummary(c, events, today)}",
                 style = Type.body,
                 color = Overgrown.colors.ink,
             )
@@ -122,17 +133,53 @@ internal fun EmptyToday(onAdd: () -> Unit) {
     }
 }
 
-/** One brick block per plant with its weather alerts, until alerts are grouped by event. */
+/**
+ * One brick card per weather event, naming every plant it affects. Done says the plants are protected; Dismiss
+ * hides it for today (D35). The card names several plants, so it opens none.
+ */
 @Composable
-internal fun AlertBlock(s: PlantStatus, onOpen: () -> Unit) {
+internal fun AlertCard(e: AlertEvent, today: LocalDate, onDone: () -> Unit, onDismiss: () -> Unit) {
     val c = LocalContext.current
     val block = StateBlock.Brick
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(block.fill).clickable(onClick = onOpen).padding(Spacing.cardPadding),
-        verticalArrangement = Arrangement.spacedBy(Spacing.grid),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(block.fill).padding(Spacing.cardPadding),
+        verticalArrangement = Arrangement.spacedBy(Spacing.grid * 3),
     ) {
-        Text(s.plant.name, style = Type.label, color = block.text)
-        for (a in s.alerts) Text(Texts.alert(c, a), style = Type.secondary, color = block.text)
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 3)) {
+            WarningMark(block.text)
+            Text(Texts.eventCard(c, e, today), Modifier.weight(1f), style = Type.body, color = block.text)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
+            // Secondary on a state block: surface fill (DESIGN.md section 5, Buttons).
+            Button(
+                onClick = onDone,
+                modifier = Modifier.heightIn(min = Spacing.buttonHeight),
+                shape = RoundedCornerShape(Radius.button),
+                colors = ButtonDefaults.buttonColors(containerColor = Overgrown.colors.surface, contentColor = Overgrown.colors.ink),
+            ) { Text(stringResource(R.string.alert_done), style = Type.label) }
+            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = Spacing.minTouchTarget)) {
+                Text(stringResource(R.string.alert_dismiss), style = Type.label, color = block.text)
+            }
+        }
+    }
+}
+
+/** A warning triangle in the block's ink. Decorative: the card's text says what the alert is. */
+@Composable
+private fun WarningMark(color: Color) {
+    Canvas(Modifier.size(Spacing.grid * 6)) {
+        val stroke = (Spacing.grid / 2).toPx()
+        val w = size.width
+        val h = size.height
+        val triangle = Path().apply {
+            moveTo(w / 2, stroke)
+            lineTo(w - stroke, h - stroke)
+            lineTo(stroke, h - stroke)
+            close()
+        }
+        drawPath(triangle, color, style = Stroke(width = stroke, join = StrokeJoin.Round))
+        drawLine(color, Offset(w / 2, h * 0.38f), Offset(w / 2, h * 0.64f), strokeWidth = stroke)
+        drawCircle(color, radius = stroke * 0.7f, center = Offset(w / 2, h * 0.78f))
     }
 }
 
