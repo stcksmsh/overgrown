@@ -82,7 +82,7 @@ object Texts {
         when (m) {
             Moisture.TOO_WET -> R.string.moisture_too_wet
             Moisture.OK -> R.string.moisture_ok
-            Moisture.DRY -> R.string.moisture_dry
+            Moisture.DRY, Moisture.DRY_OR_BONE_DRY -> R.string.moisture_dry
             Moisture.BONE_DRY -> R.string.moisture_bone_dry
         },
     )
