@@ -228,6 +228,14 @@ Screenshot tests (Roborazzi or Paparazzi) of every component state and screen, i
 
 **PotGauge on brick and moss (owner's choice).** DESIGN.md section 5 draws a gauge on a state block in the block's text colour with a white empty part. On brick and moss the text colour is white, so the pot would be solid white at every level. The owner compared captures of a transparent empty part and a translucent (30 % alpha) white one, and chose transparent over both that and the spec-literal white: on white-text blocks the empty part shows the block colour, with a white outline and fill (white on brick 5.54:1, on moss 6.37:1; checked in `ContrastTest`). Sky, marigold and surface follow the spec as written. A full gauge fills to the rim line.
 
+## D33. Glyphs (PR #20)
+
+Six vector drawables from the add-plant mockup's SVGs. Stems are drawn as 3-unit round-capped strokes, because the mockup's zero-width stems left the fern blank. The succulent rosette is scaled 0.85 about its base so it fits the 48-unit box. A plant with no archetype, or an unknown one, gets the leafy glyph; the owner can change this fallback. On the moss-tint chip the glyph uses the fixed dark ink, because moss-tint is the same in both themes and the dark theme's light ink would not show on it.
+
+## D34. Navigation (PR #21)
+
+One ⋮ menu in the top bar holds Places and Settings, rather than two icons, because the app has no icon assets and the menu keeps the bar uncluttered. The two tabs are plain selectable boxes in theme roles, not Material's NavigationBar, for the same reason. A place that still has plants cannot be deleted: `Garden.deletePlace` would delete its plants too, so the app names them instead. Delete with Undo hides the item and deletes it only when the snackbar closes without Undo; the snackbar is `SnackbarDuration.Short`, because Material makes a snackbar with an action indefinite, so the delete would never run. If the activity is recreated while the snackbar shows, the delete is dropped and the item comes back (safe direction). A delete that fails brings the item back and says so.
+
 ## D35. Alert events, Done and Dismiss
 
 D33 and D34 were not on `main` when this was written, so this entry is D35.
@@ -245,3 +253,7 @@ D33 and D34 were not on `main` when this was written, so this entry is D35.
 The `overgrown-data` submodule moves from `06d0079` to `7756c25` (data PR #7), which marks the four indoor archetypes `reviewed`. The compiler ships only `status: reviewed` entries, so the asset now holds five archetypes: `hardy-potted-conifer`, `indoor-epiphytic-orchid`, `indoor-moisture-loving`, `indoor-succulent`, `indoor-tropical-foliage`. The species entries (`dracaena-trifasciata`, `chamaecyparis-lawsoniana`) stay draft and are not in it.
 
 `CareDataPinTest` (in `:data` jvmTest) reads the pinned YAML and asserts exactly those five archetypes are reviewed and none is draft, and that the snake plant species is draft. It tests the source files rather than the compiled JSON because the compile task lives in `:app` and a test in `:caredb` or `:data` cannot reach it without a build change; the compiler's only filter is the same `status` field. The compiled `caredb.json` was also inspected once by hand and holds the five ids and no species. The older tests use inline fixture JSON and did not assert the shipped set, so none needed updating.
+
+## D37. CI off until close to V1 (owner's decision)
+
+The owner asked to switch CI off and drop it as a merge requirement until the app is close to V1, because each CI run took about 12 minutes and every fix round or merge of `main` triggered another, which made iteration slow. The `CI` workflow is disabled in GitHub (`gh workflow disable CI`; the workflow file is unchanged, so `gh workflow enable CI` restores it). `.nonslop.toml` sets `[merge] allow_no_ci = true`, so the coordinator's merge check accepts a pull request with no checks. Every builder brief still requires the full test command (`./gradlew build :engine:compileKotlinIosArm64 :engine:compileKotlinIosSimulatorArm64`) to pass locally, and the reproducible-build check (D7) does not run until CI is back. Re-enable both before the first beta.
