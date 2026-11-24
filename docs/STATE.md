@@ -15,18 +15,17 @@ Handover for the next coordinator. Read this, then run `nonslop status`. The own
 
 ## Done (this round)
 
-#17 quick Dry answer, #18 design foundation (Theme.kt, Bricolage, Roborazzi exact goldens), #20 glyphs, #21 navigation, #22 alert events data, #23 Today cards + forecast loading, #24 data pin (indoor archetypes), #25 plant screen (DayStrip, LearningDots, history by week, edit/delete), #27 alert cards (Done/Dismiss) + notifications (Wet/OK/Dry, one alert per event). Last APK sent: main b435718.
+#17 quick Dry answer, #18 design foundation (Theme.kt, Bricolage, Roborazzi exact goldens), #20 glyphs, #21 navigation, #22 alert events data, #23 Today cards + forecast loading, #24 data pin (indoor archetypes), #25 plant screen (DayStrip, LearningDots, history by week, edit/delete), #27 alert cards (Done/Dismiss) + notifications (Wet/OK/Dry, one alert per event). #29 add-plant wizard (4 steps, edit opens the same steps, D38). Last APK sent: main a1f72b8.
 
 ## In flight (check `nonslop status`)
 
-- `claude/add-plant-wizard`: 4-step wizard + acquiredOn + "No match" bug. Brief was in coordinator scratch; slice record has scope.
-- PR #26 `claude/today-look` ("Today: look like the mockup"): opened by ANOTHER session, not a slice; the main checkout was left on that branch. Conflicts with #27 on Today files. Owner has not said adopt or ignore. Do not touch without his word.
+- Nothing of ours. PR #26 `claude/today-look` ("Today: look like the mockup") was opened by ANOTHER session and is not a slice; the main checkout was left on that branch (build APKs in a worktree from origin/main). It conflicts with merged Today work. Owner has not said adopt or ignore; do not touch without his word.
 
 ## Next, in order
 
 1. Settings (owner answers S1-S3 below: one reminder at 08:00, theme follows system/light/dark, metric only; export/import with brick confirmation; weighing moved here per D31.11) in `strings_settings.xml`.
 2. "Use my location": Natural Earth populated places (public domain), approximate permission on tap, rounded to ~1 km.
-3. Polish slice: leading-zero dates in history ("04 Nov"); unused strings in strings.xml (plant_state, plant_confidence_*, plant_learned, notif_alert_title, refreshing); dark-mode empty learning dots; Delete as brick per DESIGN; minors in PR bodies of #21, #25, #27 (#27: unlocked read-modify-write of the posted-events pref; overlap split case).
+3. Polish slice (wizard minors: uncaught exception on save, stored width >300 blocks save, tiny double-save window; Common.kt FilterChip labels wrap at 1.3x; unused EditPlantScreen strings): leading-zero dates in history ("04 Nov"); unused strings in strings.xml (plant_state, plant_confidence_*, plant_learned, notif_alert_title, refreshing); dark-mode empty learning dots; Delete as brick per DESIGN; minors in PR bodies of #21, #25, #27 (#27: unlocked read-modify-write of the posted-events pref; overlap split case).
 4. Data: ~12 archetypes, then ~300 common names mapped to them (agent decides, source-checked).
 
 ## Waiting on the owner
