@@ -1,52 +1,53 @@
 # State
 
-Handover for the next session. The brief (owner's project brief, section numbers below refer to it) is the spec; `docs/DECISIONS.md` records every choice and its reason.
+Handover for the next coordinator. The owner's brief is not in the repo (section numbers refer to it; G7 is unknown here). `docs/DESIGN.md` is the UI spec (owner's, wins over mockups); `docs/DECISIONS.md` records every choice and its reason.
 
-## Repositories
+## Repositories and process
 
-- `stcksmsh/overgrown` (private, GPL-3.0-only): app, engine, weather, storage. Local: `/secondary/Programming/Github/Overgrown`.
-- `stcksmsh/overgrown-data` (private, AGPL-3.0-only): care database, schema, tools. Local: `/secondary/Programming/Github/overgrown-data`. Pinned in the app as the `overgrown-data` submodule, currently at its merge commit `06d0079`.
-- Both are wired to nonslop (`.nonslop.toml`). Merging needs `nonslop slice verify <branch>` and a recorded fresh-context review (`nonslop slice review <branch> clean|minor|must-fix --sha <sha>`). The owner has allowed the agent to merge once both pass and CI is green.
-- CI reads the private data repo with the read-only deploy key in secret `DATA_REPO_SSH_KEY`.
+- `stcksmsh/overgrown` (private, GPL-3.0-only): app, engine, weather, storage. Local `/secondary/Programming/Github/Overgrown`. Submodule `overgrown-data` pinned at `06d0079`.
+- `stcksmsh/overgrown-data` (private, AGPL-3.0-only): care database. Local `/secondary/Programming/Github/overgrown-data`. Only `status: reviewed` entries reach the app (only `hardy-potted-conifer` so far).
+- Both wired to nonslop. The agent merges app PRs after verify + recorded review + green CI. The nonslop merge hook checks PR numbers against the app repo, so it refuses data-repo merges: ask the owner to run `! gh pr merge <n> -R stcksmsh/overgrown-data --merge`.
+- Test builds: send the owner `app/build/outputs/apk/foss/debug/app-foss-debug.apk` (built here, same debug key) with SendUserFile; he installs over the existing app. Never ask him to uninstall (deletes his data).
+- Reviewers once deleted the shared scratch `.claude/tmp/<job>/`; tell every agent to touch only scratch it created.
 
 ## Gates
 
 | Gate | State |
 |---|---|
-| G0 Foundations | Done. CI: build, tests, licence check, iOS compile of `:engine`, double build compared byte for byte. |
-| G1 Engine | Done. 20 engine tests, 9 property tests, simulation report `docs/reports/sim-report.md` (CI checks it is current). Learning uses an interval likelihood instead of the brief's nearest band edge, approved by the owner (D18). |
-| G2 Care data | Done for the owner's plant. His pot label names only the genus *Chamaecyparis*, so he approved the `hardy-potted-conifer` archetype (data PR #5, reviewed by him); the *C. lawsoniana* species entry stays draft until a plant needs it (identification needs the underside of a spray). Data merges: the nonslop merge hook resolves PR numbers against this repo and refuses every data-repo merge; the owner merges data PRs himself with `! gh pr merge <n> -R stcksmsh/overgrown-data --merge`. |
-| G3 Outdoor app | Code merged (PR #4). Weather (Open-Meteo, MET Norway foreground only), Room storage with engine replay, export/import, Compose screens, notifications through WorkManager, calibration mode. **Exit condition left: the owner's cypress running on his phone over ADB.** |
-| G4 Indoor | App merged: indoor places with light class and dry-air (PR #7), light-sensor check that sets a class and stores no lux (PR #8, D28). Data (all draft, not in the app until the owner approves): four indoor archetypes (data PR #4) and *Dracaena trifasciata*, the snake plant (data PR #6; open question for the owner: winter_rest or not; it has no cold limit, so no frost alert). Owner has no indoor plants. Left: more indoor species, export/import round-trip on a device, owner to confirm the light-class labels. |
-| G5-G7 | Not started. |
+| G0, G1 | Done (CI, engine, sim report; D18 interval likelihood). |
+| G2 | Done for the owner's plant: he approved `hardy-potted-conifer` (data PR #5). |
+| G3 | Done: the app runs on his phone with Boris (installed over ADB, updated by APK). |
+| G4 Indoor | App merged (PRs #7, #8). Data drafts, not yet approved: four indoor archetypes, snake plant (owner question: winter rest; no cold limit). Left: owner review of archetypes, more species, device export/import round-trip. |
+| Extra, merged | Feeding/repotting reminders (PR #10, D29), plant photos + zip export (PR #13, D30). |
+| G5-G7 | Not started. G5 needs 1 g scale data (owner to buy a scale; his has 50 g steps). |
 
-## Open
+## In flight
 
-- Nothing open in either repo besides this handover.
+- PR #15 `claude/design-spec`: DESIGN.md, mockups in `docs/design/mockups/`, D31 (owner's 13 UI decisions). Verified and reviewed clean at 772990b; CI was running. Merge when green.
+
+## Next work, in order (DESIGN.md)
+
+1. **Foundation** `claude/design-foundation`: one theme file with all tokens, bundled Bricolage Grotesque (OFL, official source, notices), Roborazzi screenshot tests (light/dark, 1.0x/1.3x) in `./gradlew build`, dark contrast test, PotGauge. Brief to rewrite from DESIGN.md sections 2-5, 8.
+2. Glyphs (6, one per archetype; shapes in the mockups' SVG).
+3. Today: ActionCard (Watered; Wet/OK/Dry), RestingTile, AlertCard grouped per event, empty Today, the words table. Needs the quick "Dry" answer in the engine (D31.4: new answer value, band from the Dry lower edge open above, open-above keyed to the band, tests).
+4. Navigation: tabs Today/Plants; Places and Settings from a top-bar icon; Plants and Places lists with edit and delete + Undo.
+5. Plant screen: moss name block, DayStrip, LearningDots, photo, history by week, editable and deletable.
+6. Add-plant wizard (4 steps): name search + pick by look; where (tiles, city search, "Use my location": approximate, on tap, offline city list, licence check of the list first); pot (width + shape, litres under Advanced); exposure (Yes/A little/No/Not sure).
+7. Settings (notification times, theme, units, export/import with confirmation, weighing moved here) and notifications (soil answers in the notification).
+8. Data: about 12 archetypes for owner review, then a ~300 common-name table mapped to them.
+Known bugs the redesign must cover: "No forecast yet" after a fetch; "No match" after picking a search result; no acquired-on date; snooze hides the repot warning; "Bone dry" still gives "Check the soil".
 
 ## Waiting on the owner
 
-1. **Boris**, the owner's potted *Chamaecyparis* (pot label names only the genus): outdoors on his 5th-floor balcony in the inner corner of a U-shaped building, a balcony above (rain sheltered), facing south/south-east. 38 cm tall, 13 cm wide; nursery pot 9 cm tall, 30.5 cm round the top (about 0.5 L), plastic with holes, inside a decorative outer pot. Watered 2026-11-24: 0.20 kg before, 0.30 kg after draining, on a scale with 50 g steps (too coarse for calibration; a 1 g kitchen scale was suggested). Spring repot advised.
-2. **His phone over USB** with debugging on, to install the debug build and set up Boris with the above (G3's last exit condition).
-3. Pot watering point for the cypress: he did not choose; kept at 50 % (D25). Revisit with his kitchen-scale data.
-4. Before any release (brief section 12): trademark check of "Overgrown", lawyer review of the licences, CLA and `COMMERCIAL.md`, a contact address to publish (D9), the privacy policy draft `docs/PRIVACY.md`.
+1. Trademark check of "Overgrown" and lawyer review of the licences (start now, D31.12); contact address (D9); privacy policy `docs/PRIVACY.md`. Repos go public at the first beta.
+2. A 1 g kitchen scale; 2-3 more plants of different types (snake plant, pothos, a non-conifer outdoor plant).
+3. Review of the indoor archetypes and snake plant entry when he wants them in the app.
 
-## Testing and planning
+## Boris (the owner's plant)
 
-- Plant photos with timeline and zip export: merged (PR #13, D30). Open minors: the import free-space check also counts photos already on the phone; photos beyond the newest 30 are not viewable in the app.
-- Owner testing on his phone (debug build installed over ADB): no acquired-on date in the plant editor; calibration hidden behind the developer switch; Fully/Partly/Covered rain choice unclear; wants a lot of UI/UX polish. Capturing the planning package found more: "No forecast yet" shown after a fetch; place editor says "No match" after picking a search result; no place list/edit/delete and a new place is not preselected; plant delete and import have no confirmation; history cannot be corrected; "Bone dry" still gives "Check the soil" while uncertain; snooze hides the repot warning; soil answer not possible from the notification; logged weights are not used by the engine.
-- The owner sent a planning package (README + screenshots) to an outside planner and will return a V1 plan as Markdown; wait for it before starting UX work. He has not put the brief in the repo, so G7 is unknown here.
+Potted *Chamaecyparis* (label names the genus only), 5th-floor balcony, inner corner of a U-shaped building, balcony above (rain: Covered), faces south/south-east. 38 cm tall, 13 cm wide; nursery pot 9 cm tall, about 0.5 L, plastic with holes, inside a ceramic outer pot. Cold nights forecast 30 Nov-2 Dec: insulate the gap, lift off the floor, against the wall; below -5 °C into an unheated room. Repot in spring.
 
-## Next work, in order
+## Known limits
 
-1. Set up Boris on the owner's phone (closes G3).
-2. **G4 rest**: more indoor species through the pipeline; export/import round-trip on a device.
-3. Feeding and repotting reminders: merged (PR #10, D29). FED event in the export; reminders on Today and in the notification at 09:00 or inside that day's watering prompt. Nothing shows on a device until a reviewed care entry has season data. Open minors: BigTextStyle on every prompt; a Doze delay past midnight posts the next day's reminder at night.
-4. The owner asked about plants in the ground: the data side is ready (`in_ground` context); the engine needs a soil model. Out of v1 scope; raise after G3/G4.
-5. G5 proof (baseline comparison with real scale data and the archetype test), G6 hardening.
-
-## Known limits worth remembering
-
-- Learning from four answer bands cannot pin K down closer than the band width (D15, D18); the scale can.
-- Sources: AHDB, Oregon State, UF/IFAS EDIS, UMass and the Forest Service's FEIS are not used (terms or 403); see the data repo's D4. No root-kill temperature for *Chamaecyparis* has a usable source.
-- The app module has no unit tests; a notification bug reached review because of it (fixed). Consider Robolectric or instrumented tests in G6.
+- Four answer bands cannot pin K closer than the band width (D15, D18); weights are logged but unused until after V1 (D31.11).
+- Unused sources (terms or 403): AHDB, Oregon State, UF/IFAS EDIS, UMass, FEIS (data D4).
