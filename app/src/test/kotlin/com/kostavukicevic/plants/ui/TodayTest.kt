@@ -50,6 +50,20 @@ import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.time.Instant
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import com.kostavukicevic.plants.data.WeatherDayEntity
+import com.kostavukicevic.plants.weather.HttpResponse
+import com.kostavukicevic.plants.weather.HttpTransport
+import com.kostavukicevic.plants.weather.InMemoryResponseStore
+import com.kostavukicevic.plants.weather.MetNorway
+import com.kostavukicevic.plants.weather.OpenMeteo
+import com.kostavukicevic.plants.weather.WeatherService
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.datetime.TimeZone
+import java.io.File
+import java.io.IOException
+import kotlin.time.Clock
 
 /** The Today screen's cards, their order, their words and what their buttons store. */
 @RunWith(RobolectricTestRunner::class)
@@ -262,6 +276,96 @@ class TodayTest {
         assertEquals("Frost Wed.", frost(25, 25))
     }
 
+    /** The garden on the test database, with every weather request answered by [http]. */
+    private fun weatherBy(http: HttpTransport): GardenDb {
+        val db = Garden::class.java.getDeclaredField("db").apply { isAccessible = true }.get(g.garden) as GardenDb
+        val now = { Clock.System.now() }
+        val om = OpenMeteo(http, InMemoryResponseStore(), now)
+        val met = MetNorway(http, InMemoryResponseStore(), now, "test", TimeZone.UTC)
+        val app = compose.activity.application
+        val garden = Garden(db, g.settings, WeatherService(om, met, g.settings), om, { null }, now, { TimeZone.currentSystemDefault() }, File(app.filesDir, "photos"))
+        Graph::class.java.getDeclaredField("garden").apply { isAccessible = true }.set(g, garden)
+        return db
+    }
+
+    private fun outdoorPlant() = runBlocking { plant(g, "Rosemary", g.garden.savePlace(BALCONY.copy(id = 0))) }
+
+    private fun showTodayScreen() {
+        compose.setContent { OvergrownTheme { TodayScreen(onPlant = {}, onAdd = {}, onPlaces = {}, onSettings = {}) } }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText(s(R.string.refresh))).fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    private fun waitForText(text: String, substring: Boolean = false) =
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText(text, substring = substring)).fetchSemanticsNodes().isNotEmpty() }
+
+    private fun forecastBody(): String {
+        val d = g.garden.today()
+        val days = listOf(d, LocalDate.fromEpochDays(d.toEpochDays() + 1)).joinToString(",") { "\"$it\"" }
+        return """{"daily":{"time":[$days],"temperature_2m_max":[9.8,5.3],"temperature_2m_min":[1.5,0.5],""" +
+            """"precipitation_sum":[0.0,0.0],"wind_speed_10m_mean":[4.99,3.11],"relative_humidity_2m_mean":[83,67],"et0_fao_evapotranspiration":[0.68,1.14]}}"""
+    }
+
+    @Test
+    fun refreshShowsGettingTheForecastThenTheNewTimeWithoutReopening() {
+        val answer = CompletableDeferred<HttpResponse>()
+        weatherBy { url, _ -> if ("archive" in url) HttpResponse(503, emptyMap(), "") else answer.await() }
+        outdoorPlant()
+        showTodayScreen()
+        compose.onNodeWithText(s(R.string.forecast_never)).assertExists()
+
+        compose.onNodeWithText(s(R.string.refresh)).performScrollTo().performClick()
+        waitForText(s(R.string.forecast_loading))
+        compose.onNodeWithText(s(R.string.forecast_never)).assertDoesNotExist()
+        compose.onNodeWithText(s(R.string.refresh)).assertIsNotEnabled()
+
+        answer.complete(HttpResponse(200, emptyMap(), forecastBody()))
+        waitForText(s(R.string.forecast_fetched, ""), substring = true)
+        compose.onNodeWithText(s(R.string.forecast_loading)).assertDoesNotExist()
+        compose.onNodeWithText(s(R.string.forecast_never)).assertDoesNotExist()
+        compose.onNodeWithText(s(R.string.refresh)).assertIsEnabled()
+    }
+
+    @Test
+    fun aFetchThatEndsBeforeTodayLoadsStillShows() {
+        val db = weatherBy { _, _ -> HttpResponse(503, emptyMap(), "") }
+        val placeId = runBlocking { g.garden.savePlace(BALCONY.copy(id = 0)) }
+        plant(g, "Rosemary", placeId)
+        compose.setContent { OvergrownTheme { TodayScreen(onPlant = {}, onAdd = {}, onPlaces = {}, onSettings = {}) } }
+        // As the fetch on opening the app: its rows land and it signals a change before Today has loaded.
+        runBlocking { db.dao().upsertWeather(listOf(WeatherDayEntity(placeId, g.garden.today().toString(), 1.0, 9.0, 0.0, provider = "OPEN_METEO", fetchedAtEpochMs = Clock.System.now().toEpochMilliseconds()))) }
+        g.changed()
+        waitForText(s(R.string.forecast_fetched, ""), substring = true)
+        compose.onNodeWithText(s(R.string.forecast_never)).assertDoesNotExist()
+    }
+
+    @Test
+    fun aFailedFetchSaysSoAndKeepsTheLastTime() {
+        val db = weatherBy { _, _ -> throw IOException("offline") }
+        val placeId = runBlocking { g.garden.savePlace(BALCONY.copy(id = 0)) }
+        plant(g, "Rosemary", placeId)
+        val earlier = FETCHED.toEpochMilliseconds()
+        runBlocking { db.dao().upsertWeather(listOf(WeatherDayEntity(placeId, g.garden.today().toString(), 1.0, 9.0, 0.0, provider = "OPEN_METEO", fetchedAtEpochMs = earlier))) }
+        showTodayScreen()
+        val fetchedLine = s(R.string.forecast_fetched, Texts.dateTime(FETCHED))
+        // The time loads after the plants, so wait for it rather than expect it with the Refresh button.
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText(fetchedLine), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+
+        compose.onNodeWithText(s(R.string.refresh)).performScrollTo().performClick()
+        waitForText(s(R.string.forecast_failed))
+        compose.onNodeWithText(fetchedLine, useUnmergedTree = true).assertExists()
+        compose.onNodeWithText(s(R.string.refresh)).assertIsEnabled()
+    }
+
+    @Test
+    fun aFailedFirstFetchSaysSoInsteadOfNoForecastYet() {
+        weatherBy { _, _ -> throw IOException("offline") }
+        outdoorPlant()
+        showTodayScreen()
+        compose.onNodeWithText(s(R.string.refresh)).performScrollTo().performClick()
+        waitForText(s(R.string.forecast_failed))
+        compose.onNodeWithText(s(R.string.forecast_never)).assertDoesNotExist()
+    }
+
     companion object {
         private val NEVER = listOf("estimate", "depletion", "confidence", "Soil water used", "Nothing to do")
     }
@@ -306,6 +410,6 @@ internal fun fullToday() = listOf(
 
 /** The weather status with a fixed fetch time, so captures do not change with the clock. */
 @Composable
-internal fun FixedWeather() = WeatherStatus(FETCHED.toEpochMilliseconds() to "OPEN_METEO", FETCHED, refreshing = false) {}
+internal fun FixedWeather(refreshing: Boolean = false) = WeatherStatus(FETCHED.toEpochMilliseconds() to "OPEN_METEO", FETCHED, refreshing, failed = false) {}
 
 private val FETCHED = Instant.parse("2026-11-24T07:30:00Z")

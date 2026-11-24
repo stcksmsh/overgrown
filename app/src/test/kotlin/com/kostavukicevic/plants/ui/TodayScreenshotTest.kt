@@ -100,6 +100,9 @@ class TodayScreenshotTest(private val dark: Boolean, private val fontScale: Floa
     }
 
     @Test
+    fun gettingTheForecast() = capture("weather_loading") { FixedWeather(refreshing = true) }
+
+    @Test
     fun emptyToday() = capture("empty") {
         TodayContent(emptyList(), TODAY, onPlant = {}, onAdd = {}, onWatered = {}, onAnswer = { _, _ -> }) { FixedWeather() }
     }

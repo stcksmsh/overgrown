@@ -59,7 +59,8 @@
         <item quantity="one">The forecast is %1$d day old. Reminders may be off until it refreshes.</item>
         <item quantity="other">The forecast is %1$d days old. Reminders may be off until it refreshes.</item>
     </plurals>
-    <string name="refreshing">Refreshing…</string>
+    <string name="forecast_loading">Getting the forecast…</string>
+    <string name="forecast_failed">Could not get the forecast. Check the connection.</string>
     <string name="refresh">Refresh weather</string>
     <string name="weather_credit_open_meteo">Weather data by Open-Meteo.com</string>
     <string name="weather_credit_met">Data from MET Norway</string>

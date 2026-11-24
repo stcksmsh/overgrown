@@ -37,6 +37,8 @@ import com.kostavukicevic.plants.data.PlantStatus
 import com.kostavukicevic.plants.notify.Notifier
 import com.kostavukicevic.plants.ui.theme.Overgrown
 import com.kostavukicevic.plants.ui.theme.Spacing
+import com.kostavukicevic.plants.weather.FetchResult
+import kotlinx.coroutines.CancellationException
 import com.kostavukicevic.plants.ui.theme.Type
 import com.kostavukicevic.plants.weather.MetNorway
 import com.kostavukicevic.plants.weather.OpenMeteo
@@ -51,10 +53,12 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
     val c = LocalContext.current
     val tick = changeTick()
     val statuses by produceState<List<PlantStatus>?>(null, tick) { value = g.garden.statuses() }
-    val lastFetch by produceState<Pair<Long, String?>?>(null, tick) {
+    // Keyed on the statuses too: a fetch that ends before they first load must still show.
+    val lastFetch by produceState<Pair<Long, String?>?>(null, tick, statuses) {
         value = statuses?.filter { it.place.outdoor }?.map { it.place.id }?.distinct()?.mapNotNull { g.garden.lastFetchOnce(it) }?.maxOrNull()?.let { it to g.garden.lastProvider() }
     }
     var refreshing by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     var notifAllowed by remember { mutableStateOf(Notifier.allowed(c)) }
@@ -88,13 +92,20 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
             onAnswer = { s, m -> act { g.garden.checkIn(s.plant.id, m.name) } },
         ) {
             // Indoor places use no weather, so a garden of only indoor plants shows none of this.
-            if (list.any { it.place.outdoor }) WeatherStatus(lastFetch, Clock.System.now(), refreshing) {
+            if (list.any { it.place.outdoor }) WeatherStatus(lastFetch, Clock.System.now(), refreshing, failed) {
                 refreshing = true
                 scope.launch {
-                    g.garden.refreshWeather(foreground = true)
+                    failed = try {
+                        failedEverywhere(g.garden.refreshWeather(foreground = true))
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        true
+                    } finally {
+                        refreshing = false
+                    }
                     g.scheduler.reschedule()
                     g.changed()
-                    refreshing = false
                 }
             }
         }
@@ -102,21 +113,28 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
     LaunchedEffect(Unit) { notifAllowed = Notifier.allowed(c) }
 }
 
+/** No place got a forecast and at least one request failed. A rate limit or a fresh cache is not a failure. */
+private fun failedEverywhere(results: Map<Long, FetchResult>): Boolean =
+    results.values.any { it is FetchResult.Failed } && results.values.none { it is FetchResult.Fresh || it is FetchResult.Cached }
+
 /**
  * Forecast age, refresh and the provider's credit, kept quiet below the cards. The credit stays next to the
  * weather it describes (Open-Meteo licence). [fetched] is the last fetch in epoch ms and its provider.
  */
 @Composable
-internal fun WeatherStatus(fetched: Pair<Long, String?>?, now: Instant, refreshing: Boolean, onRefresh: () -> Unit) {
+internal fun WeatherStatus(fetched: Pair<Long, String?>?, now: Instant, refreshing: Boolean, failed: Boolean, onRefresh: () -> Unit) {
     val uri = LocalUriHandler.current
     val muted = Overgrown.colors.muted
     Column(Modifier.fillMaxWidth().padding(top = Spacing.grid * 2)) {
-        if (fetched == null) {
-            Text(stringResource(R.string.forecast_never), style = Type.secondary, color = muted)
-        } else {
+        when {
+            refreshing -> Text(stringResource(R.string.forecast_loading), style = Type.secondary, color = muted)
+            failed -> Text(stringResource(R.string.forecast_failed), style = Type.secondary, color = Overgrown.colors.errorText)
+            fetched == null -> Text(stringResource(R.string.forecast_never), style = Type.secondary, color = muted)
+        }
+        if (fetched != null) {
             val at = Instant.fromEpochMilliseconds(fetched.first)
             val age = now - at
-            Text(stringResource(R.string.forecast_fetched, Texts.dateTime(at)), style = Type.secondary, color = muted)
+            if (!refreshing) Text(stringResource(R.string.forecast_fetched, Texts.dateTime(at)), style = Type.secondary, color = muted)
             if (age > 3.days) {
                 val days = age.inWholeDays.toInt()
                 Text(pluralStringResource(R.plurals.forecast_stale, days, days), style = Type.secondary, color = Overgrown.colors.errorText)
@@ -132,7 +150,8 @@ internal fun WeatherStatus(fetched: Pair<Long, String?>?, now: Instant, refreshi
             )
         }
         TextButton(enabled = !refreshing, onClick = onRefresh, modifier = Modifier.heightIn(min = Spacing.minTouchTarget), contentPadding = PaddingValues(0.dp)) {
-            Text(stringResource(if (refreshing) R.string.refreshing else R.string.refresh), style = Type.secondary, color = muted)
+            // Material's disabled alpha, so a Refresh that cannot be tapped looks it.
+            Text(stringResource(R.string.refresh), style = Type.secondary, color = if (refreshing) muted.copy(alpha = 0.38f) else muted)
         }
     }
 }
