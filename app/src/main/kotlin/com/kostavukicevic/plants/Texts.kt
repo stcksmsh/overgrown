@@ -2,6 +2,8 @@
 package com.kostavukicevic.plants
 
 import android.content.Context
+import com.kostavukicevic.plants.data.AlertEvent
+import com.kostavukicevic.plants.data.AlertKind
 import com.kostavukicevic.plants.data.PlantStatus
 import com.kostavukicevic.plants.data.Reminder
 import com.kostavukicevic.plants.engine.Action
@@ -11,8 +13,10 @@ import com.kostavukicevic.plants.engine.Coefficients
 import com.kostavukicevic.plants.engine.HoldReason
 import com.kostavukicevic.plants.engine.Moisture
 import com.kostavukicevic.plants.engine.PromptReason
+import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.daysUntil
+import kotlinx.datetime.plus
 import kotlinx.datetime.format.DayOfWeekNames
 import kotlinx.datetime.format.MonthNames
 import kotlinx.datetime.format.Padding
@@ -68,6 +72,61 @@ object Texts {
                     AlertType.WATERLOGGING -> c.getString(R.string.today_alert_waterlogging)
                 }
             }
+
+    /** [alertSummary] over alert events, so the line agrees with the cards shown above it. */
+    fun eventSummary(c: Context, events: List<AlertEvent>, today: LocalDate): String =
+        alertSummary(c, events.flatMap { e -> generateSequence(e.start) { it.plus(DatePeriod(days = 1)) }.takeWhile { it <= e.end }.map { Alert(e.severity, it) } }, today)
+
+    /** An event's days: "Wed" or "Wed-Fri". An event is one run of consecutive days. */
+    fun eventDays(c: Context, e: AlertEvent, today: LocalDate): String =
+        if (e.start == e.end) day(e.start, today) else c.getString(R.string.today_day_range, day(e.start, today), day(e.end, today))
+
+    /** Every plant in the event in one phrase: "Boris", "Boris and Fern", "Boris, Fern and Ivy". */
+    fun eventPlants(c: Context, e: AlertEvent): String {
+        val names = e.plants.map { it.name }
+        if (names.size == 1) return names.single()
+        return c.getString(R.string.event_names_last, names.dropLast(1).reduce { acc, n -> c.getString(R.string.today_day_list, acc, n) }, names.last())
+    }
+
+    private val AlertEvent.strong get() = severity == AlertType.ROOT_FREEZE_STRONG
+
+    /** What to do about the event: "Move Boris and Fern against a wall." */
+    fun eventAdvice(c: Context, e: AlertEvent): String = c.getString(
+        when (e.kind) {
+            AlertKind.COLD -> if (e.strong) R.string.event_do_cold_strong else R.string.event_do_cold
+            AlertKind.HEAT -> R.string.event_do_heat
+            AlertKind.HEAVY_RAIN -> R.string.event_do_heavy_rain
+            AlertKind.WIND -> R.string.event_do_wind
+            AlertKind.WATERLOGGING -> R.string.event_do_waterlogging
+        },
+        eventPlants(c, e),
+    )
+
+    /** The alert card's text, the event and then what to do: "Cold nights Mon-Wed. Move Boris and Fern against a wall." */
+    fun eventCard(c: Context, e: AlertEvent, today: LocalDate): String {
+        val days = eventDays(c, e, today)
+        val what = when (e.kind) {
+            AlertKind.COLD -> c.getString(if (e.strong) R.string.event_cold_strong else R.string.event_cold, days)
+            AlertKind.HEAT -> c.getString(R.string.today_alert_heat, days)
+            AlertKind.HEAVY_RAIN -> c.getString(R.string.today_alert_heavy_rain, days)
+            AlertKind.WIND -> c.getString(R.string.today_alert_wind, days)
+            AlertKind.WATERLOGGING -> c.getString(R.string.today_alert_waterlogging)
+        }
+        return "$what ${eventAdvice(c, e)}"
+    }
+
+    /** The alert notification's title, starting with the event: "Frost Mon-Wed: Boris". */
+    fun eventTitle(c: Context, e: AlertEvent, today: LocalDate): String {
+        val days = eventDays(c, e, today)
+        val plants = eventPlants(c, e)
+        return when (e.kind) {
+            AlertKind.COLD -> c.getString(R.string.notif_event_frost, days, plants)
+            AlertKind.HEAT -> c.getString(R.string.notif_event_heat, days, plants)
+            AlertKind.HEAVY_RAIN -> c.getString(R.string.notif_event_heavy_rain, days, plants)
+            AlertKind.WIND -> c.getString(R.string.notif_event_wind, days, plants)
+            AlertKind.WATERLOGGING -> c.getString(R.string.notif_event_waterlogging, plants)
+        }
+    }
 
     /** Runs of consecutive days, so a gap day is never inside a range: Mon, Wed is two runs, not Mon-Wed. */
     private fun dayRuns(dates: List<LocalDate>): List<Pair<LocalDate, LocalDate>> {
