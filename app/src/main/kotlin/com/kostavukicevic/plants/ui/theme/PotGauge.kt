@@ -33,17 +33,39 @@ private const val BASE_INSET = 0.27f
 private const val STROKE = 0.055f
 
 /**
+ * How the empty part is drawn on a white-text block (brick, moss), where the spec's white empty part
+ * would match the white fill. Awaiting the owner's choice; not a user setting.
+ */
+internal enum class WhiteBlockEmpty {
+    /** A: the block colour shows through. */
+    Transparent,
+
+    /** B: translucent white. */
+    Translucent,
+}
+
+/**
  * Trapezoid pot filled from the bottom to the share of water left.
- * On a state block it draws in that block's text colour with a white empty part; otherwise ink outline and gauge fill.
+ * On a state block it draws in that block's text colour with a white empty part (see [WhiteBlockEmpty]
+ * for white-text blocks); otherwise ink outline and gauge fill.
  */
 @Composable
-fun PotGauge(waterLeft: Float, size: PotGaugeSize, modifier: Modifier = Modifier, block: StateBlock? = null) {
+fun PotGauge(waterLeft: Float, size: PotGaugeSize, modifier: Modifier = Modifier, block: StateBlock? = null) =
+    PotGauge(waterLeft, size, modifier, block, WhiteBlockEmpty.Transparent)
+
+@Composable
+internal fun PotGauge(waterLeft: Float, size: PotGaugeSize, modifier: Modifier, block: StateBlock?, whiteBlockEmpty: WhiteBlockEmpty) {
     val percent = waterLeftPercent(waterLeft)
     val description = stringResource(R.string.pot_gauge_description, percent)
     val colors = Overgrown.colors
     val outline = block?.text ?: colors.ink
     val fill = block?.text ?: colors.gaugeFill
-    val empty = if (block != null) GaugeEmptyOnBlock else null
+    val empty = when {
+        block == null -> null
+        block.text != GaugeEmptyOnBlock -> GaugeEmptyOnBlock
+        whiteBlockEmpty == WhiteBlockEmpty.Translucent -> GaugeEmptyOnWhiteTextBlock
+        else -> null
+    }
     Canvas(modifier.size(size.dp).semantics { contentDescription = description }) {
         val s = this.size.width
         val pot = Path().apply {

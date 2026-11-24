@@ -94,8 +94,14 @@ object Tints {
     val brick = BrickTint
 }
 
-/** The empty part of a PotGauge on a state block. */
+/** The empty part of a PotGauge on a state block with dark text (sky, marigold). */
 val GaugeEmptyOnBlock = White
+
+/**
+ * The empty part of a PotGauge on a white-text block (brick, moss), variant B. The spec's plain white
+ * would match the white fill there; the owner picks between this and a transparent empty part.
+ */
+val GaugeEmptyOnWhiteTextBlock = White.copy(alpha = 0.3f)
 
 // ---- Type (DESIGN.md section 3) --------------------------------------------------------
 
