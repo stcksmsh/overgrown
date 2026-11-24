@@ -31,6 +31,12 @@ Handover for the next session. The brief (owner's project brief, section numbers
 3. Pot watering point for the cypress: he did not choose; kept at 50 % (D25). Revisit with his kitchen-scale data.
 4. Before any release (brief section 12): trademark check of "Overgrown", lawyer review of the licences, CLA and `COMMERCIAL.md`, a contact address to publish (D9), the privacy policy draft `docs/PRIVACY.md`.
 
+## Testing and planning
+
+- Plant photos with timeline and zip export: merged (PR #13, D30). Open minors: the import free-space check also counts photos already on the phone; photos beyond the newest 30 are not viewable in the app.
+- Owner testing on his phone (debug build installed over ADB): no acquired-on date in the plant editor; calibration hidden behind the developer switch; Fully/Partly/Covered rain choice unclear; wants a lot of UI/UX polish. Capturing the planning package found more: "No forecast yet" shown after a fetch; place editor says "No match" after picking a search result; no place list/edit/delete and a new place is not preselected; plant delete and import have no confirmation; history cannot be corrected; "Bone dry" still gives "Check the soil" while uncertain; snooze hides the repot warning; soil answer not possible from the notification; logged weights are not used by the engine.
+- The owner sent a planning package (README + screenshots) to an outside planner and will return a V1 plan as Markdown; wait for it before starting UX work. He has not put the brief in the repo, so G7 is unknown here.
+
 ## Next work, in order
 
 1. Set up Boris on the owner's phone (closes G3).
