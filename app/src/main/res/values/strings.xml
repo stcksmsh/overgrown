@@ -198,6 +198,12 @@
     <string name="about_privacy_link">Privacy policy</string>
     <string name="about_care_notice">Care advice is general information. Plants, pots and places differ; watch your plant.</string>
     <string name="about_source">Source code</string>
+    <string name="about_font">Typeface: Bricolage Grotesque by Mathieu Triay, under the SIL Open Font License 1.1.</string>
+    <string name="about_font_licence">Font licence</string>
+    <string name="close">Close</string>
+
+    <!-- Design components -->
+    <string name="pot_gauge_description">Water left: %1$d percent</string>
 
     <!-- Notifications -->
     <string name="channel_prompts">Watering reminders</string>

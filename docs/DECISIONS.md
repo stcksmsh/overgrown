@@ -213,3 +213,15 @@ The owner reviewed the planning package with an outside planning agent and retur
 13. The repositories go public at the first beta.
 
 Screenshot tests (Roborazzi or Paparazzi) of every component state and screen, in light and dark and at 1.0x and 1.3x font scale, are what the owner reviews.
+
+## D32. Design foundation: theme tokens, bundled font, screenshot tests
+
+**Licence gate exception (D6, per D31.1).** SIL OFL 1.1 is allowed for bundled fonts and for nothing else. The only such font is Bricolage Grotesque, version 1.001, taken from the typeface's upstream repository https://github.com/ateliertriay/bricolage at commit `84745e5b96261ae5f8c6c856e262fe78d1d6efdd` (the commit Google Fonts imports from): the static `fonts/ttf/BricolageGrotesque-Regular.ttf`, `-SemiBold.ttf` and `-ExtraBold.ttf` (the three weights the six type styles use) and `OFL.txt`. The fonts are in `app/src/main/res/font/`, the licence text ships as `res/raw/ofl_bricolage_grotesque.txt`, and Settings, About names the font and shows the licence. Licensee checks Maven dependencies only, so its allow-list is unchanged; a font arrives only by this route and needs this entry. Static instances were chosen over the variable font because they need no variation settings and render the same under Robolectric.
+
+**Tokens.** Every colour, type style, radius and spacing value from `docs/DESIGN.md` sections 2-4 is in `app/src/main/kotlin/com/kostavukicevic/plants/ui/theme/Theme.kt`, each hex value once. Ranges in the spec are kept as two tokens: card padding 16 and 18, bar radius 5 and 6. The Material 3 colour, type and shape slots map onto these tokens so the existing screens take the new look without layout changes: primary is ink (primary buttons are ink), the surface containers are all surface, and every type slot is one of the six styles.
+
+**Error text in dark.** The existing screens write warnings in the Material `error` colour. Brick as text fails in dark (2.91:1 on dark surface, 3.32:1 on dark ground), so dark error text uses the brick-tint value `#F3D9CF` (over 12:1 on both). Light error text is brick (4.83:1 on ground, 5.54:1 on surface). No new colour is introduced. This goes away when later slices replace those lines with brick alert cards.
+
+**Contrast check.** `ContrastTest` checks every text/fill pair at 4.5:1, and the gauge outlines, gauge fill and tint chips at 3:1, in both themes. All dark values from DESIGN.md pass as written, so none changed. The `outline` role (secondary-button borders) is not a text or gauge colour and is not checked; it measures 1.61:1 light and 1.52:1 dark.
+
+**Screenshot tests.** Roborazzi 1.79.0 with Robolectric 4.18.1 (test-only, Maven Central, Apache-2.0), plus Compose `ui-test-junit4` from the existing Compose BOM. Every unit-test run compares against the goldens in `app/src/test/snapshots/` with Roborazzi's default comparator, so `./gradlew build` fails when an image changes; `-Proborazzi.record=true` re-records them. The Roborazzi Gradle plugin is not used: two system properties do the same job.

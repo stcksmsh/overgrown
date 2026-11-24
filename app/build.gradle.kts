@@ -54,6 +54,11 @@ android {
         compose = true
     }
 
+    // Robolectric screenshot tests need the merged resources (fonts, strings).
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
@@ -78,6 +83,23 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.work.runtime.ktx)
     implementation(libs.kotlinx.coroutines.core)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+}
+
+// Screenshot tests compare against the committed goldens in src/test/snapshots on every test run,
+// so `./gradlew build` fails when a rendered image differs. Re-record them on purpose with
+// `./gradlew :app:testFossDebugUnitTest -Proborazzi.record=true`.
+tasks.withType<Test>().configureEach {
+    val record = providers.gradleProperty("roborazzi.record").isPresent
+    systemProperty(if (record) "roborazzi.test.record" else "roborazzi.test.verify", "true")
+    inputs.files(fileTree("src/test/snapshots")).withPathSensitivity(PathSensitivity.RELATIVE)
+    if (record) outputs.upToDateWhen { false }
 }
 
 // ---- Care database asset ---------------------------------------------------------------

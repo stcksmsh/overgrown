@@ -7,21 +7,17 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.lifecycleScope
 import com.kostavukicevic.plants.ui.EditPlaceScreen
 import com.kostavukicevic.plants.ui.EditPlantScreen
 import com.kostavukicevic.plants.ui.PlantScreen
 import com.kostavukicevic.plants.ui.SettingsScreen
 import com.kostavukicevic.plants.ui.TodayScreen
+import com.kostavukicevic.plants.ui.theme.OvergrownTheme
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -101,11 +97,4 @@ private fun App(openPlant: Long?) {
         is Screen.EditPlace -> EditPlaceScreen(s.id, onDone = ::back)
         Screen.Settings -> SettingsScreen(onBack = ::back)
     }
-}
-
-@Composable
-private fun OvergrownTheme(content: @Composable () -> Unit) {
-    val green = Color(0xFF2E6B3F)
-    val scheme = if (isSystemInDarkTheme()) darkColorScheme(primary = Color(0xFF8FD3A0)) else lightColorScheme(primary = green)
-    MaterialTheme(colorScheme = scheme, content = content)
 }
