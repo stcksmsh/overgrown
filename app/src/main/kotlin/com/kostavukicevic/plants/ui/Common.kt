@@ -11,10 +11,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -130,19 +132,62 @@ fun TopMenu(onPlaces: () -> Unit, onSettings: () -> Unit) {
     }
 }
 
-/** A row in the Plants and Places lists. Edit and Delete name the item for TalkBack. */
+/** One row of the Plants or Places list. [key] is what [UndoDelete] hides while its delete is pending. */
+class ListItem(
+    val key: String,
+    val title: String,
+    val subtitle: String?,
+    val onOpen: (() -> Unit)?,
+    val onEdit: () -> Unit,
+    val onDelete: () -> Unit,
+)
+
+/** The Plants and Places lists: rows with Edit and Delete, or one line and an Add button when empty. */
 @Composable
-fun ListRow(title: String, subtitle: String?, onOpen: (() -> Unit)?, onEdit: () -> Unit, onDelete: () -> Unit) {
-    val editLabel = stringResource(R.string.edit_named, title)
-    val deleteLabel = stringResource(R.string.delete_named, title)
-    Card(Modifier.fillMaxWidth().then(if (onOpen != null) Modifier.clickable(onClick = onOpen) else Modifier)) {
-        Row(Modifier.padding(start = Spacing.cardPadding, top = Spacing.grid, bottom = Spacing.grid), verticalAlignment = Alignment.CenterVertically) {
+fun ListPage(
+    title: String,
+    onBack: (() -> Unit)?,
+    addLabel: String,
+    onAdd: () -> Unit,
+    empty: String,
+    undo: UndoDelete,
+    items: List<ListItem>?,
+    menu: @Composable () -> Unit = {},
+) {
+    Page(
+        title = title,
+        onBack = onBack,
+        actions = {
+            TextButton(onClick = onAdd) { Text(addLabel) }
+            menu()
+        },
+    ) {
+        val list = items?.filter { it.key !in undo.hidden } ?: return@Page
+        if (list.isEmpty()) {
+            Text(empty)
+            Button(onClick = onAdd) { Text(addLabel) }
+            return@Page
+        }
+        for (item in list) ListRow(item)
+    }
+}
+
+/** Edit and Delete name the item for TalkBack. The card padding lets the row grow with the text size. */
+@Composable
+private fun ListRow(item: ListItem) {
+    val editLabel = stringResource(R.string.edit_named, item.title)
+    val deleteLabel = stringResource(R.string.delete_named, item.title)
+    Card(Modifier.fillMaxWidth().then(if (item.onOpen != null) Modifier.clickable(onClick = item.onOpen) else Modifier)) {
+        Row(
+            Modifier.heightIn(min = Spacing.minTouchTarget).padding(start = Spacing.cardPadding, top = Spacing.cardPadding, bottom = Spacing.cardPadding, end = Spacing.grid),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                Text(item.title, style = MaterialTheme.typography.titleMedium)
+                item.subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
-            TextButton(onClick = onEdit, modifier = Modifier.semantics { contentDescription = editLabel }) { Text(stringResource(R.string.edit)) }
-            TextButton(onClick = onDelete, modifier = Modifier.semantics { contentDescription = deleteLabel }) {
+            TextButton(onClick = item.onEdit, modifier = Modifier.semantics { contentDescription = editLabel }) { Text(stringResource(R.string.edit)) }
+            TextButton(onClick = item.onDelete, modifier = Modifier.semantics { contentDescription = deleteLabel }) {
                 Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
             }
         }

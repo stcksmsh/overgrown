@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.ui
 
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -25,33 +22,30 @@ fun PlantsScreen(
     val deleted = stringResource(R.string.deleted)
     val undoLabel = stringResource(R.string.undo)
 
-    Page(
+    ListPage(
         title = stringResource(R.string.plants_title),
-        actions = {
-            TextButton(onClick = onAdd) { Text(stringResource(R.string.add_plant)) }
-            TopMenu(onPlaces, onSettings)
-        },
-    ) {
-        val list = plants?.filter { "plant:${it.id}" !in undo.hidden } ?: return@Page
-        if (list.isEmpty()) {
-            Text(stringResource(R.string.plants_empty))
-            Button(onClick = onAdd) { Text(stringResource(R.string.add_plant)) }
-            return@Page
-        }
-        for (p in list) {
-            ListRow(
+        onBack = null,
+        addLabel = stringResource(R.string.add_plant),
+        onAdd = onAdd,
+        empty = stringResource(R.string.plants_empty),
+        undo = undo,
+        menu = { TopMenu(onPlaces, onSettings) },
+        items = plants?.map { p ->
+            val key = "plant:${p.id}"
+            ListItem(
+                key = key,
                 title = p.name,
                 subtitle = places?.find { it.id == p.placeId }?.name,
                 onOpen = { onPlant(p.id) },
                 onEdit = { onEdit(p.id) },
                 onDelete = {
-                    undo.delete("plant:${p.id}", deleted.format(p.name), undoLabel) {
+                    undo.delete(key, deleted.format(p.name), undoLabel) {
                         g.garden.deletePlant(p.id)
                         g.scheduler.reschedule()
                         g.changed()
                     }
                 },
             )
-        }
-    }
+        },
+    )
 }
