@@ -4,6 +4,9 @@ package com.kostavukicevic.plants.ui
 import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -15,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalUriHandler
@@ -35,6 +39,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     val uri = LocalUriHandler.current
     val developer by g.settings.developerMode.collectAsState(false)
     var message by remember { mutableStateOf<String?>(null) }
+    var fontLicence by remember { mutableStateOf(false) }
 
     val exportZip = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { target ->
         target ?: return@rememberLauncherForActivityResult
@@ -110,6 +115,17 @@ fun SettingsScreen(onBack: () -> Unit) {
         TextButton(onClick = { uri.openUri(PRIVACY_URL) }) { Text(stringResource(R.string.about_privacy_link)) }
         Text(stringResource(R.string.about_care_notice), style = MaterialTheme.typography.bodySmall)
         TextButton(onClick = { uri.openUri(SOURCE_URL) }) { Text(stringResource(R.string.about_source)) }
+        Text(stringResource(R.string.about_font))
+        TextButton(onClick = { fontLicence = true }) { Text(stringResource(R.string.about_font_licence)) }
+    }
+
+    if (fontLicence) {
+        val text = remember { res.openRawResource(R.raw.ofl_bricolage_grotesque).bufferedReader().use { it.readText() } }
+        AlertDialog(
+            onDismissRequest = { fontLicence = false },
+            confirmButton = { TextButton(onClick = { fontLicence = false }) { Text(stringResource(R.string.close)) } },
+            text = { Text(text, Modifier.verticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall) },
+        )
     }
 }
 
