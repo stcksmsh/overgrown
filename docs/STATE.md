@@ -23,7 +23,7 @@ Handover for the next coordinator. The owner's brief is not in the repo (section
 
 ## In flight
 
-- PR #15 `claude/design-spec`: DESIGN.md, mockups in `docs/design/mockups/`, D31 (owner's 13 UI decisions). Verified and reviewed clean at 772990b; CI was running. Merge when green.
+- Nothing. PR #15 (DESIGN.md, mockups in `docs/design/mockups/`, D31 with the owner's 13 UI decisions) is merged.
 
 ## Next work, in order (DESIGN.md)
 
