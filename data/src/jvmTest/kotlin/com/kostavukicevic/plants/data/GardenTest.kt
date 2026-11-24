@@ -22,16 +22,25 @@ import com.kostavukicevic.plants.weather.MetNorway
 import com.kostavukicevic.plants.weather.OpenMeteo
 import com.kostavukicevic.plants.weather.WeatherService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import okio.Path.Companion.toOkioPath
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.File
 import java.nio.file.Files
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -46,6 +55,8 @@ class GardenTest {
 
     @AfterTest fun close() { dbs.forEach { it.close() } }
 
+    private fun photoDir(name: String): File = dir.resolve("$name-photos").toFile()
+
     private val noNetwork = HttpTransport { _, _ -> HttpResponse(503, emptyMap(), "") }
 
     private fun garden(name: String, careDb: CareDb? = null, http: HttpTransport = noNetwork): Garden {
@@ -56,7 +67,7 @@ class GardenTest {
         val settings = Settings(PreferenceDataStoreFactory.createWithPath { dir.resolve("$name.preferences_pb").toOkioPath() })
         val om = OpenMeteo(http, InMemoryResponseStore(), { clock })
         val met = MetNorway(http, InMemoryResponseStore(), { clock }, "test", TimeZone.UTC)
-        return Garden(db, settings, WeatherService(om, met, settings), om, { careDb }, { clock }, { TimeZone.UTC })
+        return Garden(db, settings, WeatherService(om, met, settings), om, { careDb }, { clock }, { TimeZone.UTC }, photoDir(name))
     }
 
     private suspend fun Garden.seed(): Long {
@@ -420,5 +431,202 @@ class GardenTest {
         assertEquals(june.plus(DatePeriod(days = 1)), status(emptyList()).nextReminder)
         assertEquals(june.plus(DatePeriod(days = 14)), status(listOf(fed(june))).nextReminder)
         assertNull(Planner.status(plant, indoor("MEDIUM"), emptyList(), emptyList(), emptyList(), null, june).nextReminder)
+    }
+
+    // ---- Photos -------------------------------------------------------------------------
+
+    private val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 1, 2, 3, 4, 5, 0xFF.toByte(), 0xD9.toByte())
+
+    private suspend fun Garden.zip(): ByteArray = ByteArrayOutputStream().also { exportZip("x", it) }.toByteArray()
+
+    private fun zipOf(vararg entries: Pair<String, ByteArray>): ByteArray = ByteArrayOutputStream().also { out ->
+        ZipOutputStream(out).use { z -> for ((name, bytes) in entries) { z.putNextEntry(ZipEntry(name)); z.write(bytes); z.closeEntry() } }
+    }.toByteArray()
+
+    private fun entries(zip: ByteArray): Map<String, ByteArray> = buildMap {
+        ZipInputStream(ByteArrayInputStream(zip)).use { z -> while (true) { val e = z.nextEntry ?: break; put(e.name, z.readBytes()) } }
+    }
+
+    @Test
+    fun aPhotoIsStoredAndListedWithItsDate() = runTest {
+        val g = garden("photo")
+        val plantId = g.seed()
+        val day = today.plus(DatePeriod(days = -4))
+        val id = g.addPhoto(plantId, jpeg, day)
+        val photo = dbs.last().dao().photo(id)!!
+        assertEquals(day.toString(), photo.date)
+        assertEquals(plantId, photo.plantId)
+        assertTrue(photo.file.endsWith(".jpg"))
+        assertContentEquals(jpeg, g.photoFile(photo).readBytes())
+        assertEquals(listOf(id), g.photos(plantId).first().map { it.id })
+    }
+
+    @Test
+    fun exportZipAndImportRoundTripAPhoto() = runTest {
+        val a = garden("zip-a")
+        val plantId = a.seed()
+        a.watered(plantId, ranOutOfBottom = true)
+        a.addPhoto(plantId, jpeg)
+        val zip = a.zip()
+        val inZip = entries(zip)
+        assertEquals(setOf(Export.ZIP_JSON, Export.ZIP_PHOTOS + a.photos(plantId).first().single().file), inZip.keys)
+
+        val b = garden("zip-b")
+        assertEquals(0, b.import(ByteArrayInputStream(zip)))
+        val photo = b.photos(plantId).first().single()
+        assertContentEquals(jpeg, b.photoFile(photo).readBytes())
+        assertTrue(b.photoFile(photo).startsWith(photoDir("zip-b")))
+        assertEquals(a.exportJson("x"), b.exportJson("x"))
+    }
+
+    @Test
+    fun importAcceptsAPlainVersionOneJson() = runTest {
+        val a = garden("v1-a")
+        val plantId = a.seed()
+        a.watered(plantId, ranOutOfBottom = false)
+        // A version 1 export has no photos field.
+        val v1 = a.exportJson("0.1.0").replace("\"version\": 2", "\"version\": 1").replace(Regex(",\\s*\"photos\": \\[\\s*]"), "")
+        assertTrue("photos" !in v1)
+        val b = garden("v1-b")
+        b.addPhoto(b.seed(), jpeg)
+        val old = b.photoFile(dbs.last().dao().allPhotos().single())
+        assertEquals(0, b.import(ByteArrayInputStream(v1.encodeToByteArray())))
+        assertEquals("Cypress", b.plant(plantId)?.name)
+        assertEquals(listOf("WATERED"), dbs.last().dao().events(plantId).map { it.type })
+        // Everything was replaced, the old photo with it.
+        assertTrue(dbs.last().dao().allPhotos().isEmpty())
+        assertFalse(old.exists())
+    }
+
+    @Test
+    fun aPhotoMissingFromTheZipIsSkippedAndCounted() = runTest {
+        val a = garden("missing-a")
+        val plantId = a.seed()
+        a.addPhoto(plantId, jpeg)
+        a.addPhoto(plantId, jpeg + byteArrayOf(1))
+        val full = entries(a.zip())
+        val dropped = full.keys.first { it.startsWith(Export.ZIP_PHOTOS) }
+        val zip = zipOf(*full.filterKeys { it != dropped }.toList().toTypedArray())
+
+        val b = garden("missing-b")
+        assertEquals(1, b.import(ByteArrayInputStream(zip)))
+        assertEquals("Cypress", b.plant(plantId)?.name)
+        val kept = b.photos(plantId).first().single()
+        assertTrue(kept.file != dropped.removePrefix(Export.ZIP_PHOTOS))
+        assertTrue(b.photoFile(kept).isFile)
+    }
+
+    @Test
+    fun aZipEntryWithDotDotIsRejectedAndChangesNothing() = runTest {
+        val g = garden("slip")
+        val plantId = g.seed()
+        g.addPhoto(plantId, jpeg)
+        val before = g.exportJson("x")
+        val json = entries(g.zip()).getValue(Export.ZIP_JSON)
+        for (bad in listOf("photos/../../escaped.jpg", "../garden.json", "/etc/escaped", "photos\\..\\escaped.jpg")) {
+            val zip = zipOf(bad to jpeg, Export.ZIP_JSON to json)
+            assertIs<IllegalArgumentException>(runCatching { g.import(ByteArrayInputStream(zip)) }.exceptionOrNull(), bad)
+            assertEquals(before, g.exportJson("x"))
+            assertTrue(g.photoFile(g.photos(plantId).first().single()).isFile)
+        }
+        assertFalse(dir.resolve("escaped.jpg").toFile().exists())
+        assertFalse(File(photoDir("slip").parentFile.parentFile, "escaped.jpg").exists())
+    }
+
+    @Test
+    fun aPhotoFileNameThatIsAPathIsRejected() = runTest {
+        val g = garden("path-name")
+        val plantId = g.seed()
+        g.addPhoto(plantId, jpeg)
+        val before = g.exportJson("x")
+        val file = g.photos(plantId).first().single().file
+        val zip = zipOf(Export.ZIP_JSON to before.replace(file, "../$file").encodeToByteArray(), Export.ZIP_PHOTOS + file to jpeg)
+        assertIs<IllegalArgumentException>(runCatching { g.import(ByteArrayInputStream(zip)) }.exceptionOrNull())
+        assertEquals(before, g.exportJson("x"))
+    }
+
+    @Test
+    fun deletingAPhotoOrAPlantRemovesTheFiles() = runTest {
+        val g = garden("delete-photos")
+        val plantId = g.seed()
+        val first = g.addPhoto(plantId, jpeg)
+        g.addPhoto(plantId, jpeg)
+        val files = g.photos(plantId).first().associate { it.id to g.photoFile(it) }
+        assertTrue(files.values.all { it.isFile })
+
+        g.deletePhoto(first)
+        assertFalse(files.getValue(first).exists())
+        assertEquals(1, g.photos(plantId).first().size)
+
+        g.deletePlant(plantId)
+        assertTrue(files.values.none { it.exists() })
+        assertTrue(dbs.last().dao().allPhotos().isEmpty())
+    }
+
+    @Test
+    fun deletingAPlaceRemovesItsPlantsPhotoFiles() = runTest {
+        val g = garden("delete-place")
+        val plantId = g.seed()
+        g.addPhoto(plantId, jpeg)
+        val file = g.photoFile(g.photos(plantId).first().single())
+        g.deletePlace(g.plant(plantId)!!.placeId)
+        assertFalse(file.exists())
+    }
+
+    @Test
+    fun anEmptyPhotoIsRefusedAndLeavesNothing() = runTest {
+        val g = garden("empty-photo")
+        val plantId = g.seed()
+        assertIs<IllegalArgumentException>(runCatching { g.addPhoto(plantId, ByteArray(0)) }.exceptionOrNull())
+        assertTrue(g.photos(plantId).first().isEmpty())
+        assertTrue(photoDir("empty-photo").listFiles().orEmpty().isEmpty())
+    }
+
+    @Test
+    fun aFailedPhotoCopyRollsBackAndKeepsTheLivePhoto() = runTest {
+        val a = garden("copy-fail-a")
+        val plantId = a.seed()
+        a.addPhoto(plantId, jpeg)
+        a.addPhoto(plantId, jpeg + byteArrayOf(1))
+        a.addPhoto(plantId, jpeg + byteArrayOf(2))
+        val zip = a.zip()
+        // In id order, the order import copies them in.
+        val names = a.photos(plantId).first().sortedBy { it.id }.map { it.file }
+
+        // The destination already has a live photo under the first name, and a directory where the third must go:
+        // the second is copied, the third fails, and the second must be removed again.
+        val b = garden("copy-fail-b")
+        val bPlant = b.seed()
+        b.addPhoto(bPlant, jpeg + byteArrayOf(7))
+        val live = b.photos(bPlant).first().single()
+        val liveBytes = b.photoFile(live).readBytes()
+        val forged = entries(zip).mapValues { (k, v) -> if (k == Export.ZIP_JSON) v.decodeToString().replace(names[0], live.file).encodeToByteArray() else v }
+            .mapKeys { (k, _) -> if (k == Export.ZIP_PHOTOS + names[0]) Export.ZIP_PHOTOS + live.file else k }
+        File(photoDir("copy-fail-b"), names[2]).resolve("blocker").apply { parentFile.mkdirs(); writeText("x") }
+        val before = b.exportJson("x")
+
+        assertIs<java.io.IOException>(runCatching { b.import(ByteArrayInputStream(zipOf(*forged.toList().toTypedArray()))) }.exceptionOrNull())
+        assertEquals(before, b.exportJson("x"))
+        assertContentEquals(liveBytes, b.photoFile(live).readBytes())
+        assertEquals(setOf(live.file, names[2]), photoDir("copy-fail-b").list()!!.toSet())
+    }
+
+    @Test
+    fun anOversizedZipEntryIsRefusedAndChangesNothing() = runTest {
+        val g = garden("oversized")
+        val plantId = g.seed()
+        g.addPhoto(plantId, jpeg)
+        val before = g.exportJson("x")
+        val json = entries(g.zip()).getValue(Export.ZIP_JSON)
+        // Zeros compress to almost nothing, as in a zip bomb; only the inflated size counts.
+        val bigPhoto = zipOf(Export.ZIP_JSON to json, Export.ZIP_PHOTOS + "big.jpg" to ByteArray((MAX_PHOTO_BYTES + 1).toInt()))
+        val bigJson = zipOf(Export.ZIP_JSON to ByteArray((MAX_JSON_BYTES + 1).toInt()) { ' '.code.toByte() })
+        val tooMany = zipOf(*Array(MAX_ZIP_ENTRIES + 1) { "photos/d$it/" to ByteArray(0) })
+        for (zip in listOf(bigPhoto, bigJson, tooMany)) {
+            assertIs<IllegalArgumentException>(runCatching { g.import(ByteArrayInputStream(zip)) }.exceptionOrNull())
+            assertEquals(before, g.exportJson("x"))
+            assertTrue(g.photoFile(g.photos(plantId).first().single()).isFile)
+        }
+        assertFalse(File(photoDir("oversized").path + ".import").exists())
     }
 }

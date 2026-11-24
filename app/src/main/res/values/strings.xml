@@ -87,6 +87,23 @@
     <string name="history_repotted">%1$s: repotted</string>
     <string name="history_fed">%1$s: fed</string>
     <string name="history_snoozed">%1$s: snoozed</string>
+    <string name="history_photo">%1$s: photo</string>
+
+    <!-- Photos -->
+    <string name="photo_add">Add photo</string>
+    <string name="photo_add_title">Add a photo</string>
+    <string name="photo_add_private">Photos stay on this phone. They leave it only in an export you make.</string>
+    <string name="photo_camera">Take a photo</string>
+    <string name="photo_gallery">Choose from gallery</string>
+    <string name="photo_no_camera">No camera app found.</string>
+    <string name="photo_failed">Could not add the photo: %1$s</string>
+    <string name="photo_description">Photo from %1$s</string>
+    <string name="photo_unreadable">The photo file could not be read.</string>
+    <string name="photo_too_large">The image is too large to open.</string>
+    <string name="photo_missing">This photo is not on this phone. Only an export zip carries photos to another phone.</string>
+    <string name="photo_delete">Delete photo</string>
+    <string name="photo_delete_question">Delete this photo?</string>
+    <string name="cancel">Cancel</string>
     <string name="cold_in_ground">In the ground it survives about %1$s °C. Roots in a pot freeze far sooner.</string>
 
     <!-- Calibration -->
@@ -158,9 +175,13 @@
     <string name="invalid_coordinates">Pick a city or enter valid coordinates.</string>
 
     <!-- Settings and about -->
-    <string name="export_json">Export all data (JSON)</string>
+    <string name="export_json">Export all data and photos (zip)</string>
     <string name="import_json">Import data (replaces everything)</string>
     <string name="import_done">Imported.</string>
+    <plurals name="import_done_missing_photos">
+        <item quantity="one">Imported. %1$d photo was not in the file and was left out.</item>
+        <item quantity="other">Imported. %1$d photos were not in the file and were left out.</item>
+    </plurals>
     <string name="import_failed">Import failed: %1$s</string>
     <string name="export_done">Exported.</string>
     <string name="export_calibration">Export calibration (CSV)</string>

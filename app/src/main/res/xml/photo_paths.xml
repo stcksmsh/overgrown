@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- Only the camera's one-photo scratch folder is shared, and only for the capture. -->
+<paths>
+    <cache-path name="camera" path="camera/" />
+</paths>

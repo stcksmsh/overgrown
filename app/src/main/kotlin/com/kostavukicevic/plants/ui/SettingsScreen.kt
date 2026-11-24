@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.ui
 
+import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.HorizontalDivider
@@ -35,14 +36,24 @@ fun SettingsScreen(onBack: () -> Unit) {
     val developer by g.settings.developerMode.collectAsState(false)
     var message by remember { mutableStateOf<String?>(null) }
 
-    val exportJson = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { target ->
+    val exportZip = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { target ->
         target ?: return@rememberLauncherForActivityResult
         scope.launch {
             message = try {
-                val text = g.garden.exportJson(g.versionName)
-                withContext(Dispatchers.IO) { c.contentResolver.openOutputStream(target)?.use { it.write(text.toByteArray()) } }
+                val out = withContext(Dispatchers.IO) { c.contentResolver.openOutputStream(target) } ?: throw java.io.IOException("unwritable file")
+                g.garden.exportZip(g.versionName, out) // closes out, also when it fails
                 res.getString(R.string.export_done)
             } catch (e: java.io.IOException) {
+                // A half-written zip would look like a good export; remove it where the provider allows.
+                withContext(Dispatchers.IO) {
+                    try {
+                        DocumentsContract.deleteDocument(c.contentResolver, target)
+                    } catch (_: java.io.FileNotFoundException) {
+                        // Best effort: the message below still says the export failed.
+                    } catch (_: RuntimeException) {
+                        // Providers without delete throw UnsupportedOperationException, others SecurityException; same as above.
+                    }
+                }
                 e.message
             }
         }
@@ -63,11 +74,10 @@ fun SettingsScreen(onBack: () -> Unit) {
         source ?: return@rememberLauncherForActivityResult
         scope.launch {
             message = try {
-                val text = withContext(Dispatchers.IO) { c.contentResolver.openInputStream(source)?.use { it.readBytes().decodeToString() } }
-                    ?: throw java.io.IOException("unreadable file")
-                g.garden.importJson(text)
+                val input = withContext(Dispatchers.IO) { c.contentResolver.openInputStream(source) } ?: throw java.io.IOException("unreadable file")
+                val missing = input.use { g.garden.import(it) }
                 g.scheduler.reschedule(); g.changed()
-                res.getString(R.string.import_done)
+                if (missing == 0) res.getString(R.string.import_done) else res.getQuantityString(R.plurals.import_done_missing_photos, missing, missing)
             } catch (e: java.io.IOException) {
                 res.getString(R.string.import_failed, e.message)
             } catch (e: IllegalArgumentException) {
@@ -77,8 +87,11 @@ fun SettingsScreen(onBack: () -> Unit) {
     }
 
     Page(stringResource(R.string.settings), onBack = onBack) {
-        TextButton(onClick = { exportJson.launch("overgrown-export.json") }) { Text(stringResource(R.string.export_json)) }
-        TextButton(onClick = { importJson.launch(arrayOf("application/json", "text/plain")) }) { Text(stringResource(R.string.import_json)) }
+        TextButton(onClick = { exportZip.launch("overgrown-export.zip") }) { Text(stringResource(R.string.export_json)) }
+        // A zip export, or a plain JSON one from an older build. Some file managers label zips with other types.
+        TextButton(onClick = {
+            importJson.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/json", "text/plain", "application/octet-stream"))
+        }) { Text(stringResource(R.string.import_json)) }
         SwitchRow(stringResource(R.string.developer_mode), developer) { on -> scope.launch { g.settings.setDeveloperMode(on) } }
         if (developer) TextButton(onClick = { exportCsv.launch("overgrown-calibration.csv") }) { Text(stringResource(R.string.export_calibration)) }
         message?.let { Text(it) }

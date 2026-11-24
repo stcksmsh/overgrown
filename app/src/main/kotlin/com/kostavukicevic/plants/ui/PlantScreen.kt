@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.ui
 
+import android.content.ActivityNotFoundException
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -21,9 +28,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -32,11 +46,16 @@ import com.kostavukicevic.plants.Texts
 import com.kostavukicevic.plants.caredb.Context as CareContext
 import com.kostavukicevic.plants.data.CareSource
 import com.kostavukicevic.plants.data.EventEntity
+import com.kostavukicevic.plants.data.PhotoEntity
 import com.kostavukicevic.plants.data.PlantStatus
 import com.kostavukicevic.plants.engine.Coefficients
 import com.kostavukicevic.plants.engine.Moisture
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
+import java.io.File
+import java.io.IOException
 import kotlin.math.roundToInt
 import kotlin.time.Instant
 
@@ -44,6 +63,7 @@ import kotlin.time.Instant
 fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
     val g = rememberGraph()
     val c = LocalContext.current
+    val res = LocalResources.current
     val tick = changeTick()
     val status by produceState<PlantStatus?>(null, tick) { value = g.garden.status(plantId) }
     val events by g.garden.events(plantId).collectAsState(emptyList())
@@ -51,8 +71,42 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
     val scope = rememberCoroutineScope()
     val uri = LocalUriHandler.current
     var askRanOut by remember { mutableStateOf(false) }
+    val photos by g.garden.photos(plantId).collectAsState(emptyList())
+    var askPhotoSource by remember { mutableStateOf(false) }
+    var deletePhoto by remember { mutableStateOf<PhotoEntity?>(null) }
+    var photoMessage by remember { mutableStateOf<String?>(null) }
+    // Survives the activity being recreated while the camera app is in front.
+    var cameraFile by rememberSaveable { mutableStateOf<String?>(null) }
 
     fun act(block: suspend () -> Unit) = scope.launch { block(); g.scheduler.reschedule(); g.changed() }
+
+    fun addPhoto(read: () -> ByteArray?) = scope.launch {
+        photoMessage = try {
+            // A camera that reports success without writing, or an empty file, leaves nothing to store.
+            val bytes = withContext(Dispatchers.IO) { read() }?.takeIf { it.isNotEmpty() }
+                ?: throw IOException(res.getString(R.string.photo_unreadable))
+            val today = g.garden.today()
+            val date = takenOn(bytes)?.takeIf { it <= today } ?: today
+            g.garden.addPhoto(plantId, withContext(Dispatchers.Default) { forStorage(bytes) }, date)
+            null
+        } catch (e: IOException) {
+            res.getString(R.string.photo_failed, e.message)
+        } catch (e: IllegalArgumentException) {
+            res.getString(R.string.photo_failed, e.message)
+        } catch (_: OutOfMemoryError) {
+            res.getString(R.string.photo_failed, res.getString(R.string.photo_too_large))
+        }
+    }
+
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+        val file = cameraFile?.let(::File) ?: return@rememberLauncherForActivityResult
+        cameraFile = null
+        if (taken) addPhoto { file.takeIf { it.isFile }?.readBytes().also { file.delete() } } else file.delete()
+    }
+    val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { picked ->
+        picked ?: return@rememberLauncherForActivityResult
+        addPhoto { c.contentResolver.openInputStream(picked)?.use { it.readBytes() } }
+    }
 
     val s = status
     Page(
@@ -110,7 +164,15 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
 
         HorizontalDivider()
         Text(stringResource(R.string.plant_history), style = MaterialTheme.typography.titleMedium)
-        for (e in events.take(50)) Text(historyLine(c, e), style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick = { askPhotoSource = true }) { Text(stringResource(R.string.photo_add)) }
+        photoMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        // Newest first; on the same day a photo comes after that day's events. Capped like the events,
+        // because the page is not a lazy list and every photo shown is decoded.
+        val timeline = (events.take(50).map { it.date to it } + photos.take(MAX_TIMELINE_PHOTOS).map { it.date to it }).sortedByDescending { it.first }
+        for ((_, item) in timeline) when (item) {
+            is EventEntity -> Text(historyLine(c, item), style = MaterialTheme.typography.bodySmall)
+            is PhotoEntity -> TimelinePhoto(item, onDelete = { deletePhoto = item })
+        }
 
         TextButton(onClick = { act { g.garden.deletePlant(plantId) }; onBack() }) {
             Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
@@ -125,7 +187,83 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
             dismissButton = { TextButton(onClick = { askRanOut = false; act { g.garden.watered(plantId, ranOutOfBottom = false) } }) { Text(stringResource(R.string.no)) } },
         )
     }
+
+    if (askPhotoSource) {
+        AlertDialog(
+            onDismissRequest = { askPhotoSource = false },
+            title = { Text(stringResource(R.string.photo_add_title)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.photo_add_private), style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = {
+                        askPhotoSource = false
+                        val (file, target) = cameraTarget(c)
+                        cameraFile = file.path
+                        try {
+                            camera.launch(target)
+                        } catch (_: ActivityNotFoundException) {
+                            cameraFile = null
+                            photoMessage = res.getString(R.string.photo_no_camera)
+                        }
+                    }) { Text(stringResource(R.string.photo_camera)) }
+                    TextButton(onClick = {
+                        askPhotoSource = false
+                        gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }) { Text(stringResource(R.string.photo_gallery)) }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { askPhotoSource = false }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+
+    deletePhoto?.let { photo ->
+        AlertDialog(
+            onDismissRequest = { deletePhoto = null },
+            title = { Text(stringResource(R.string.photo_delete_question)) },
+            confirmButton = {
+                TextButton(onClick = { deletePhoto = null; scope.launch { g.garden.deletePhoto(photo.id) } }) {
+                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { deletePhoto = null }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
 }
+
+@Composable
+private fun TimelinePhoto(photo: PhotoEntity, onDelete: () -> Unit) {
+    val g = rememberGraph()
+    val longSidePx = with(LocalDensity.current) { THUMBNAIL_DP.dp.roundToPx() }
+    val thumb by produceState<Thumb?>(null, photo.file) {
+        value = withContext(Dispatchers.IO) {
+            val file = g.garden.photoFile(photo)
+            Thumb(thumbnail(file, longSidePx)?.asImageBitmap(), present = file.isFile)
+        }
+    }
+    val date = Texts.date(LocalDate.parse(photo.date))
+    Text(stringResource(R.string.history_photo, date), style = MaterialTheme.typography.bodySmall)
+    val t = thumb ?: return
+    when {
+        t.bitmap != null -> Image(
+            t.bitmap,
+            contentDescription = stringResource(R.string.photo_description, date),
+            modifier = Modifier.heightIn(max = THUMBNAIL_DP.dp),
+            contentScale = ContentScale.Fit,
+            alignment = Alignment.CenterStart,
+        )
+        // A backup restore brings the rows back but not the files, which are left out of backups.
+        !t.present -> Text(stringResource(R.string.photo_missing), style = MaterialTheme.typography.bodySmall)
+        else -> Text(stringResource(R.string.photo_unreadable), style = MaterialTheme.typography.bodySmall)
+    }
+    TextButton(onClick = onDelete) { Text(stringResource(R.string.photo_delete)) }
+}
+
+private class Thumb(val bitmap: ImageBitmap?, val present: Boolean)
+
+/** Photos shown in the history; older ones stay stored and exported. */
+private const val MAX_TIMELINE_PHOTOS = 30
+private const val THUMBNAIL_DP = 240
 
 @Composable
 private fun CareInfo(s: PlantStatus, onReport: () -> Unit) {
