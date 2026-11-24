@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- The add-plant wizard. Shared words (Save, Back, place kinds, shapes, materials, light classes) are in strings.xml. -->
+<resources>
+    <string name="wizard_progress">%1$d of %2$d</string>
+    <string name="wizard_progress_description">Step %1$d of %2$d</string>
+    <string name="wizard_next_where">Next: where it lives</string>
+    <string name="wizard_next_pot">Next: the pot</string>
+    <string name="wizard_next_exposure">Next: sun and rain</string>
+    <string name="wizard_fix_above">Check the answers above.</string>
+
+    <string name="wizard_plant_title">What plant is it?</string>
+    <string name="wizard_name">Name, if you know it</string>
+    <string name="wizard_name_needed">Enter a name.</string>
+    <string name="wizard_no_match">No match. The name is kept; pick what it looks like below.</string>
+    <string name="wizard_change">Change</string>
+    <string name="wizard_change_named">Change %1$s</string>
+    <string name="wizard_look_title">Not sure? Pick what it looks like.</string>
+    <string name="wizard_general_rules">Using general care rules. Pick a plant type for better advice.</string>
+    <string name="look_conifer">Conifer</string>
+    <string name="look_succulent">Succulent or cactus</string>
+    <string name="look_leafy">Leafy tropical</string>
+    <string name="look_fern">Fern</string>
+    <string name="look_orchid">Orchid</string>
+    <string name="look_herb">Herb</string>
+
+    <string name="wizard_where_title">Where does it live?</string>
+    <string name="wizard_kind_needed">Pick indoors or outdoors.</string>
+    <string name="wizard_which_place">Which place?</string>
+    <string name="wizard_new_place">New place</string>
+    <string name="wizard_place_needed">Pick a place.</string>
+    <string name="wizard_place_name">Name of the place</string>
+    <string name="wizard_city_offline">Can\'t search for cities right now. Check the connection, or enter coordinates under Advanced.</string>
+    <string name="wizard_city_picked">Near %1$s</string>
+    <string name="wizard_advanced">Advanced</string>
+
+    <string name="wizard_pot_title">The pot</string>
+    <string name="wizard_pot_width">Width across the top, cm</string>
+    <string name="wizard_width_invalid">Enter a width above 0 and up to 300 cm.</string>
+    <string name="wizard_pot_shape">Shape</string>
+    <string name="wizard_plant_width">How wide is the plant, cm?</string>
+    <string name="wizard_volume_computed">From the width and shape: about %1$s litres.</string>
+    <string name="wizard_volume_hint">Leave empty to use that.</string>
+    <string name="wizard_acquired">When did you get it?</string>
+    <string name="wizard_acquired_button">When did you get it? %1$s. Change</string>
+    <string name="wizard_ok">OK</string>
+
+    <string name="wizard_exposure_outdoor_title">Rain and wind</string>
+    <string name="wizard_exposure_indoor_title">Light</string>
+    <string name="wizard_rain">When it rains, does the soil get wet?</string>
+    <string name="wizard_wind">Is it windy where the pot stands?</string>
+    <string name="wizard_sun">Does sun fall on the leaves?</string>
+    <string name="wizard_answer_needed">Pick an answer.</string>
+    <string name="answer_yes">Yes</string>
+    <string name="answer_little">A little</string>
+    <string name="answer_no">No</string>
+    <string name="answer_unsure">Not sure</string>
+    <string name="wizard_shared_place">These answers belong to %1$s, so they also change them for %2$s.</string>
+</resources>

@@ -37,99 +37,6 @@ import com.kostavukicevic.plants.weather.PlaceMatch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** A species or profile choice: (speciesSlug, archetypeId) and its label. */
-private data class CareChoice(val slug: String?, val archetype: String?, val label: String)
-
-@Composable
-fun EditPlantScreen(plantId: Long?, onDone: () -> Unit, onNewPlace: () -> Unit) {
-    val g = rememberGraph()
-    val scope = rememberCoroutineScope()
-    val places by g.garden.places.collectAsState(emptyList())
-
-    var loaded by remember { mutableStateOf<PlantEntity?>(null) }
-    var name by remember { mutableStateOf("") }
-    var care by remember { mutableStateOf<CareChoice?>(null) }
-    var placeId by remember { mutableStateOf<Long?>(null) }
-    var canopy by remember { mutableStateOf("") }
-    var volume by remember { mutableStateOf("") }
-    var height by remember { mutableStateOf("") }
-    var shape by remember { mutableStateOf("STANDARD") }
-    var material by remember { mutableStateOf("PLASTIC") }
-    var drainage by remember { mutableStateOf(true) }
-    var nursery by remember { mutableStateOf(false) }
-    var rootBound by remember { mutableStateOf(false) }
-    var showErrors by remember { mutableStateOf(false) }
-
-    val db = g.careDb
-    val generic = CareChoice(null, null, stringResource(R.string.field_species_generic))
-    val choices = remember(db) {
-        listOf(generic) +
-            (db?.species?.map { (slug, s) -> CareChoice(slug, s.archetype, s.taxon.acceptedName + (s.commonNames["en"]?.firstOrNull()?.let { " (${it.name})" } ?: "")) } ?: emptyList()) +
-            (db?.archetypes?.map { (id, a) -> CareChoice(null, id, a.name) } ?: emptyList())
-    }
-
-    LaunchedEffect(plantId) {
-        val p = plantId?.let { g.garden.plant(it) } ?: return@LaunchedEffect
-        loaded = p
-        name = p.name; placeId = p.placeId; canopy = p.canopyWidthCm.toString(); volume = p.potVolumeL.toString()
-        height = p.potHeightCm?.toString() ?: ""; shape = p.potShape; material = p.potMaterial
-        drainage = p.drainageHoles; nursery = p.inNurseryPot; rootBound = p.rootBound
-        care = choices.firstOrNull { it.slug == p.speciesSlug && (p.speciesSlug != null || it.archetype == p.archetypeId) } ?: generic
-    }
-    LaunchedEffect(places) { if (placeId == null) placeId = places.firstOrNull()?.id }
-
-    Page(stringResource(R.string.edit_plant_title), onBack = onDone) {
-        OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.field_name)) }, isError = showErrors && name.isBlank(), modifier = Modifier.fillMaxWidth())
-
-        Text(stringResource(R.string.field_species), style = MaterialTheme.typography.labelLarge)
-        for (ch in choices) {
-            val selected = (care ?: generic) == ch
-            Text(
-                (if (selected) "● " else "○ ") + ch.label,
-                modifier = Modifier.fillMaxWidth().clickable { care = ch }.padding(vertical = 4.dp),
-            )
-        }
-
-        Text(stringResource(R.string.field_place), style = MaterialTheme.typography.labelLarge)
-        if (places.isEmpty()) Text(stringResource(R.string.need_place), color = MaterialTheme.colorScheme.error)
-        for (p in places) {
-            Text((if (placeId == p.id) "● " else "○ ") + p.name, Modifier.fillMaxWidth().clickable { placeId = p.id }.padding(vertical = 4.dp))
-        }
-        TextButton(onClick = onNewPlace) { Text(stringResource(R.string.field_place_new)) }
-
-        Text(stringResource(R.string.size_hint), style = MaterialTheme.typography.bodySmall)
-        NumberField(stringResource(R.string.field_canopy), canopy, showErrors) { canopy = it }
-        NumberField(stringResource(R.string.field_pot_volume), volume, showErrors) { volume = it }
-        OutlinedTextField(height, { height = it }, label = { Text(stringResource(R.string.field_pot_height)) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
-        Choice(stringResource(R.string.field_pot_shape), listOf("SHALLOW" to stringResource(R.string.shape_shallow), "STANDARD" to stringResource(R.string.shape_standard), "TALL" to stringResource(R.string.shape_tall)), shape) { shape = it }
-        Choice(stringResource(R.string.field_pot_material), listOf("PLASTIC" to stringResource(R.string.material_plastic), "GLAZED_CERAMIC" to stringResource(R.string.material_glazed), "UNGLAZED_TERRACOTTA" to stringResource(R.string.material_terracotta)), material) { material = it }
-        SwitchRow(stringResource(R.string.field_drainage), drainage) { drainage = it }
-        SwitchRow(stringResource(R.string.field_nursery_pot), nursery) { nursery = it }
-        SwitchRow(stringResource(R.string.field_root_bound), rootBound) { rootBound = it }
-
-        Button(onClick = {
-            val c = positive(canopy); val v = positive(volume); val pl = placeId
-            if (name.isBlank() || c == null || v == null || pl == null) { showErrors = true; return@Button }
-            val chosen = care ?: generic
-            val entity = (loaded ?: PlantEntity(name = "", placeId = pl, canopyWidthCm = c, potVolumeL = v, acquiredOn = g.garden.today().toString())).copy(
-                name = name.trim(), placeId = pl, speciesSlug = chosen.slug, archetypeId = chosen.archetype,
-                canopyWidthCm = c, potVolumeL = v, potHeightCm = positive(height), potShape = shape, potMaterial = material,
-                drainageHoles = drainage, inNurseryPot = nursery, rootBound = rootBound,
-            )
-            scope.launch { g.garden.savePlant(entity); g.scheduler.reschedule(); g.changed(); onDone() }
-        }) { Text(stringResource(R.string.save)) }
-    }
-}
-
-@Composable
-private fun NumberField(label: String, value: String, showErrors: Boolean, onChange: (String) -> Unit) {
-    val bad = showErrors && positive(value) == null
-    OutlinedTextField(value, onChange, label = { Text(label) }, isError = bad,
-        supportingText = { if (bad) Text(stringResource(R.string.invalid_number)) },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
-}
-
 @Composable
 fun EditPlaceScreen(placeId: Long?, onDone: () -> Unit) {
     val g = rememberGraph()
@@ -220,7 +127,7 @@ fun EditPlaceScreen(placeId: Long?, onDone: () -> Unit) {
  * lux reading (D28). Shows nothing on a device without a light sensor.
  */
 @Composable
-private fun LightCheck(selected: String, onClass: (LightClass) -> Unit) {
+internal fun LightCheck(selected: String, onClass: (LightClass) -> Unit) {
     val context = LocalContext.current
     val sensors = remember { context.getSystemService(SensorManager::class.java) }
     val sensor = remember { sensors?.getDefaultSensor(Sensor.TYPE_LIGHT) }

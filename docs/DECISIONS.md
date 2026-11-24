@@ -257,3 +257,19 @@ The `overgrown-data` submodule moves from `06d0079` to `7756c25` (data PR #7), w
 ## D37. CI off until close to V1 (owner's decision)
 
 The owner asked to switch CI off and drop it as a merge requirement until the app is close to V1, because each CI run took about 12 minutes and every fix round or merge of `main` triggered another, which made iteration slow. The `CI` workflow is disabled in GitHub (`gh workflow disable CI`; the workflow file is unchanged, so `gh workflow enable CI` restores it). `.nonslop.toml` sets `[merge] allow_no_ci = true`, so the coordinator's merge check accepts a pull request with no checks. Every builder brief still requires the full test command (`./gradlew build :engine:compileKotlinIosArm64 :engine:compileKotlinIosSimulatorArm64`) to pass locally, and the reproducible-build check (D7) does not run until CI is back. Re-enable both before the first beta.
+
+## D38. Add-plant wizard
+
+The single add/edit plant form is replaced by four steps (`ui/AddPlantWizard.kt`, `docs/DESIGN.md` section 6): what plant, where, the pot, sun and rain. Editing a plant opens the same steps filled in, with Save on every step. `EditPlantScreen` is removed; `EditPlaceScreen` stays for the Places list. No schema change.
+
+**Pot geometry.** The pot is modelled as a frustum whose base is 0.75 of the top width, with height over top width 0.5 (shallow), 0.9 (standard) and 1.5 (tall). Litres = pi h (D^2 + Dd + d^2) / 12 / 1000. A 20 cm standard pot comes to about 4.4 litres. These are geometry, not care data, so they sit in the UI file. The width is not stored: the wizard stores the computed height in `potHeightCm` (which the engine already uses for the column height), and editing reads the width back from it, or from the volume for plants saved before the wizard. A stored volume more than 1 % off the computed one is shown as the Advanced litres override. Widths of 0, empty, or above 300 cm are refused, for the pot and for the plant.
+
+**Step 1.** The name search covers species (common and accepted names) and, because no species ship yet (D36), archetype names too. Picking a result fills the name, shows the pick as a moss row with Change, and stops searching while the name is edited, so "No match" never shows under a pick. A typed name with no match is kept as the name. Herb has no archetype, so picking it means the general care rules. Selected tiles are moss with a check mark and no border (DESIGN wins over the mockup's outlined tile).
+
+**Step 2.** No places of the chosen kind means the new-place form shows at once. The new place asks a name and a city; coordinates are only under Advanced. "Use my location" (DESIGN section 9, item 2) is not in this slice. A failed city search says it cannot search right now. A new outdoor place triggers a weather refresh on save, as `EditPlaceScreen` does.
+
+**Step 4.** Exposure is the place's, so answering for an existing place changes that place; when other plants share it the step names them. Rain Yes / A little / No / Not sure stores OPEN / PARTIAL / COVERED / PARTIAL; wind Yes / No / Not sure stores EXPOSED / SHELTERED / NORMAL. "Not sure" is not recorded separately yet (DESIGN asks for it; it needs a column, so it waits for a schema change). Indoors, "Does sun fall on the leaves?" Yes / A little / No / Not sure sets the light class to DIRECT / HIGH / MEDIUM / MEDIUM, which the light choices and the light check can then change. Changing an indoor place's class clears its stored lux, which the engine would otherwise use in place of the class (`WaterBalance`), as `EditPlaceScreen` does.
+
+**Not asked.** Root-bound and the place's dry-air flag are not wizard questions; editing keeps their stored values.
+
+**State.** All answers and the step are saved with the instance state, so rotation and process death keep them. Back on step 1 leaves without saving; system back goes to the previous step.
