@@ -63,6 +63,10 @@ import com.kostavukicevic.plants.weather.MetNorway
 import com.kostavukicevic.plants.weather.OpenMeteo
 import com.kostavukicevic.plants.weather.WeatherService
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.TimeZone
 import java.io.File
 import java.io.IOException
@@ -397,6 +401,20 @@ class TodayTest {
         runBlocking { g.refreshWeather(foreground = true) }
         assertFalse(g.fetching.value)
         assertTrue(g.fetchFailed.value)
+    }
+
+    @Test
+    fun aCancelledFetchIsNotAFailureAndEndsFetching() {
+        val never = CompletableDeferred<HttpResponse>()
+        weatherBy { _, _ -> never.await() }
+        outdoorPlant()
+        runBlocking {
+            val job = launch(Dispatchers.Default) { g.refreshWeather(foreground = true) }
+            withTimeout(10_000) { g.fetching.first { it } }
+            job.cancelAndJoin()
+        }
+        assertFalse(g.fetching.value)
+        assertFalse(g.fetchFailed.value)
     }
 
     companion object {
