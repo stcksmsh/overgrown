@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Glyph: filled shapes plus round-capped stems, one colour (tinted at the use site). 48-unit grid, see docs/DESIGN.md section 5. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path android:fillColor="#FF000000" android:pathData="M24,5L33,18H15Z M24,14L36,30H12Z M24,25L39,42H9Z" />
+    <path android:strokeColor="#FF000000" android:strokeWidth="3" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M24,42V46" />
+</vector>
