@@ -6,7 +6,7 @@ Handover for the next coordinator. The owner's brief is not in the repo (section
 
 - `stcksmsh/overgrown` (private, GPL-3.0-only): app, engine, weather, storage. Local `/secondary/Programming/Github/Overgrown`. Submodule `overgrown-data` pinned at `06d0079`.
 - `stcksmsh/overgrown-data` (private, AGPL-3.0-only): care database. Local `/secondary/Programming/Github/overgrown-data`. Only `status: reviewed` entries reach the app (only `hardy-potted-conifer` so far).
-- Both wired to nonslop. The agent merges app PRs after verify + recorded review + green CI. The nonslop merge hook checks PR numbers against the app repo, so it refuses data-repo merges: ask the owner to run `! gh pr merge <n> -R stcksmsh/overgrown-data --merge`.
+- Both wired to nonslop. The agent merges app PRs after `nonslop slice verify <branch>`, a fresh-context review recorded with `nonslop slice review <branch> clean|minor|must-fix --sha <sha>`, and green CI. CI reads the data repo with the deploy key in secret `DATA_REPO_SSH_KEY`. The nonslop merge hook checks PR numbers against the app repo, so it refuses data-repo merges: ask the owner to run `! gh pr merge <n> -R stcksmsh/overgrown-data --merge`.
 - Test builds: send the owner `app/build/outputs/apk/foss/debug/app-foss-debug.apk` (built here, same debug key) with SendUserFile; he installs over the existing app. Never ask him to uninstall (deletes his data).
 - Reviewers once deleted the shared scratch `.claude/tmp/<job>/`; tell every agent to touch only scratch it created.
 
@@ -41,13 +41,14 @@ Known bugs the redesign must cover: "No forecast yet" after a fetch; "No match" 
 
 1. Trademark check of "Overgrown" and lawyer review of the licences (start now, D31.12); contact address (D9); privacy policy `docs/PRIVACY.md`. Repos go public at the first beta.
 2. A 1 g kitchen scale; 2-3 more plants of different types (snake plant, pothos, a non-conifer outdoor plant).
-3. Review of the indoor archetypes and snake plant entry when he wants them in the app.
+3. The four draft indoor archetypes (data PR #4) feed the ~12-archetype review in item 8 of the work order; the snake plant entry waits for that.
 
 ## Boris (the owner's plant)
 
-Potted *Chamaecyparis* (label names the genus only), 5th-floor balcony, inner corner of a U-shaped building, balcony above (rain: Covered), faces south/south-east. 38 cm tall, 13 cm wide; nursery pot 9 cm tall, about 0.5 L, plastic with holes, inside a ceramic outer pot. Cold nights forecast 30 Nov-2 Dec: insulate the gap, lift off the floor, against the wall; below -5 °C into an unheated room. Repot in spring.
+Potted *Chamaecyparis* (label names the genus only), 5th-floor balcony, inner corner of a U-shaped building, balcony above (rain: Covered), faces south/south-east. 38 cm tall, 13 cm wide; nursery pot 9 cm tall, about 0.5 L, plastic with holes, inside a ceramic outer pot. Cold nights forecast 30 Nov-2 Dec: insulate the gap, lift off the floor, against the wall; below -5 °C into an unheated room. Repot in spring. Watering point kept at 50 % (D25). Watered 24 Nov: 0.20 kg before, 0.30 kg drained (50 g scale). The *C. lawsoniana* species entry stays draft; no usable source gives a *Chamaecyparis* root-kill temperature.
 
 ## Known limits
 
 - Four answer bands cannot pin K closer than the band width (D15, D18); weights are logged but unused until after V1 (D31.11).
+- Open minors: every prompt uses BigTextStyle; a Doze delay past midnight posts the next day's reminder at night (PR #10); the import free-space check counts photos already present; photos beyond the newest 30 are not viewable (PR #13). Plants in the ground need a soil model: out of v1.
 - Unused sources (terms or 403): AHDB, Oregon State, UF/IFAS EDIS, UMass, FEIS (data D4).
