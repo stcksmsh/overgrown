@@ -39,7 +39,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.lifecycle.lifecycleScope
 import com.kostavukicevic.plants.ui.EditPlaceScreen
-import com.kostavukicevic.plants.ui.EditPlantScreen
+import com.kostavukicevic.plants.ui.AddPlantWizard
 import com.kostavukicevic.plants.ui.PlacesScreen
 import com.kostavukicevic.plants.ui.PlantScreen
 import com.kostavukicevic.plants.ui.PlantsScreen
@@ -173,7 +173,7 @@ internal fun App(openPlant: Long?) {
                 )
                 Screen.Places -> PlacesScreen(undo, onBack = ::back, onEdit = { go(Screen.EditPlace(it)) }, onAdd = { go(Screen.EditPlace(null)) })
                 is Screen.Plant -> PlantScreen(top.id, onBack = ::back, onEdit = { go(Screen.EditPlant(top.id)) })
-                is Screen.EditPlant -> EditPlantScreen(top.id, onDone = ::back, onNewPlace = { go(Screen.EditPlace(null)) })
+                is Screen.EditPlant -> AddPlantWizard(top.id, onDone = ::back)
                 is Screen.EditPlace -> EditPlaceScreen(top.id, onDone = ::back)
                 Screen.Settings -> SettingsScreen(onBack = ::back)
             }
