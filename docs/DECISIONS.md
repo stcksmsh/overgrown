@@ -193,3 +193,23 @@ The owner asked for photos and a timeline of each plant kept on the phone, possi
 - Deleting a photo deletes its file. Deleting a plant, or a place with its plants, deletes their photo files after the database rows are gone.
 - Database: version 2 adds the `photo` table (`id`, `plantId`, `date`, `file`) and changes nothing else, so Room's `AutoMigration(from = 1, to = 2)` applies; existing places, plants and events are kept. There is no destructive fallback. `MigrationTest` builds a version 1 database from the exported `1.json` schema and opens it with the version 2 code.
 - Export: format version 2 adds a `photos` list to the JSON. The export is a zip: `garden.json` at the root (the same JSON as before) and each photo file as `photos/<file>`. Import accepts that zip and a plain `.json` export from older builds (detected by the zip's `PK` signature). A photo listed in the JSON whose file is not in the zip is left out and counted, and the rest is imported; the app says how many were left out. Import still replaces everything or nothing: an entry whose path is absolute or contains `..`, a photo entry that is not a plain file name, or a photo whose `file` in the JSON is not a plain file name refuses the whole file before anything changes. New photo files are copied in before the database transaction, and every file the import created is removed again if a copy or the transaction fails; the old ones are deleted only after it succeeds. A live photo file is never overwritten: names are random, so a name already in use is the same photo and its file is kept. The zip is bounded before anything is kept in memory or on disk: `garden.json` (and a plain JSON file) at most 32 MB, each photo at most 32 MB, 1 GB in all and 20 000 entries, counting the bytes actually inflated rather than what the zip claims; a larger file is refused and changes nothing. Photos are unpacked to a staging folder and then copied, so an import briefly needs about twice their size; before copying, import checks that the photos plus a 64 MB margin fit in the free space and otherwise refuses the file. The rollback and the cleanup of old and staged files run to the end even if the import is cancelled.
+
+## D31. Design spec v1 and the owner's UI decisions
+
+The owner reviewed the planning package with an outside planning agent and returned a design spec, now `docs/DESIGN.md`, with reference mockups (Today, Plant, Add plant step 1) in `docs/design/mockups/`. Where the mockups and the spec disagree, the spec wins. The spec's section 9 records his decisions:
+
+1. SIL OFL 1.1 is allowed for bundled fonts only. The licence gate (D6) gains that one exception; the bundled typeface is Bricolage Grotesque, listed in the notices.
+2. "Use my location" is added, which reverses part of D26: approximate location only, requested on tap, optional, coordinates rounded to about 1 km, the nearest city name from a bundled offline list. City search stays.
+3. Two bottom tabs, Today and Plants; Places and Settings open from a top-bar icon.
+4. Soil answers on Today cards and in notifications are Wet / OK / Dry; the plant screen also offers "Bone dry". A quick "Dry" covers the Dry and Bone dry bands together. D18's interval likelihood takes any band, so this is one more band, from the Dry band's lower edge and open above like Bone dry; no other change to the learning rule.
+5. Pot size is asked as the width across the top plus a shape; the volume is computed and editable under "Advanced".
+6. "Not sure" for rain and wind stores partly and normal; learning exposure from answers after rain is after V1.
+7. Cards and tiles use the care profile's glyph; a plant photo appears only on the plant screen in V1.
+8. Resting tiles are surface coloured with a moss chip.
+9. Indoor plants are in V1.
+10. Launch coverage: about 12 owner-reviewed archetypes and a table of about 300 common plant names mapped to them; archetypes are reviewed before species entries.
+11. Weighing (calibration) moves from developer options into Settings; the engine starts using weights after V1.
+12. The trademark check and the lawyer review of the licences start now, in parallel.
+13. The repositories go public at the first beta.
+
+Screenshot tests (Roborazzi or Paparazzi) of every component state and screen, in light and dark and at 1.0x and 1.3x font scale, are what the owner reviews.
