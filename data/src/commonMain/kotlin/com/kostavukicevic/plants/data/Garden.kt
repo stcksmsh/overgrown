@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.kostavukicevic.plants.caredb.CareDb
 import com.kostavukicevic.plants.engine.LightClass
 import com.kostavukicevic.plants.engine.Moisture
@@ -39,6 +40,7 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.io.BufferedInputStream
 import java.io.File
@@ -199,6 +201,23 @@ class Garden(
     }
 
     suspend fun statuses(): List<PlantStatus> = dao.allPlants().mapNotNull { status(it.id) }
+
+    /** Today's alert events, one per weather event, without those the person marked Done or dismissed today. */
+    suspend fun alertEvents(): List<AlertEvent> = alertEvents(statuses())
+
+    /** [alertEvents] for statuses the caller already has. */
+    suspend fun alertEvents(statuses: List<PlantStatus>): List<AlertEvent> {
+        val day = today()
+        var visible = emptyList<AlertEvent>()
+        settings.updateAlertAcks { acks -> applyAcks(alertEvents(statuses, day), acks, day).also { visible = it.first }.second }
+        return visible
+    }
+
+    /** "I protected the plants": hidden for the event's whole range unless it gets worse or reaches another plant. */
+    suspend fun done(event: AlertEvent) = settings.updateAlertAcks { acked(it, event, dismissedOn = null) }
+
+    /** "Not now": hidden for today. */
+    suspend fun dismiss(event: AlertEvent) = settings.updateAlertAcks { acked(it, event, dismissedOn = today()) }
 
     // ---- Export, import, calibration CSV ------------------------------------------------
 
@@ -464,6 +483,8 @@ class Settings(private val store: DataStore<Preferences>) : FallbackState {
     private val failuresKey = intPreferencesKey("weather_failures")
     private val installSeedKey = longPreferencesKey("install_seed")
     private val developerKey = booleanPreferencesKey("developer_mode")
+    private val alertAcksKey = stringPreferencesKey("alert_acks")
+    private val acksSerializer = ListSerializer(AlertAck.serializer())
 
     override suspend fun useFallback() = store.data.first()[fallbackKey] ?: false
     override suspend fun setFallback(on: Boolean) { store.edit { it[fallbackKey] = on } }
@@ -480,4 +501,20 @@ class Settings(private val store: DataStore<Preferences>) : FallbackState {
 
     val developerMode: Flow<Boolean> get() = store.data.map { it[developerKey] ?: false }
     suspend fun setDeveloperMode(on: Boolean) { store.edit { it[developerKey] = on } }
+
+    /** Done and Dismiss on alert events, as JSON. An unreadable value is treated as none, so alerts show again. */
+    suspend fun alertAcks(): List<AlertAck> = decodeAcks(store.data.first()[alertAcksKey])
+
+    /** Read, change and write in one DataStore transaction; writes only when something changed. */
+    suspend fun updateAlertAcks(change: (List<AlertAck>) -> List<AlertAck>) {
+        store.edit { prefs ->
+            val old = decodeAcks(prefs[alertAcksKey])
+            val new = change(old)
+            if (new == old) return@edit
+            if (new.isEmpty()) prefs.remove(alertAcksKey) else prefs[alertAcksKey] = Json.encodeToString(acksSerializer, new)
+        }
+    }
+
+    private fun decodeAcks(text: String?): List<AlertAck> =
+        text?.let { runCatching { Json.decodeFromString(acksSerializer, it) }.getOrNull() } ?: emptyList()
 }
