@@ -572,4 +572,61 @@ class GardenTest {
         g.deletePlace(g.plant(plantId)!!.placeId)
         assertFalse(file.exists())
     }
+
+    @Test
+    fun anEmptyPhotoIsRefusedAndLeavesNothing() = runTest {
+        val g = garden("empty-photo")
+        val plantId = g.seed()
+        assertIs<IllegalArgumentException>(runCatching { g.addPhoto(plantId, ByteArray(0)) }.exceptionOrNull())
+        assertTrue(g.photos(plantId).first().isEmpty())
+        assertTrue(photoDir("empty-photo").listFiles().orEmpty().isEmpty())
+    }
+
+    @Test
+    fun aFailedPhotoCopyRollsBackAndKeepsTheLivePhoto() = runTest {
+        val a = garden("copy-fail-a")
+        val plantId = a.seed()
+        a.addPhoto(plantId, jpeg)
+        a.addPhoto(plantId, jpeg + byteArrayOf(1))
+        a.addPhoto(plantId, jpeg + byteArrayOf(2))
+        val zip = a.zip()
+        // In id order, the order import copies them in.
+        val names = a.photos(plantId).first().sortedBy { it.id }.map { it.file }
+
+        // The destination already has a live photo under the first name, and a directory where the third must go:
+        // the second is copied, the third fails, and the second must be removed again.
+        val b = garden("copy-fail-b")
+        val bPlant = b.seed()
+        b.addPhoto(bPlant, jpeg + byteArrayOf(7))
+        val live = b.photos(bPlant).first().single()
+        val liveBytes = b.photoFile(live).readBytes()
+        val forged = entries(zip).mapValues { (k, v) -> if (k == Export.ZIP_JSON) v.decodeToString().replace(names[0], live.file).encodeToByteArray() else v }
+            .mapKeys { (k, _) -> if (k == Export.ZIP_PHOTOS + names[0]) Export.ZIP_PHOTOS + live.file else k }
+        File(photoDir("copy-fail-b"), names[2]).resolve("blocker").apply { parentFile.mkdirs(); writeText("x") }
+        val before = b.exportJson("x")
+
+        assertIs<java.io.IOException>(runCatching { b.import(ByteArrayInputStream(zipOf(*forged.toList().toTypedArray()))) }.exceptionOrNull())
+        assertEquals(before, b.exportJson("x"))
+        assertContentEquals(liveBytes, b.photoFile(live).readBytes())
+        assertEquals(setOf(live.file, names[2]), photoDir("copy-fail-b").list()!!.toSet())
+    }
+
+    @Test
+    fun anOversizedZipEntryIsRefusedAndChangesNothing() = runTest {
+        val g = garden("oversized")
+        val plantId = g.seed()
+        g.addPhoto(plantId, jpeg)
+        val before = g.exportJson("x")
+        val json = entries(g.zip()).getValue(Export.ZIP_JSON)
+        // Zeros compress to almost nothing, as in a zip bomb; only the inflated size counts.
+        val bigPhoto = zipOf(Export.ZIP_JSON to json, Export.ZIP_PHOTOS + "big.jpg" to ByteArray((MAX_PHOTO_BYTES + 1).toInt()))
+        val bigJson = zipOf(Export.ZIP_JSON to ByteArray((MAX_JSON_BYTES + 1).toInt()) { ' '.code.toByte() })
+        val tooMany = zipOf(*Array(MAX_ZIP_ENTRIES + 1) { "photos/d$it/" to ByteArray(0) })
+        for (zip in listOf(bigPhoto, bigJson, tooMany)) {
+            assertIs<IllegalArgumentException>(runCatching { g.import(ByteArrayInputStream(zip)) }.exceptionOrNull())
+            assertEquals(before, g.exportJson("x"))
+            assertTrue(g.photoFile(g.photos(plantId).first().single()).isFile)
+        }
+        assertFalse(File(photoDir("oversized").path + ".import").exists())
+    }
 }

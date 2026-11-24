@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.ui
 
+import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.HorizontalDivider
@@ -40,9 +41,17 @@ fun SettingsScreen(onBack: () -> Unit) {
         scope.launch {
             message = try {
                 val out = withContext(Dispatchers.IO) { c.contentResolver.openOutputStream(target) } ?: throw java.io.IOException("unwritable file")
-                g.garden.exportZip(g.versionName, out)
+                g.garden.exportZip(g.versionName, out) // closes out, also when it fails
                 res.getString(R.string.export_done)
             } catch (e: java.io.IOException) {
+                // A half-written zip would look like a good export; remove it where the provider allows.
+                withContext(Dispatchers.IO) {
+                    try {
+                        DocumentsContract.deleteDocument(c.contentResolver, target)
+                    } catch (_: java.io.FileNotFoundException) {
+                        // The provider reports any failure to delete this way; the message below still says the export failed.
+                    }
+                }
                 e.message
             }
         }

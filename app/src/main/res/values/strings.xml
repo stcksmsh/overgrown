@@ -99,6 +99,8 @@
     <string name="photo_failed">Could not add the photo: %1$s</string>
     <string name="photo_description">Photo from %1$s</string>
     <string name="photo_unreadable">The photo file could not be read.</string>
+    <string name="photo_too_large">The image is too large to open.</string>
+    <string name="photo_missing">This photo is not on this phone. Only an export zip carries photos to another phone.</string>
     <string name="photo_delete">Delete photo</string>
     <string name="photo_delete_question">Delete this photo?</string>
     <string name="cancel">Cancel</string>

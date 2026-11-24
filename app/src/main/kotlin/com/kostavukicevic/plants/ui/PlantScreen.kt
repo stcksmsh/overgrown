@@ -82,13 +82,19 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
 
     fun addPhoto(read: () -> ByteArray?) = scope.launch {
         photoMessage = try {
-            val bytes = withContext(Dispatchers.IO) { read() } ?: throw IOException(res.getString(R.string.photo_unreadable))
+            // A camera that reports success without writing, or an empty file, leaves nothing to store.
+            val bytes = withContext(Dispatchers.IO) { read() }?.takeIf { it.isNotEmpty() }
+                ?: throw IOException(res.getString(R.string.photo_unreadable))
             val today = g.garden.today()
             val date = takenOn(bytes)?.takeIf { it <= today } ?: today
             g.garden.addPhoto(plantId, withContext(Dispatchers.Default) { forStorage(bytes) }, date)
             null
         } catch (e: IOException) {
             res.getString(R.string.photo_failed, e.message)
+        } catch (e: IllegalArgumentException) {
+            res.getString(R.string.photo_failed, e.message)
+        } catch (_: OutOfMemoryError) {
+            res.getString(R.string.photo_failed, res.getString(R.string.photo_too_large))
         }
     }
 
@@ -160,8 +166,9 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
         Text(stringResource(R.string.plant_history), style = MaterialTheme.typography.titleMedium)
         OutlinedButton(onClick = { askPhotoSource = true }) { Text(stringResource(R.string.photo_add)) }
         photoMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        // Newest first; on the same day a photo comes after that day's events.
-        val timeline = (events.take(50).map { it.date to it } + photos.map { it.date to it }).sortedByDescending { it.first }
+        // Newest first; on the same day a photo comes after that day's events. Capped like the events,
+        // because the page is not a lazy list and every photo shown is decoded.
+        val timeline = (events.take(50).map { it.date to it } + photos.take(MAX_TIMELINE_PHOTOS).map { it.date to it }).sortedByDescending { it.first }
         for ((_, item) in timeline) when (item) {
             is EventEntity -> Text(historyLine(c, item), style = MaterialTheme.typography.bodySmall)
             is PhotoEntity -> TimelinePhoto(item, onDelete = { deletePhoto = item })
@@ -227,23 +234,36 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
 @Composable
 private fun TimelinePhoto(photo: PhotoEntity, onDelete: () -> Unit) {
     val g = rememberGraph()
-    val widthPx = with(LocalDensity.current) { 320.dp.roundToPx() }
-    val bitmap by produceState<ImageBitmap?>(null, photo.file) {
-        value = withContext(Dispatchers.IO) { thumbnail(g.garden.photoFile(photo), widthPx)?.asImageBitmap() }
+    val longSidePx = with(LocalDensity.current) { THUMBNAIL_DP.dp.roundToPx() }
+    val thumb by produceState<Thumb?>(null, photo.file) {
+        value = withContext(Dispatchers.IO) {
+            val file = g.garden.photoFile(photo)
+            Thumb(thumbnail(file, longSidePx)?.asImageBitmap(), present = file.isFile)
+        }
     }
     val date = Texts.date(LocalDate.parse(photo.date))
     Text(stringResource(R.string.history_photo, date), style = MaterialTheme.typography.bodySmall)
-    bitmap?.let {
-        Image(
-            it,
+    val t = thumb ?: return
+    when {
+        t.bitmap != null -> Image(
+            t.bitmap,
             contentDescription = stringResource(R.string.photo_description, date),
-            modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
+            modifier = Modifier.heightIn(max = THUMBNAIL_DP.dp),
             contentScale = ContentScale.Fit,
             alignment = Alignment.CenterStart,
         )
+        // A backup restore brings the rows back but not the files, which are left out of backups.
+        !t.present -> Text(stringResource(R.string.photo_missing), style = MaterialTheme.typography.bodySmall)
+        else -> Text(stringResource(R.string.photo_unreadable), style = MaterialTheme.typography.bodySmall)
     }
     TextButton(onClick = onDelete) { Text(stringResource(R.string.photo_delete)) }
 }
+
+private class Thumb(val bitmap: ImageBitmap?, val present: Boolean)
+
+/** Photos shown in the history; older ones stay stored and exported. */
+private const val MAX_TIMELINE_PHOTOS = 30
+private const val THUMBNAIL_DP = 240
 
 @Composable
 private fun CareInfo(s: PlantStatus, onReport: () -> Unit) {

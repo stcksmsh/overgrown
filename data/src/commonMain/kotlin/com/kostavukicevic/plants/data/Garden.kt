@@ -215,7 +215,7 @@ class Garden(
      * The full export: a zip with [Export.ZIP_JSON] and every photo file under [Export.ZIP_PHOTOS].
      * Closes [out]. A photo whose file is gone is still listed in the JSON; import skips it.
      */
-    suspend fun exportZip(appVersion: String, out: OutputStream) {
+    suspend fun exportZip(appVersion: String, out: OutputStream) = out.use {
         val text = exportJson(appVersion)
         val photos = dao.allPhotos()
         withContext(Dispatchers.IO) {
@@ -244,7 +244,7 @@ class Garden(
             source.mark(2)
             (source.read() == 'P'.code && source.read() == 'K'.code).also { source.reset() }
         }
-        if (!zip) return importJson(withContext(Dispatchers.IO) { source.readBytes().decodeToString() })
+        if (!zip) return importJson(withContext(Dispatchers.IO) { readBounded(source, MAX_JSON_BYTES).decodeToString() })
 
         val staging = File(photoDir.path + ".import")
         try {
@@ -252,20 +252,24 @@ class Garden(
                 staging.deleteRecursively()
                 staging.mkdirs()
                 var text: String? = null
+                var entries = 0
+                var total = 0L
                 ZipInputStream(source).use { z ->
                     while (true) {
                         val entry = z.nextEntry ?: break
                         val name = entry.name
+                        require(++entries <= MAX_ZIP_ENTRIES) { "too many entries in the file" }
                         require(safeEntry(name)) { "unsafe path in the file: $name" }
                         when {
-                            name == Export.ZIP_JSON -> text = z.readBytes().decodeToString()
+                            name == Export.ZIP_JSON -> text = readBounded(z, MAX_JSON_BYTES).decodeToString().also { total += it.length }
                             entry.isDirectory -> Unit
                             name.startsWith(Export.ZIP_PHOTOS) -> {
                                 val file = name.removePrefix(Export.ZIP_PHOTOS)
                                 require(SAFE_NAME.matches(file)) { "unexpected entry in the file: $name" }
-                                File(staging, file).outputStream().use { z.copyTo(it) }
+                                total += File(staging, file).outputStream().use { copyBounded(z, it, MAX_PHOTO_BYTES) }
                             }
                         }
+                        require(total <= MAX_ZIP_TOTAL_BYTES) { "the file is too large" }
                     }
                 }
                 text ?: throw IllegalArgumentException("no ${Export.ZIP_JSON} in the file")
@@ -294,13 +298,18 @@ class Garden(
     private suspend fun replace(parsed: Export, staging: File?): Int {
         val (photos, missing) = parsed.photos.partition { staging != null && File(staging, it.file).isFile }
         val old = dao.allPhotos().map { it.file }.toSet()
-        val copied = withContext(Dispatchers.IO) {
-            photoDir.mkdirs()
-            // A name already in use is the same photo (names are random), exported from this garden.
-            for (p in photos) File(staging, p.file).copyTo(File(photoDir, p.file), overwrite = true)
-            photos.map { it.file }.filter { it !in old }
-        }
+        // Files this import created, removed again if anything fails before the database accepts it.
+        val copied = mutableListOf<String>()
         try {
+            withContext(Dispatchers.IO) {
+                photoDir.mkdirs()
+                for (p in photos) {
+                    // Names are random, so a live file with this name is this same photo: never overwrite it.
+                    if (p.file in old && File(photoDir, p.file).isFile) continue
+                    copied += p.file
+                    File(staging, p.file).copyTo(File(photoDir, p.file), overwrite = true)
+                }
+            }
             dao.replaceAll(parsed.places, parsed.plants, parsed.events, parsed.weather, parsed.calibration, photos)
         } catch (t: Throwable) {
             deleteFiles(copied)
@@ -308,6 +317,22 @@ class Garden(
         }
         deleteFiles(old - photos.map { it.file }.toSet())
         return missing.size
+    }
+
+    /** Reads at most [limit] bytes; a larger stream refuses the file instead of filling memory. */
+    private fun readBounded(input: InputStream, limit: Long): ByteArray =
+        java.io.ByteArrayOutputStream().also { copyBounded(input, it, limit) }.toByteArray()
+
+    private fun copyBounded(input: InputStream, out: OutputStream, limit: Long): Long {
+        val buffer = ByteArray(64 * 1024)
+        var copied = 0L
+        while (true) {
+            val n = input.read(buffer)
+            if (n < 0) return copied
+            copied += n
+            require(copied <= limit) { "an entry in the file is too large" }
+            out.write(buffer, 0, n)
+        }
     }
 
     /** Zip slip: an entry that could land outside the staging directory refuses the whole file. */
@@ -389,6 +414,16 @@ data class Export(
 
 /** A plain file name: letters, digits, dot, dash, underscore, not starting with a dot. */
 private val SAFE_NAME = Regex("[A-Za-z0-9][A-Za-z0-9._-]*")
+
+/*
+ * Import limits, far above any real garden (stored photos are at most about 4 MB, garden.json a few MB after
+ * years of use) but low enough that a damaged or hostile file is refused before it fills memory or storage.
+ * Sizes count the bytes actually inflated, not what the zip claims.
+ */
+internal const val MAX_JSON_BYTES = 32L * 1024 * 1024
+internal const val MAX_PHOTO_BYTES = 32L * 1024 * 1024
+internal const val MAX_ZIP_TOTAL_BYTES = 4L * 1024 * 1024 * 1024
+internal const val MAX_ZIP_ENTRIES = 20_000
 
 /** Weather client cache in the database. */
 class DbResponseStore(private val dao: GardenDao) : ResponseStore {
