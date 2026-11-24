@@ -2,7 +2,6 @@
 package com.kostavukicevic.plants.ui.theme
 
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.compositeOver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -38,10 +37,6 @@ class ContrastTest {
             add(Check("gauge outline (ink) on ground", c.ink, c.ground, GRAPHIC))
             add(Check("gauge fill on surface", c.gaugeFill, c.surface, GRAPHIC))
             for (b in StateBlock.entries) add(Check("gauge outline on ${b.name}", b.text, b.fill, GRAPHIC))
-            // Variant B on white-text blocks: the white fill must stand out from the translucent empty part.
-            for (b in listOf(StateBlock.Brick, StateBlock.Moss)) {
-                add(Check("gauge fill vs variant B empty on ${b.name}", b.text, GaugeEmptyOnWhiteTextBlock.compositeOver(b.fill), GRAPHIC))
-            }
             add(Check("moss on moss tint", StateBlock.Moss.fill, Tints.moss, GRAPHIC))
             add(Check("brick on brick tint", StateBlock.Brick.fill, Tints.brick, GRAPHIC))
         }

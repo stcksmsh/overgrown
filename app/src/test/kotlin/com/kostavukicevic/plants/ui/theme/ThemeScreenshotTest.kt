@@ -20,6 +20,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import com.dropbox.differ.SimpleImageComparator
+import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -35,8 +37,14 @@ class ThemeScreenshotTest(private val dark: Boolean, private val fontScale: Floa
 
     private val suffix = "${if (dark) "dark" else "light"}_${fontScale}x"
 
+    // Any changed pixel fails: no share of changed pixels and no per-pixel colour distance is tolerated.
+    // Built per instance, inside the Robolectric sandbox, which Roborazzi's options need.
+    private val exact = RoborazziOptions(
+        compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0f, imageComparator = SimpleImageComparator(maxDistance = 0f)),
+    )
+
     private fun capture(name: String, content: @Composable () -> Unit) =
-        captureRoboImage("src/test/snapshots/${name}_$suffix.png") {
+        captureRoboImage("src/test/snapshots/${name}_$suffix.png", roborazziOptions = exact) {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
                 OvergrownTheme(dark = dark) {
