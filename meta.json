@@ -1,0 +1,11 @@
+{
+  "slug": "overgrown",
+  "title": "Overgrown",
+  "tagline": "An open-source Android app that tells you when and how much to water each plant, learning from your feedback. Fully on-device: no account, no server.",
+  "status": "active",
+  "stack": ["Kotlin", "Jetpack Compose", "Kotlin Multiplatform", "Room"],
+  "repo": "https://github.com/stcksmsh/overgrown",
+  "accent": [0.7, 0.16, 145],
+  "featured": true,
+  "order": 8
+}
