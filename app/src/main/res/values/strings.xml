@@ -41,6 +41,16 @@
     <string name="today_alert_waterlogging">Roots may be waterlogged.</string>
     <string name="today_day_range">%1$s-%2$s</string>
     <string name="today_day_list">%1$s, %2$s</string>
+    <!-- Alert cards, one per weather event: %1$s the days, %2$s the plants. -->
+    <string name="event_cold">Cold nights %1$s. Move %2$s against a wall or insulate the pot.</string>
+    <string name="event_cold_strong">Hard frost %1$s. Move %2$s somewhere sheltered or wrap the pot well.</string>
+    <string name="event_heat">Heat %1$s. Check %2$s more often; shade small pots.</string>
+    <string name="event_heavy_rain">Heavy rain %1$s. Make sure %2$s can drain.</string>
+    <string name="event_wind">Strong wind %1$s. Move %2$s out of the wind or secure it.</string>
+    <string name="event_waterlogging">Roots of %2$s may be waterlogged. Tip out standing water.</string>
+    <string name="event_done">Done</string>
+    <string name="event_not_now">Not now</string>
+    <string name="names_and">%1$s and %2$s</string>
     <string name="today_water_dose">Water about %1$d ml</string>
     <string name="today_soil_question">How does the soil feel?</string>
     <string name="today_level">%1$s ·\u00A0%2$d\u00A0%%</string>

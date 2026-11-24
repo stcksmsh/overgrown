@@ -34,6 +34,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -52,7 +53,9 @@ import androidx.compose.ui.unit.dp
 import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.graph
+import com.kostavukicevic.plants.ui.theme.Overgrown
 import com.kostavukicevic.plants.ui.theme.Spacing
+import com.kostavukicevic.plants.ui.theme.Type
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
@@ -74,21 +77,28 @@ fun changeTick(): Int {
 fun Page(
     title: String,
     onBack: (() -> Unit)? = null,
+    /** The display-size title of a tab's root screen. */
+    large: Boolean = false,
     actions: @Composable () -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val ground = Overgrown.colors.ground
     Scaffold(
+        containerColor = ground,
         topBar = {
             TopAppBar(
-                title = { Text(title) },
+                title = { Text(title, style = if (large) Type.display else Type.cardTitle) },
                 navigationIcon = { if (onBack != null) TextButton(onClick = onBack) { Text(stringResource(R.string.back)) } },
                 actions = { actions() },
+                // The bar is the screen's own ground, not a band of another colour.
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ground, scrolledContainerColor = ground),
+                expandedHeight = if (large) Spacing.grid * 20 else TopAppBarDefaults.TopAppBarExpandedHeight,
             )
         },
     ) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = Spacing.screen, vertical = Spacing.grid * 2),
+            verticalArrangement = Arrangement.spacedBy(Spacing.cardGap),
             content = content,
         )
     }

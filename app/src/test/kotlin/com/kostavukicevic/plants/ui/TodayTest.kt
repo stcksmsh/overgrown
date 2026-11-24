@@ -32,6 +32,8 @@ import com.kostavukicevic.plants.data.PlantEntity
 import com.kostavukicevic.plants.data.PlantStatus
 import com.kostavukicevic.plants.data.Planner
 import com.kostavukicevic.plants.engine.Action
+import com.kostavukicevic.plants.data.AlertEvent
+import com.kostavukicevic.plants.data.alertEvents
 import com.kostavukicevic.plants.engine.Alert
 import com.kostavukicevic.plants.engine.AlertType
 import com.kostavukicevic.plants.engine.EngineState
@@ -164,15 +166,16 @@ class TodayTest {
                 fixture("Elm", Action.WaterNow(500, PromptReason.DRY_BY_MODEL), depletion = 0.9, alerts = frost),
             ),
         )
-        val alert = compose.onAllNodesWithText(s(R.string.alert_root_freeze_caution, "25 Nov")).fetchSemanticsNodes().maxOf { it.positionInRoot.y }
+        // One card for the one frost event, naming both plants in it.
+        val alert = top(s(R.string.event_cold, "Wed", "Cedar and Elm"))
         val water = compose.onAllNodesWithText(s(R.string.plant_watered)).fetchSemanticsNodes().map { it.positionInRoot.y }
         val soil = top(s(R.string.today_soil_question))
         val fine = compose.onAllNodesWithText(s(R.string.tile_fine_check, "Thu"), substring = true).fetchSemanticsNodes().minOf { it.positionInRoot.y }
         assertTrue("alerts above Do now", alert < water.min())
         assertTrue("Do now above All fine", maxOf(water.max(), soil) < fine)
-        // Elm has an alert and a water card, and is not also a resting tile; Cedar has an alert block and a tile.
-        compose.onAllNodesWithText("Elm").assertCountEquals(2)
-        compose.onAllNodesWithText("Cedar").assertCountEquals(2)
+        // Elm has a water card and is not also a resting tile; Cedar has a tile. Both are named on the alert card.
+        compose.onAllNodesWithText("Elm").assertCountEquals(1)
+        compose.onAllNodesWithText("Cedar").assertCountEquals(1)
         compose.onAllNodesWithText("Ash").assertCountEquals(1)
         compose.onAllNodes(hasText(s(R.string.tile_fine_check, "Fri"))).assertCountEquals(1)
     }
@@ -281,6 +284,37 @@ class TodayTest {
         assertEquals("Frost Wed-Thu, Sat.", frost(25, 26, 28))
         assertEquals("Frost Wed-Fri.", frost(25, 26, 27))
         assertEquals("Frost Wed.", frost(25, 25))
+    }
+
+    @Test
+    fun anAlertCardNamesItsDaysAndEveryPlant() {
+        val c = compose.activity
+        fun event(type: AlertType, days: IntRange, vararg names: String) =
+            alertEvents(names.map { n -> fixture(n, alerts = days.map { Alert(type, LocalDate(2026, 11, it)) }) }, TODAY).single()
+        assertEquals("Cold nights Wed. Move Boris against a wall or insulate the pot.", Texts.event(c, event(AlertType.ROOT_FREEZE_CAUTION, 25..25, "Boris"), TODAY))
+        assertEquals(
+            "Hard frost Wed-Fri. Move Aloe, Boris and Fern somewhere sheltered or wrap the pot well.",
+            Texts.event(c, event(AlertType.ROOT_FREEZE_STRONG, 25..27, "Fern", "Boris", "Aloe"), TODAY),
+        )
+        assertEquals("Heat Thu-Fri. Check Basil and Boris more often; shade small pots.", Texts.event(c, event(AlertType.HEAT, 26..27, "Boris", "Basil"), TODAY))
+    }
+
+    @Test
+    fun alertCardDoneAndNotNowPassTheirEvent() {
+        val frost = listOf(Alert(AlertType.ROOT_FREEZE_CAUTION, LocalDate(2026, 11, 25)))
+        val list = listOf(fixture("Boris", alerts = frost, next = LocalDate(2026, 11, 26)))
+        val done = mutableListOf<AlertEvent>()
+        val dismissed = mutableListOf<AlertEvent>()
+        compose.setContent {
+            OvergrownTheme {
+                TodayContent(list, TODAY, onPlant = {}, onAdd = {}, onWatered = {}, onAnswer = { _, _ -> }, onDone = { done += it }, onDismiss = { dismissed += it }) { FixedWeather() }
+            }
+        }
+        val event = alertEvents(list, TODAY).single()
+        compose.onNodeWithText(s(R.string.event_done)).performClick()
+        compose.onNodeWithText(s(R.string.event_not_now)).performClick()
+        assertEquals(listOf(event), done)
+        assertEquals(listOf(event), dismissed)
     }
 
     /** The garden on the test database, with every weather request answered by [http]. */

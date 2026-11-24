@@ -2,6 +2,8 @@
 package com.kostavukicevic.plants
 
 import android.content.Context
+import com.kostavukicevic.plants.data.AlertEvent
+import com.kostavukicevic.plants.data.AlertKind
 import com.kostavukicevic.plants.data.PlantStatus
 import com.kostavukicevic.plants.data.Reminder
 import com.kostavukicevic.plants.engine.Action
@@ -68,6 +70,21 @@ object Texts {
                     AlertType.WATERLOGGING -> c.getString(R.string.today_alert_waterlogging)
                 }
             }
+
+    /** An alert card's one sentence: the event, its days and what to do with which plants. */
+    fun event(c: Context, e: AlertEvent, today: LocalDate): String {
+        val days = if (e.start == e.end) day(e.start, today) else c.getString(R.string.today_day_range, day(e.start, today), day(e.end, today))
+        val names = e.plants.map { it.name }
+        val plants = if (names.size == 1) names.single() else c.getString(R.string.names_and, names.dropLast(1).joinToString(", "), names.last())
+        val id = when (e.kind) {
+            AlertKind.COLD -> if (e.severity == AlertType.ROOT_FREEZE_STRONG) R.string.event_cold_strong else R.string.event_cold
+            AlertKind.HEAT -> R.string.event_heat
+            AlertKind.HEAVY_RAIN -> R.string.event_heavy_rain
+            AlertKind.WIND -> R.string.event_wind
+            AlertKind.WATERLOGGING -> R.string.event_waterlogging
+        }
+        return c.getString(id, days, plants)
+    }
 
     /** Runs of consecutive days, so a gap day is never inside a range: Mon, Wed is two runs, not Mon-Wed. */
     private fun dayRuns(dates: List<LocalDate>): List<Pair<LocalDate, LocalDate>> {

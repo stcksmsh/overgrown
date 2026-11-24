@@ -257,3 +257,13 @@ The `overgrown-data` submodule moves from `06d0079` to `7756c25` (data PR #7), w
 ## D37. CI off until close to V1 (owner's decision)
 
 The owner asked to switch CI off and drop it as a merge requirement until the app is close to V1, because each CI run took about 12 minutes and every fix round or merge of `main` triggered another, which made iteration slow. The `CI` workflow is disabled in GitHub (`gh workflow disable CI`; the workflow file is unchanged, so `gh workflow enable CI` restores it). `.nonslop.toml` sets `[merge] allow_no_ci = true`, so the coordinator's merge check accepts a pull request with no checks. Every builder brief still requires the full test command (`./gradlew build :engine:compileKotlinIosArm64 :engine:compileKotlinIosSimulatorArm64`) to pass locally, and the reproducible-build check (D7) does not run until CI is back. Re-enable both before the first beta.
+
+## D38. Today matches the mockup (owner's request)
+
+The owner asked for the app to look like the Today mockup (the one also shown on the project website). Changes:
+
+- **Alert cards per event.** Today now shows one brick card per weather event from `Garden.alertEvents` (D35), with an icon for the kind, one sentence naming the days and every plant ("Cold nights Wed. Move Boris against a wall or insulate the pot."), and Done and Not now. The per-plant alert block is gone. `TodayContent` takes the events, defaulting to every event with none acknowledged, so the tests and captures need no garden.
+- **Buttons on a state block** (soil answers, Done) are white with dark ink in both themes, like the block itself. DESIGN.md section 5 says "surface fill"; in dark mode that drew dark buttons on marigold, which the mockup does not have.
+- **Resting tiles** use a moss chip with a white glyph, as DESIGN.md section 9.8 says; they had a moss-tint chip.
+- **Top bar** is the screen's own ground colour instead of a white band. Today's title is display size (44 sp). Screen padding is 20 and the gap between items 10, the DESIGN.md tokens; the page used 16 and 12.
+- **Tabs** sit on the ground colour; the unselected tab is a surface pill.

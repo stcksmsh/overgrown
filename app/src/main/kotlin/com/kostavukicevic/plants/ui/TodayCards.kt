@@ -18,16 +18,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
+import com.kostavukicevic.plants.data.AlertEvent
+import com.kostavukicevic.plants.data.AlertKind
 import com.kostavukicevic.plants.data.Garden
+import com.kostavukicevic.plants.data.alertEvents
 import com.kostavukicevic.plants.data.PlantEntity
 import com.kostavukicevic.plants.data.PlantStatus
 import com.kostavukicevic.plants.engine.Action
@@ -39,7 +45,6 @@ import com.kostavukicevic.plants.ui.theme.PotGaugeSize
 import com.kostavukicevic.plants.ui.theme.Radius
 import com.kostavukicevic.plants.ui.theme.Spacing
 import com.kostavukicevic.plants.ui.theme.StateBlock
-import com.kostavukicevic.plants.ui.theme.Tints
 import com.kostavukicevic.plants.ui.theme.Type
 import com.kostavukicevic.plants.ui.theme.waterLeftPercent
 import kotlinx.datetime.LocalDate
@@ -68,7 +73,8 @@ private val answers = listOf(R.string.answer_wet to Moisture.TOO_WET, R.string.a
 
 /**
  * The Today screen below its top bar. With no plants, one sentence and one button and nothing else. Otherwise
- * alerts, "Do now" cards and "All fine" tiles, then [weather], which the caller leaves empty where no weather applies.
+ * one alert card per weather event in [events], "Do now" cards and "All fine" tiles, then [weather], which the
+ * caller leaves empty where no weather applies. [events] defaults to every event, none marked Done.
  */
 @Composable
 internal fun TodayContent(
@@ -78,6 +84,9 @@ internal fun TodayContent(
     onAdd: () -> Unit,
     onWatered: (PlantStatus) -> Unit,
     onAnswer: (PlantStatus, Moisture) -> Unit,
+    events: List<AlertEvent> = alertEvents(list, today),
+    onDone: (AlertEvent) -> Unit = {},
+    onDismiss: (AlertEvent) -> Unit = {},
     weather: @Composable () -> Unit,
 ) {
     if (list.isEmpty()) {
@@ -87,7 +96,7 @@ internal fun TodayContent(
     val c = LocalContext.current
     val groups = TodayGroups(list)
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.cardGap)) {
-        for (s in groups.alerts) AlertBlock(s, onOpen = { onPlant(s.plant.id) })
+        for (e in events) AlertCard(e, today, onDone = { onDone(e) }, onDismiss = { onDismiss(e) })
         if (groups.doNow.isEmpty()) {
             val alerts = groups.alerts.flatMap { it.alerts }
             Text(
@@ -122,19 +131,44 @@ internal fun EmptyToday(onAdd: () -> Unit) {
     }
 }
 
-/** One brick block per plant with its weather alerts, until alerts are grouped by event. */
+/** The icon for an alert card, one per kind of weather. */
+private val AlertKind.icon get() = when (this) {
+    AlertKind.COLD -> R.drawable.ic_alert_cold
+    AlertKind.HEAT -> R.drawable.ic_alert_heat
+    AlertKind.HEAVY_RAIN, AlertKind.WATERLOGGING -> R.drawable.ic_alert_rain
+    AlertKind.WIND -> R.drawable.ic_alert_wind
+}
+
+/** One brick card per weather event, naming every plant in it, with Done and Not now (D35). */
 @Composable
-internal fun AlertBlock(s: PlantStatus, onOpen: () -> Unit) {
+internal fun AlertCard(e: AlertEvent, today: LocalDate, onDone: () -> Unit, onDismiss: () -> Unit) {
     val c = LocalContext.current
     val block = StateBlock.Brick
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(block.fill).clickable(onClick = onOpen).padding(Spacing.cardPadding),
-        verticalArrangement = Arrangement.spacedBy(Spacing.grid),
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(block.fill).padding(Spacing.cardPadding),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 3),
     ) {
-        Text(s.plant.name, style = Type.label, color = block.text)
-        for (a in s.alerts) Text(Texts.alert(c, a), style = Type.secondary, color = block.text)
+        Icon(painterResource(e.kind.icon), contentDescription = null, Modifier.padding(top = Spacing.grid / 2).size(Spacing.grid * 7), tint = block.text)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.grid * 3)) {
+            Text(Texts.event(c, e, today), style = Type.label, color = block.text)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
+                OnBlockButton(stringResource(R.string.event_done), onDone)
+                TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = Spacing.buttonHeight)) {
+                    Text(stringResource(R.string.event_not_now), style = Type.label, color = block.text)
+                }
+            }
+        }
     }
 }
+
+/** A secondary button on a state block: light surface and ink in both themes, like the block itself. */
+@Composable
+private fun OnBlockButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) = Button(
+    onClick = onClick,
+    modifier = modifier.heightIn(min = Spacing.buttonHeight),
+    shape = RoundedCornerShape(Radius.button),
+    colors = ButtonDefaults.buttonColors(containerColor = LightColors.surface, contentColor = LightColors.ink),
+) { Text(label, style = Type.label) }
 
 /** A "Do now" card: sky when the plant needs water, marigold when the app has a question. */
 @Composable
@@ -177,12 +211,7 @@ internal fun ActionCard(s: PlantStatus, onOpen: () -> Unit, onWatered: () -> Uni
                 ) { Text(stringResource(R.string.plant_watered), style = Type.label) }
             }
             is Action.CheckSoil -> Row(horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
-                for ((label, moisture) in answers) Button(
-                    onClick = { onAnswer(moisture) },
-                    modifier = Modifier.weight(1f).heightIn(min = Spacing.buttonHeight),
-                    shape = RoundedCornerShape(Radius.button),
-                    colors = ButtonDefaults.buttonColors(containerColor = Overgrown.colors.surface, contentColor = Overgrown.colors.ink),
-                ) { Text(stringResource(label), style = Type.label) }
+                for ((label, moisture) in answers) OnBlockButton(stringResource(label), { onAnswer(moisture) }, Modifier.weight(1f))
             }
             else -> Unit
         }
@@ -204,8 +233,9 @@ internal fun RestingTile(s: PlantStatus, today: LocalDate, modifier: Modifier = 
         verticalArrangement = Arrangement.spacedBy(Spacing.grid * 2),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(Spacing.grid * 12).background(Tints.moss, RoundedCornerShape(Radius.glyphChip)), contentAlignment = Alignment.Center) {
-                Glyph(glyphFor(s.plant.archetypeId), StateBlock.Moss.fill, contentDescription = null, size = Spacing.grid * 8)
+            // A moss chip (DESIGN.md section 9.8), the same in both themes.
+            Box(Modifier.size(Spacing.grid * 12).background(StateBlock.Moss.fill, RoundedCornerShape(Radius.glyphChip)), contentAlignment = Alignment.Center) {
+                Glyph(glyphFor(s.plant.archetypeId), StateBlock.Moss.text, contentDescription = null, size = Spacing.grid * 8)
             }
             PotGauge(s.waterLeft.toFloat(), PotGaugeSize.Small)
         }

@@ -184,7 +184,7 @@ internal fun App(openPlant: Long?) {
 @Composable
 private fun Tabs(plants: Boolean, onToday: () -> Unit, onPlants: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().background(Overgrown.colors.surface).navigationBarsPadding()
+        Modifier.fillMaxWidth().background(Overgrown.colors.ground).navigationBarsPadding()
             .padding(Spacing.grid * 2).selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2),
     ) {
