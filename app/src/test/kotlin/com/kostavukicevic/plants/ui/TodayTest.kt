@@ -17,11 +17,15 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.kostavukicevic.plants.App
 import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
 import com.kostavukicevic.plants.data.CareSource
+import com.kostavukicevic.plants.data.EventEntity
+import com.kostavukicevic.plants.data.Garden
+import com.kostavukicevic.plants.data.GardenDb
 import com.kostavukicevic.plants.data.PlaceEntity
 import com.kostavukicevic.plants.data.PlantEntity
 import com.kostavukicevic.plants.data.PlantStatus
@@ -200,6 +204,60 @@ class TodayTest {
         compose.onNodeWithText("${s(R.string.today_nothing_to_water)} Frost Wed-Fri.").assertExists()
         val text = allText()
         for (never in NEVER) assertTrue("\"$never\" on Today: $text", text.none { it.contains(never, ignoreCase = true) })
+    }
+
+    @Test
+    fun theRealTodayScreenStoresWateredAndTheThreeAnswers() {
+        val hall = place(g, "Hall")
+        val fern = plant(g, "Fern", hall)
+        val pothos = plant(g, "Pothos", hall)
+        // Eight five-day cycles of dry, watered and OK halfway, the last eight days ago: the engine is sure enough
+        // to say water, where a plant with no history only asks for a soil check.
+        runBlocking {
+            for (k in 9 downTo 1) {
+                val day = 3 + k * 5
+                storeEvent(pothos, day, "CHECK_IN", Moisture.DRY_OR_BONE_DRY.name)
+                storeEvent(pothos, day, "WATERED")
+                if (k > 1) storeEvent(pothos, day - 2, "CHECK_IN", Moisture.OK.name)
+            }
+        }
+        compose.setContent { OvergrownTheme { TodayScreen(onPlant = {}, onAdd = {}, onPlaces = {}, onSettings = {}) } }
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText(s(R.string.today_soil_question))).fetchSemanticsNodes().isNotEmpty() }
+
+        fun eventsOf(id: Long) = runBlocking { g.garden.events(id).first() }
+        val before = eventsOf(pothos).count { it.type == "WATERED" }
+        // A tap is a real touch at the node's place, so the button must be on screen first.
+        compose.onNodeWithText(s(R.string.plant_watered)).performScrollTo().performClick()
+        compose.waitUntil(5_000) { eventsOf(pothos).count { it.type == "WATERED" } == before + 1 }
+        val watered = eventsOf(pothos).filter { it.type == "WATERED" }.maxBy { it.id }
+        assertEquals(g.garden.today().toString(), watered.date)
+        assertEquals(runBlocking { g.garden.plant(pothos)!!.drainageHoles }, watered.ranOutOfBottom)
+
+        val expected = listOf(R.string.answer_wet to Moisture.TOO_WET, R.string.answer_ok to Moisture.OK, R.string.answer_dry to Moisture.DRY_OR_BONE_DRY)
+        for ((n, answer) in expected.withIndex()) {
+            compose.waitUntil(5_000) { compose.onAllNodes(hasText(s(answer.first))).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText(s(answer.first)).performScrollTo().performClick()
+            compose.waitUntil(5_000) { eventsOf(fern).count { it.type == "CHECK_IN" } == n + 1 }
+        }
+        assertEquals(expected.map { it.second.name }, eventsOf(fern).filter { it.type == "CHECK_IN" }.sortedBy { it.id }.map { it.moisture })
+    }
+
+    /** An event [daysAgo] days before today, which the app itself only records for today. */
+    private suspend fun storeEvent(plantId: Long, daysAgo: Int, type: String, moisture: String? = null) {
+        val db = Garden::class.java.getDeclaredField("db").apply { isAccessible = true }.get(g.garden) as GardenDb
+        val date = LocalDate.fromEpochDays(g.garden.today().toEpochDays() - daysAgo)
+        db.dao().insertEvent(EventEntity(plantId = plantId, date = date.toString(), type = type, ranOutOfBottom = if (type == "WATERED") true else null, moisture = moisture))
+    }
+
+    @Test
+    fun alertDaysSplitAtGaps() {
+        val c = compose.activity
+        fun frost(vararg days: Int) = Texts.alertSummary(c, days.map { Alert(AlertType.ROOT_FREEZE_CAUTION, LocalDate(2026, 11, it)) }, TODAY)
+        // Today is Tuesday 24 Nov; a frost Wednesday and Friday must not read as one Wed-Fri range.
+        assertEquals("Frost Wed, Fri.", frost(25, 27))
+        assertEquals("Frost Wed-Thu, Sat.", frost(25, 26, 28))
+        assertEquals("Frost Wed-Fri.", frost(25, 26, 27))
+        assertEquals("Frost Wed.", frost(25, 25))
     }
 
     companion object {

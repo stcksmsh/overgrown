@@ -40,9 +40,10 @@
     <string name="today_alert_wind">Wind %1$s.</string>
     <string name="today_alert_waterlogging">Roots may be waterlogged.</string>
     <string name="today_day_range">%1$s-%2$s</string>
+    <string name="today_day_list">%1$s, %2$s</string>
     <string name="today_water_dose">Water about %1$d ml</string>
     <string name="today_soil_question">How does the soil feel?</string>
-    <string name="today_level">%1$s\u00A0· %2$d\u00A0%%</string>
+    <string name="today_level">%1$s ·\u00A0%2$d\u00A0%%</string>
     <string name="level_wet">Wet</string>
     <string name="level_moist">Moist</string>
     <string name="level_getting_dry">Getting dry</string>

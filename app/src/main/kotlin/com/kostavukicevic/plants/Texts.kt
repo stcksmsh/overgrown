@@ -52,14 +52,14 @@ object Texts {
         )
     }
 
-    /** One short sentence per kind of weather alert, over the days it spans: "Frost Mon-Wed." */
+    /** One short sentence per kind of weather alert, over the days it falls on: "Frost Mon-Tue, Thu." */
     fun alertSummary(c: Context, alerts: List<Alert>, today: LocalDate): String =
         alerts.groupBy { if (it.type == AlertType.ROOT_FREEZE_STRONG) AlertType.ROOT_FREEZE_CAUTION else it.type }
             .entries.sortedBy { (_, a) -> a.minOf { it.date } }
             .joinToString(" ") { (type, a) ->
-                val first = a.minOf { it.date }
-                val last = a.maxOf { it.date }
-                val days = if (first == last) day(first, today) else c.getString(R.string.today_day_range, day(first, today), day(last, today))
+                val days = dayRuns(a.map { it.date }).map { (first, last) ->
+                    if (first == last) day(first, today) else c.getString(R.string.today_day_range, day(first, today), day(last, today))
+                }.reduce { acc, run -> c.getString(R.string.today_day_list, acc, run) }
                 when (type) {
                     AlertType.ROOT_FREEZE_CAUTION, AlertType.ROOT_FREEZE_STRONG -> c.getString(R.string.today_alert_frost, days)
                     AlertType.HEAT -> c.getString(R.string.today_alert_heat, days)
@@ -68,6 +68,16 @@ object Texts {
                     AlertType.WATERLOGGING -> c.getString(R.string.today_alert_waterlogging)
                 }
             }
+
+    /** Runs of consecutive days, so a gap day is never inside a range: Mon, Wed is two runs, not Mon-Wed. */
+    private fun dayRuns(dates: List<LocalDate>): List<Pair<LocalDate, LocalDate>> {
+        val runs = mutableListOf<Pair<LocalDate, LocalDate>>()
+        for (d in dates.distinct().sorted()) {
+            val last = runs.lastOrNull()
+            if (last != null && last.second.daysUntil(d) == 1) runs[runs.lastIndex] = last.first to d else runs += d to d
+        }
+        return runs
+    }
 
     /** Local date and time, e.g. "23 Nov 10:04". */
     fun dateTime(at: Instant): String {
