@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.ui
 
+import android.Manifest
+import android.app.Activity
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationManager
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsSelected
@@ -41,6 +49,7 @@ import org.junit.Test
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import kotlin.math.PI
 
 /** The add-plant wizard driven through its real screens, saving to an in-memory database. */
@@ -440,6 +449,94 @@ class WizardTest {
         compose.onNodeWithText(s(R.string.wizard_no_match)).assertDoesNotExist()
         saveAndWait()
         assertEquals("testus-gone", plants().single().speciesSlug)
+    }
+
+    /** Steps 1 and 2 up to a new outdoor place, where "Use my location" shows. */
+    private fun toNewOutdoorPlace() {
+        start()
+        field(R.string.wizard_name).performTextInput("Zzplant")
+        press(R.string.wizard_next_where)
+        tap(R.string.place_outdoor)
+    }
+
+    private fun typed(label: Int) = field(label).fetchSemanticsNode().config[SemanticsProperties.EditableText].text
+
+    private fun latLonFields(): Pair<String, String> {
+        tap(R.string.wizard_advanced)
+        return typed(R.string.field_latitude) to typed(R.string.field_longitude)
+    }
+
+    @Test
+    fun theManifestAsksForApproximateLocationOnly() {
+        val app = compose.activity.application
+        val asked = app.packageManager.getPackageInfo(app.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions!!.toList()
+        assertTrue(Manifest.permission.ACCESS_COARSE_LOCATION in asked)
+        assertFalse(Manifest.permission.ACCESS_FINE_LOCATION in asked)
+        assertFalse(Manifest.permission.ACCESS_BACKGROUND_LOCATION in asked)
+    }
+
+    @Test
+    fun aLocationFixIsRoundedBeforeItIsKept() {
+        val st = WizardState("")
+        st.useLocation(44.81234, 20.46789, listOf(City("Belgrade", "Serbia", 44.82, 20.47)))
+        assertEquals("44.81", st.lat)
+        assertEquals("20.47", st.lon)
+        assertEquals(44.81, st.latitude()!!, 0.0)
+        assertEquals(20.47, st.longitude()!!, 0.0)
+        assertEquals("Belgrade, Serbia", st.cityPicked)
+        assertEquals("Belgrade", st.placeName)
+    }
+
+    @Test
+    fun aFarCityGivesTheDistanceAndNoPlaceName() {
+        val st = WizardState("")
+        st.useLocation(30.0, -40.0, listOf(City("Horta", "Portugal", 38.53, -28.64)))
+        assertEquals("Horta, Portugal (1408 km)", st.cityPicked)
+        assertEquals("", st.placeName)
+        assertEquals("30", st.lat)
+    }
+
+    @Test
+    fun useMyLocationWithPermissionFillsRoundedCoordinatesAndTheCity() {
+        val app = compose.activity.application
+        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
+        val lm = app.getSystemService(LocationManager::class.java)
+        val providers = listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
+        providers.forEach { shadowOf(lm).setProviderEnabled(it, true) }
+        toNewOutdoorPlace()
+        field(R.string.wizard_place_name).performTextInput("Balcony")
+        tap(R.string.wizard_use_location)
+
+        val near = s(R.string.wizard_city_picked, "Belgrade, Serbia")
+        compose.waitUntil(5_000) {
+            // The fix is asked for once the city list has loaded; sending it until it lands avoids guessing when.
+            providers.forEach { p -> shadowOf(lm).simulateLocation(Location(p).apply { latitude = 44.81234; longitude = 20.46789 }) }
+            compose.onAllNodesWithText(near).fetchSemanticsNodes().isNotEmpty()
+        }
+        // The name the person typed stays.
+        assertEquals("Balcony", typed(R.string.wizard_place_name))
+        assertEquals("44.81" to "20.47", latLonFields())
+        compose.onNodeWithText(s(R.string.wizard_location_denied)).assertDoesNotExist()
+    }
+
+    @Test
+    fun useMyLocationDeniedLeavesTheFieldsAndSaysSo() {
+        toNewOutdoorPlace()
+        tap(R.string.wizard_use_location)
+        val request = shadowOf(compose.activity).lastRequestedPermission!!
+        assertEquals(listOf(Manifest.permission.ACCESS_COARSE_LOCATION), request.requestedPermissions.toList())
+        compose.runOnUiThread {
+            compose.activity.activityResultRegistry.dispatchResult(
+                request.requestCode, Activity.RESULT_OK,
+                Intent()
+                    .putExtra(ActivityResultContracts.RequestMultiplePermissions.EXTRA_PERMISSIONS, request.requestedPermissions)
+                    .putExtra(ActivityResultContracts.RequestMultiplePermissions.EXTRA_PERMISSION_GRANT_RESULTS, intArrayOf(PackageManager.PERMISSION_DENIED)),
+            )
+        }
+        compose.onNodeWithText(s(R.string.wizard_location_denied)).performScrollTo().assertExists()
+        compose.onNodeWithText(s(R.string.wizard_city_picked, "Belgrade, Serbia")).assertDoesNotExist()
+        assertEquals("", typed(R.string.wizard_place_name))
+        assertEquals("" to "", latLonFields())
     }
 
     companion object {

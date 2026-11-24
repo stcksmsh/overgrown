@@ -49,7 +49,7 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import kotlin.time.Instant
 
-/** Golden images of the four add-plant steps, and step 1 with search results and with no match, light and dark, at 1.0x and 1.3x. */
+/** Golden images of the four add-plant steps, a new outdoor place with "Use my location", and step 1 with search results and with no match, light and dark, at 1.0x and 1.3x. */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w400dp-h800dp-xhdpi")
@@ -152,6 +152,18 @@ class WizardScreenshotTest(private val dark: Boolean, private val fontScale: Flo
         tap(R.string.answer_little)
         compose.onAllNodesWithText(s(R.string.wizard_exposure_indoor_title))[0].performScrollTo()
         capture("step4")
+    }
+
+    @Test
+    fun step2NewOutdoorPlace() {
+        start()
+        type(R.string.wizard_name, "Zzplant")
+        next(R.string.wizard_next_where)
+        tap(R.string.place_outdoor)
+        tap(R.string.wizard_new_place)
+        unfocus()
+        compose.onNodeWithText(s(R.string.wizard_use_location)).performScrollTo()
+        capture("step2_new_outdoor")
     }
 
     companion object {

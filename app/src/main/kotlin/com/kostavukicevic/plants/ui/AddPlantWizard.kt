@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.ui
 
+import android.Manifest
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -60,6 +63,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -269,6 +273,17 @@ internal class WizardState(acquiredOn: String) {
 
     fun pickNewPlace() {
         newPlace = true; placeId = null; rain = null; wind = null; sun = null; light = null
+    }
+
+    /** A location fix: rounded before it is kept, labelled by the nearest city; a typed place name stays. */
+    fun useLocation(latitude: Double, longitude: Double, cities: List<City>) {
+        val la = roundCoordinate(latitude)
+        val lo = roundCoordinate(longitude)
+        lat = plain(la); lon = plain(lo)
+        val near = nearestCity(cities, la, lo)
+        cityPicked = near?.let(::cityLabel) ?: "$lat, $lon"
+        // A far city is not a fitting name, so the person names the place then.
+        if (placeName.isBlank() && near != null && near.km <= NEAR_KM) placeName = near.city.name
     }
 
     fun computedVolumeL(): Double? = width(potWidth)?.let { potVolumeL(it, shape) }
@@ -661,6 +676,7 @@ private fun WhereStep(st: WizardState, places: List<PlaceEntity>) {
         enabled = st.cityQuery.isNotBlank(),
         modifier = Modifier.heightIn(min = Spacing.minTouchTarget),
     ) { Text(stringResource(R.string.city_search), style = Type.label, color = c.ink) }
+    if (outdoor) UseMyLocation(st)
     if (failed) ErrorText(stringResource(R.string.wizard_city_offline))
     if (searched && !failed && matches.isEmpty()) Text(stringResource(R.string.city_none), style = Type.secondary, color = c.ink)
     for (m in matches) {
@@ -684,6 +700,37 @@ private fun WhereStep(st: WizardState, places: List<PlaceEntity>) {
         DecimalField(stringResource(R.string.field_longitude), st.lon, st.showErrors && st.longitude() == null) { st.lon = it; st.cityPicked = null }
     }
     Text(stringResource(if (outdoor) R.string.location_privacy else R.string.location_indoor), style = Type.secondary, color = c.muted)
+}
+
+/** Asks for approximate location only on tap, takes one fix and fills the coordinates and city; any failure leaves the fields as they were. */
+@Composable
+private fun UseMyLocation(st: WizardState) {
+    val c = Overgrown.colors
+    val context = LocalContext.current
+    // Not saved: rotation cancels the fix with this scope, and the button is simply there again.
+    val scope = rememberCoroutineScope()
+    var locating by remember { mutableStateOf(false) }
+    var problem by remember { mutableStateOf<Int?>(null) }
+    fun locate() {
+        locating = true; problem = null
+        scope.launch {
+            try {
+                val fix = currentLocation(context)
+                if (fix == null) problem = R.string.wizard_location_unavailable else st.useLocation(fix.latitude, fix.longitude, loadCities(context))
+            } finally {
+                locating = false
+            }
+        }
+    }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) locate() else problem = R.string.wizard_location_denied
+    }
+    OutlinedButton(
+        onClick = { if (hasCoarseLocation(context)) locate() else ask.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
+        enabled = !locating,
+        modifier = Modifier.heightIn(min = Spacing.minTouchTarget),
+    ) { Text(stringResource(if (locating) R.string.wizard_location_finding else R.string.wizard_use_location), style = Type.label, color = c.ink) }
+    problem?.let { ErrorText(stringResource(it)) }
 }
 
 // ---- Step 3: pot --------------------------------------------------------------------------
