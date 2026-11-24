@@ -3,15 +3,170 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>overgrown</title>
+    <title>Overgrown: when and how much to water each plant</title>
+    <meta name="description" content="A free, open-source Android app that tells you when and how much to water each of your plants, and when to protect them from weather. Runs entirely on the phone." />
+    <meta property="og:title" content="Overgrown" />
+    <meta property="og:description" content="When and how much to water each plant, from care data, the pot, the weather and your own answers. Open source, on-device, no account." />
+    <meta property="og:type" content="website" />
+    <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" />
   </head>
   <body>
-    <main>
-      <h1>overgrown</h1>
-      <p>This site is built and deployed from the <code>website</code> branch of its own repository.</p>
-      <p id="built"></p>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="hero wrap">
+      <div class="hero-text">
+        <p class="status"><span class="dot" aria-hidden="true"></span>In development. Nothing released yet.</p>
+        <h1>Overgrown</h1>
+        <p class="lede">Tells you when and how much to water each of your plants, and when to protect them from the weather.</p>
+        <p>It works from three things: care data for the species, the plant’s actual situation (pot, place, light, local weather) and your own answers, from which it learns each plant. It runs entirely on the phone. No account, no server, no analytics, no advertising.</p>
+        <nav class="links" aria-label="Project">
+          <a class="btn primary" href="https://github.com/stcksmsh/overgrown">Source on GitHub</a>
+          <a class="btn" href="#how">How it decides</a>
+        </nav>
+        <p class="small">Android. Free and open source (GPL-3.0).</p>
+      </div>
+      <figure class="phone" aria-label="Design mockup of the Today screen">
+        <div class="screen" id="today-mock"></div>
+        <figcaption>Design mockup of the Today screen, not a screenshot</figcaption>
+      </figure>
+    </header>
+
+    <main id="main">
+      <section class="wrap" aria-labelledby="today-h">
+        <h2 id="today-h"><span class="num">01</span>A screen only as loud as your plants need</h2>
+        <div class="cols3">
+          <div class="card sky">
+            <h3>Needs water</h3>
+            <p>How much, in millilitres, for this pot. Tap <b>Watered</b> on the card or in the notification.</p>
+          </div>
+          <div class="card marigold">
+            <h3>A question</h3>
+            <p>“How does the soil feel?” <b>Wet</b>, <b>OK</b> or <b>Dry</b>. Each answer teaches it how fast this plant really drinks.</p>
+          </div>
+          <div class="card brick">
+            <h3>Weather alert</h3>
+            <p>One card per event, not per day: “Cold nights Mon–Wed. Move Boris against the wall.”</p>
+          </div>
+        </div>
+        <p class="note">Colour means state, and never on its own: every state also has words and a shape. Plants that are fine stay quiet.</p>
+      </section>
+
+      <section class="wrap" id="how" aria-labelledby="how-h">
+        <h2 id="how-h"><span class="num">02</span>How it decides</h2>
+        <p>The pot is a bucket of water the roots can reach. Every day the weather, the plant and the pot draw on it; rain can refill it if it reaches the soil. When the bucket gets low for that kind of plant, it is time to water, and the amount is what was used. Change the plant below and watch the next ten days move.</p>
+
+        <div class="demo" id="demo">
+          <form class="controls" id="controls">
+            <fieldset>
+              <legend>Plant</legend>
+              <div class="seg" role="radiogroup" aria-label="Plant">
+                <label><input type="radio" name="plant" value="succulent" /><span>Succulent</span></label>
+                <label><input type="radio" name="plant" value="herb" checked /><span>Herb</span></label>
+                <label><input type="radio" name="plant" value="fern" /><span>Fern</span></label>
+              </div>
+            </fieldset>
+            <label class="range">Pot width across the top <output data-for="width">18 cm</output>
+              <input type="range" name="width" min="8" max="40" value="18" />
+            </label>
+            <fieldset>
+              <legend>Pot</legend>
+              <div class="seg" role="radiogroup" aria-label="Pot material">
+                <label><input type="radio" name="material" value="plastic" checked /><span>Plastic</span></label>
+                <label><input type="radio" name="material" value="glazed" /><span>Glazed</span></label>
+                <label><input type="radio" name="material" value="terracotta" /><span>Terracotta</span></label>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Where</legend>
+              <div class="seg" role="radiogroup" aria-label="Where">
+                <label><input type="radio" name="spot" value="sun" checked /><span>Sunny balcony</span></label>
+                <label><input type="radio" name="spot" value="covered" /><span>Under a roof</span></label>
+                <label><input type="radio" name="spot" value="indoor" /><span>Indoors</span></label>
+              </div>
+            </fieldset>
+          </form>
+
+          <div class="out">
+            <div id="demo-card" aria-live="polite"></div>
+            <div class="strip" id="strip" role="img"></div>
+            <div class="card surface ask">
+              <p><b>Check the soil today.</b> How does it feel a finger deep?</p>
+              <div class="answers">
+                <button type="button" class="btn" data-answer="wet">Wet</button>
+                <button type="button" class="btn" data-answer="ok">OK</button>
+                <button type="button" class="btn" data-answer="dry">Dry</button>
+              </div>
+              <div class="learn">
+                <span id="learn-text">Still learning: 0 of about 8 answers</span>
+                <span class="dots" id="dots" aria-hidden="true"></span>
+              </div>
+              <button type="button" class="link" id="forget">Start over</button>
+            </div>
+          </div>
+        </div>
+        <p class="note">A sketch of the idea with made-up weather, not the app’s engine. The real one uses the forecast’s evapotranspiration, the sun’s angle for indoor plants, pot height and shape, wind and rain exposure, and updates its belief about each plant from every answer with an interval likelihood rather than a fixed step.</p>
+      </section>
+
+      <section class="wrap" aria-labelledby="weather-h">
+        <h2 id="weather-h"><span class="num">03</span>Weather, read for each pot</h2>
+        <div class="cols2">
+          <div>
+            <p>Forecasts come from Open-Meteo and MET Norway, fetched for the place, not the plant. Each plant then reads them through its own situation: a balcony under another balcony gets no rain, a pot against a south wall dries faster, a pot on the ground freezes before the plant does.</p>
+            <p>Frost, heat and storm warnings arrive as one card per event, naming every plant that needs moving, with what to do.</p>
+          </div>
+          <div class="alert-stack" id="alerts"></div>
+        </div>
+      </section>
+
+      <section class="wrap" aria-labelledby="sim-h">
+        <h2 id="sim-h"><span class="num">04</span>Tested on ten years of real weather</h2>
+        <p>Before any interface, the engine was run against simulated plants that behave in more ways than the engine models (hourly demand from the sun’s angle and air dryness, a random thirst, pot-wall loss, wind, rain at random hours) and a simulated person whose soil answers are noisy and biased. Weather is 2015–2024 daily history for each city. The baseline uses the same inputs and learning, but a fixed summer interval.</p>
+        <div class="chart" id="chart" role="img" aria-label="Days per plant per year with soil drier than the plant can take: engine versus baseline"></div>
+        <p class="note">Days per plant per year the soil got drier than the plant can take. From <a href="https://github.com/stcksmsh/overgrown/blob/main/docs/reports/sim-report.md">docs/reports/sim-report.md</a>. This shows robustness, not real-world accuracy: that needs kitchen-scale measurements, which come next.</p>
+      </section>
+
+      <section class="wrap" aria-labelledby="priv-h">
+        <h2 id="priv-h"><span class="num">05</span>Your plants stay on your phone</h2>
+        <ul class="facts">
+          <li><b>No account.</b> Nothing to sign up for.</li>
+          <li><b>No server.</b> Nothing you enter is sent to the developer.</li>
+          <li><b>No tracking.</b> No analytics, crash reporting or advertising.</li>
+          <li><b>Yours to take.</b> Export everything, photos included, to one file.</li>
+        </ul>
+        <p class="note">The only things that leave the phone are weather requests and city searches, sent straight to the weather provider with each place rounded to about 1 km. No plant data, no identifiers.</p>
+      </section>
+
+      <section class="wrap" aria-labelledby="src-h">
+        <h2 id="src-h"><span class="num">06</span>Source</h2>
+        <div class="cols2">
+          <div>
+            <p>Kotlin and Jetpack Compose. The engine is plain Kotlin Multiplatform with no Android code, so it can be tested on its own and run anywhere.</p>
+<pre><code>git clone https://github.com/stcksmsh/overgrown
+cd overgrown
+./gradlew build</code></pre>
+            <p class="small">Needs JDK 21 and the Android SDK (platform 36). The care database is a git submodule in its own repository, which is not public yet.</p>
+          </div>
+          <dl class="mods">
+            <div><dt>:engine</dt><dd>Water balance, alerts, learning</dd></div>
+            <div><dt>:engine-sim</dt><dd>The simulated decade above</dd></div>
+            <div><dt>:weather</dt><dd>Open-Meteo, MET Norway, cache</dd></div>
+            <div><dt>:caredb</dt><dd>Reviewed care data per plant type</dd></div>
+            <div><dt>:data</dt><dd>On-device storage, export, import</dd></div>
+            <div><dt>:app</dt><dd>The Android app</dd></div>
+          </dl>
+        </div>
+        <p class="small">App: GPL-3.0. Care database: AGPL-3.0, in its own repository. “Overgrown” is a working name.</p>
+      </section>
     </main>
+
+    <footer class="foot wrap">
+      <span>Overgrown by Kosta Vukićević</span>
+      <a href="https://kostavukicevic.com/">kostavukicevic.com</a>
+    </footer>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
