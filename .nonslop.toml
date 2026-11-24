@@ -13,12 +13,16 @@ clean = "./gradlew clean"
 [done]
 branch_prefix = "claude/"
 require = ["clean_tree", "pushed", "pr"]
-# CI runs build, tests, licence check, iOS compile, report check and the double build on every pull request.
+# CI is off until close to V1 (D37); every brief makes the builder run the test command and report it.
 run = []
 gate_timeout_s = 1800
 auto_clean = false
 min_free_gb = 0
 stop_retries = 2
+
+[merge]
+# CI is disabled until close to V1 (D37); re-enable the workflow and set this back to false before the first beta.
+allow_no_ci = true
 
 [state]
 file = "docs/STATE.md"

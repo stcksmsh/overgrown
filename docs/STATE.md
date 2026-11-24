@@ -23,14 +23,15 @@ Handover for the next coordinator. The owner's brief is not in the repo (section
 
 ## In flight
 
-- Nothing. PR #15 (DESIGN.md, mockups in `docs/design/mockups/`, D31 with the owner's 13 UI decisions) is merged.
+- `claude/glyphs` (6 glyph drawables, `glyphFor(archetypeId)`, leafy fallback) and `claude/navigation` (tabs, top-bar Places/Settings, lists with deferred delete + Undo snackbar). Briefs were in the coordinator's scratch; `nonslop status` shows their state.
+- Merged since DESIGN: PR #17 quick Dry answer `Moisture.DRY_OR_BONE_DRY` (band BAND_OK_MAX..1, open-above keyed to the band's upper edge); PR #18 design foundation (tokens in `ui/theme/Theme.kt`, Bricolage Grotesque, D32, Roborazzi goldens in `app/src/test/snapshots/` with exact compare, ContrastTest, PotGauge; owner chose gauge variant A: empty part transparent on brick/moss).
 
 ## Next work, in order (DESIGN.md)
 
-1. **Foundation** `claude/design-foundation`: one theme file with all tokens, bundled Bricolage Grotesque (OFL, official source, notices), Roborazzi screenshot tests (light/dark, 1.0x/1.3x) in `./gradlew build`, dark contrast test, PotGauge. Brief to rewrite from DESIGN.md sections 2-5, 8.
-2. Glyphs (6, one per archetype; shapes in the mockups' SVG).
-3. Today: ActionCard (Watered; Wet/OK/Dry), RestingTile, AlertCard grouped per event, empty Today, the words table. Needs the quick "Dry" answer in the engine (D31.4: new answer value, band from the Dry lower edge open above, open-above keyed to the band, tests).
-4. Navigation: tabs Today/Plants; Places and Settings from a top-bar icon; Plants and Places lists with edit and delete + Undo.
+1. Foundation: done (PR #18).
+2. Glyphs: in flight.
+3. Today: ActionCard (Watered; Wet/OK/Dry), RestingTile, AlertCard grouped per event, empty Today, the words table. Engine side done (PR #17); needs glyphs and navigation merged.
+4. Navigation (in flight): tabs Today/Plants; Places and Settings from a top-bar icon; Plants and Places lists with edit and delete + Undo.
 5. Plant screen: moss name block, DayStrip, LearningDots, photo, history by week, editable and deletable.
 6. Add-plant wizard (4 steps): name search + pick by look; where (tiles, city search, "Use my location": approximate, on tap, offline city list, licence check of the list first); pot (width + shape, litres under Advanced); exposure (Yes/A little/No/Not sure).
 7. Settings (notification times, theme, units, export/import with confirmation, weighing moved here) and notifications (soil answers in the notification).
