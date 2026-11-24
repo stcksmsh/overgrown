@@ -11,14 +11,20 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,27 +42,30 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
 import com.kostavukicevic.plants.caredb.Context as CareContext
 import com.kostavukicevic.plants.data.CareSource
 import com.kostavukicevic.plants.data.EventEntity
+import com.kostavukicevic.plants.data.OutlookDay
 import com.kostavukicevic.plants.data.PhotoEntity
 import com.kostavukicevic.plants.data.PlantStatus
 import com.kostavukicevic.plants.engine.Coefficients
-import com.kostavukicevic.plants.engine.Moisture
+import com.kostavukicevic.plants.ui.theme.Overgrown
+import com.kostavukicevic.plants.ui.theme.Spacing
+import com.kostavukicevic.plants.ui.theme.Type
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import java.io.File
 import java.io.IOException
-import kotlin.math.roundToInt
 import kotlin.time.Instant
 
 @Composable
@@ -66,15 +75,21 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
     val res = LocalResources.current
     val tick = changeTick()
     val status by produceState<PlantStatus?>(null, tick) { value = g.garden.status(plantId) }
-    val events by g.garden.events(plantId).collectAsState(emptyList())
+    val outlook by produceState(emptyList<OutlookDay>(), status) { value = status?.let { g.garden.outlook(it) } ?: emptyList() }
+    val events by g.garden.events(plantId).collectAsState(null)
     val developer by g.settings.developerMode.collectAsState(false)
     val scope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
+    // Its own snackbar: deleting a history entry offers Undo on this screen.
+    val undo = remember { UndoDelete(snackbar, scope) }
     val uri = LocalUriHandler.current
     var askRanOut by remember { mutableStateOf(false) }
     val photos by g.garden.photos(plantId).collectAsState(emptyList())
     var askPhotoSource by remember { mutableStateOf(false) }
     var deletePhoto by remember { mutableStateOf<PhotoEntity?>(null) }
     var photoMessage by remember { mutableStateOf<String?>(null) }
+    var editing by remember { mutableStateOf<EventEntity?>(null) }
+    var editError by remember { mutableStateOf<String?>(null) }
     // Survives the activity being recreated while the camera app is in front.
     var cameraFile by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -108,76 +123,130 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
         addPhoto { c.contentResolver.openInputStream(picked)?.use { it.readBytes() } }
     }
 
-    val s = status
-    Page(
-        title = s?.plant?.name ?: "",
-        onBack = onBack,
-        actions = { TextButton(onClick = onEdit) { Text(stringResource(R.string.edit)) } },
-    ) {
-        if (s == null) return@Page
-        Text(Texts.action(c, s.today), style = MaterialTheme.typography.titleLarge)
-        Texts.reason(c, s)?.let { Text(it) }
-        for (r in s.reminders) Text(Texts.reminder(c, r))
-        for (a in s.alerts) Text(Texts.alert(c, a), color = MaterialTheme.colorScheme.error)
-        s.snoozedUntil?.let { Text(stringResource(R.string.snoozed_until, Texts.date(it))) }
-        Text(
-            s.nextPrompt?.let { (d, a) -> stringResource(R.string.next_prompt, Texts.action(c, a), Texts.date(d)) }
-                ?: stringResource(R.string.next_prompt_none),
-            style = MaterialTheme.typography.bodySmall,
+    val colors = Overgrown.colors
+    Scaffold(
+        containerColor = colors.ground,
+        snackbarHost = {
+            SnackbarHost(snackbar) { Snackbar(it, containerColor = colors.ink, contentColor = colors.onInk, actionColor = colors.onInk) }
+        },
+    ) { padding ->
+        val s = status
+        val log = events
+        Column(
+            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = Spacing.screen, vertical = Spacing.grid * 2),
+            verticalArrangement = Arrangement.spacedBy(Spacing.cardGap),
+        ) {
+            if (s == null || log == null) return@Column
+            val today = g.garden.today()
+            NameBlock(
+                name = s.plant.name,
+                typeAndPlace = plantType(s)?.let { stringResource(R.string.plant_type_and_place, it, s.place.name) } ?: s.place.name,
+                glyph = glyphFor(s.plant.archetypeId),
+                waterLeft = (1 - s.state.depletion).toFloat(),
+                onBack = onBack,
+                onEdit = onEdit,
+            )
+
+            SurfaceCard {
+                Text(Texts.action(c, s.today), style = Type.body.copy(fontWeight = FontWeight.SemiBold), color = colors.ink)
+                Texts.reason(c, s)?.let { Text(it, style = Type.secondary, color = colors.ink) }
+                for (r in s.reminders) Text(Texts.reminder(c, r), style = Type.secondary, color = colors.ink)
+                for (a in s.alerts) Text(Texts.alert(c, a), style = Type.secondary, color = colors.errorText)
+                s.snoozedUntil?.let { Text(stringResource(R.string.snoozed_until, Texts.date(it)), style = Type.secondary, color = colors.ink) }
+                Text(
+                    s.nextPrompt?.let { (d, a) -> stringResource(R.string.next_prompt, Texts.action(c, a), Texts.date(d)) }
+                        ?: stringResource(R.string.next_prompt_none),
+                    style = Type.secondary,
+                    color = colors.muted,
+                )
+            }
+
+            if (outlook.isNotEmpty()) DayStrip(outlook, next = s.nextPrompt?.first)
+
+            LearningDots(
+                name = s.plant.name,
+                // The engine keeps no answer count; every logged soil answer is one (check-ins and answers given when watering).
+                answers = log.count { it.moisture != null },
+                learned = s.state.belief.sd < Coefficients.CONFIDENT_SD,
+            )
+
+            Text(stringResource(R.string.plant_check_in), style = Type.label, color = colors.ink)
+            AnswerButtons { m -> act { g.garden.checkIn(plantId, m.name) } }
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
+                PrimaryButton(stringResource(R.string.plant_watered), onClick = { askRanOut = true }, modifier = Modifier.weight(1f))
+                SecondaryButton(stringResource(R.string.plant_snooze), onClick = { act { g.garden.snooze(plantId) } }, modifier = Modifier.weight(1f))
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2), verticalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
+                SecondaryButton(stringResource(R.string.plant_moved), onClick = { act { g.garden.moved(plantId) } })
+                SecondaryButton(stringResource(R.string.plant_repotted), onClick = { act { g.garden.repotted(plantId) } })
+                SecondaryButton(stringResource(R.string.plant_fed), onClick = { act { g.garden.fed(plantId) } })
+                SecondaryButton(stringResource(R.string.photo_add), onClick = { askPhotoSource = true })
+            }
+            photoMessage?.let { Text(it, style = Type.secondary, color = colors.errorText) }
+
+            SurfaceCard {
+                Text(stringResource(R.string.plant_history), style = Type.cardTitle, color = colors.ink)
+                // Newest first; on the same day a photo comes after that day's events. Capped like the events,
+                // because the page is not a lazy list and every photo shown is decoded.
+                val shown = log.filter { "event:${it.id}" !in undo.hidden }.take(50)
+                val timeline = (shown.map { LocalDate.parse(it.date) to it } + photos.take(MAX_TIMELINE_PHOTOS).map { LocalDate.parse(it.date) to it })
+                    .sortedByDescending { it.first }
+                if (timeline.isEmpty()) Text(stringResource(R.string.plant_history_empty), style = Type.secondary, color = colors.ink)
+                for ((monday, items) in byWeek(timeline) { it.first }) {
+                    WeekHeading(weekHeading(c, monday, today))
+                    for ((_, item) in items) when (item) {
+                        is EventEntity -> {
+                            val line = historyLine(c, item)
+                            HistoryRow(
+                                line,
+                                onEdit = { editError = null; editing = item },
+                                onDelete = {
+                                    undo.delete("event:${item.id}", res.getString(R.string.deleted, line), res.getString(R.string.undo), res.getString(R.string.delete_failed, line)) {
+                                        g.garden.deleteEvent(item.id)
+                                        g.scheduler.reschedule()
+                                        g.changed()
+                                    }
+                                },
+                            )
+                        }
+                        is PhotoEntity -> TimelinePhoto(item, onDelete = { deletePhoto = item })
+                    }
+                }
+            }
+
+            SurfaceCard { CareInfo(s, onReport = { uri.openUri(reportUrl(s)) }) }
+
+            if (developer) SurfaceCard { Calibration(plantId) }
+
+            TextButton(onClick = { act { g.garden.deletePlant(plantId) }; onBack() }, modifier = Modifier.heightIn(min = Spacing.minTouchTarget)) {
+                Text(stringResource(R.string.delete), style = Type.label, color = colors.errorText)
+            }
+        }
+    }
+
+    editing?.let { e ->
+        EditEntryDialog(
+            e,
+            error = editError,
+            onDismiss = { editing = null },
+            onSave = { edited ->
+                if (LocalDate.parse(edited.date) > g.garden.today()) {
+                    editError = res.getString(R.string.plant_entry_future)
+                } else {
+                    scope.launch {
+                        try {
+                            g.garden.updateEvent(edited)
+                            editing = null
+                            // The engine replays from the events, so the plant and Today recompute.
+                            g.scheduler.reschedule()
+                            g.changed()
+                        } catch (x: IllegalArgumentException) {
+                            editError = res.getString(R.string.plant_entry_failed, x.message)
+                        }
+                    }
+                }
+            },
         )
-
-        HorizontalDivider()
-        Text(stringResource(R.string.plant_state, (s.state.depletion * 100).roundToInt()))
-        val sd = s.state.belief.sd
-        Text(
-            stringResource(
-                when {
-                    sd < Coefficients.CONFIDENT_SD -> R.string.plant_confidence_high
-                    sd < 0.35 -> R.string.plant_confidence_medium
-                    else -> R.string.plant_confidence_low
-                },
-            ),
-        )
-        Text(stringResource(R.string.plant_learned, (s.state.belief.k * 100).roundToInt()), style = MaterialTheme.typography.bodySmall)
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { askRanOut = true }) { Text(stringResource(R.string.plant_watered)) }
-            OutlinedButton(onClick = { act { g.garden.snooze(plantId) } }) { Text(stringResource(R.string.plant_snooze)) }
-        }
-        Text(stringResource(R.string.plant_check_in), style = MaterialTheme.typography.titleMedium)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // The detailed answers; the quick "Dry" belongs to the Wet / OK / Dry prompts (D31.4).
-            for (m in listOf(Moisture.TOO_WET, Moisture.OK, Moisture.DRY, Moisture.BONE_DRY)) OutlinedButton(onClick = { act { g.garden.checkIn(plantId, m.name) } }) { Text(Texts.moisture(c, m)) }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { act { g.garden.moved(plantId) } }) { Text(stringResource(R.string.plant_moved)) }
-            OutlinedButton(onClick = { act { g.garden.repotted(plantId) } }) { Text(stringResource(R.string.plant_repotted)) }
-            OutlinedButton(onClick = { act { g.garden.fed(plantId) } }) { Text(stringResource(R.string.plant_fed)) }
-        }
-
-        HorizontalDivider()
-        CareInfo(s, onReport = { uri.openUri(reportUrl(s)) })
-
-        if (developer) {
-            HorizontalDivider()
-            Calibration(plantId)
-        }
-
-        HorizontalDivider()
-        Text(stringResource(R.string.plant_history), style = MaterialTheme.typography.titleMedium)
-        OutlinedButton(onClick = { askPhotoSource = true }) { Text(stringResource(R.string.photo_add)) }
-        photoMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        // Newest first; on the same day a photo comes after that day's events. Capped like the events,
-        // because the page is not a lazy list and every photo shown is decoded.
-        val timeline = (events.take(50).map { it.date to it } + photos.take(MAX_TIMELINE_PHOTOS).map { it.date to it }).sortedByDescending { it.first }
-        for ((_, item) in timeline) when (item) {
-            is EventEntity -> Text(historyLine(c, item), style = MaterialTheme.typography.bodySmall)
-            is PhotoEntity -> TimelinePhoto(item, onDelete = { deletePhoto = item })
-        }
-
-        TextButton(onClick = { act { g.garden.deletePlant(plantId) }; onBack() }) {
-            Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
-        }
     }
 
     if (askRanOut) {
@@ -230,6 +299,14 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
             dismissButton = { TextButton(onClick = { deletePhoto = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
+}
+
+/** The species' accepted name or the archetype's name, when the care database has it. */
+@Composable
+private fun plantType(s: PlantStatus): String? {
+    val db = rememberGraph().careDb
+    return s.plant.speciesSlug?.let { db?.species(it)?.taxon?.acceptedName }
+        ?: s.plant.archetypeId?.let { db?.archetypes?.get(it)?.name }
 }
 
 @Composable
@@ -304,18 +381,6 @@ private fun Calibration(plantId: Long) {
     if (error) Text(stringResource(R.string.calibration_invalid), color = MaterialTheme.colorScheme.error)
     for (e in entries.asReversed().take(30)) {
         Text(stringResource(R.string.calibration_entry, Texts.dateTime(Instant.fromEpochMilliseconds(e.atEpochMs)), e.grams.toString(), e.note), style = MaterialTheme.typography.bodySmall)
-    }
-}
-
-private fun historyLine(c: android.content.Context, e: EventEntity): String {
-    val d = Texts.date(LocalDate.parse(e.date))
-    return when (e.type) {
-        "WATERED" -> c.getString(if (e.ranOutOfBottom == true) R.string.history_watered_ran_out else R.string.history_watered, d)
-        "CHECK_IN" -> c.getString(R.string.history_check_in, d, e.moisture?.let { Texts.moisture(c, Moisture.valueOf(it)) } ?: "")
-        "MOVED" -> c.getString(R.string.history_moved, d)
-        "REPOTTED" -> c.getString(R.string.history_repotted, d)
-        "FED" -> c.getString(R.string.history_fed, d)
-        else -> c.getString(R.string.history_snoozed, d)
     }
 }
 

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- The plant screen (docs/DESIGN.md sections 5 and 6). -->
+<resources>
+    <string name="plant_type_and_place">%1$s · %2$s</string>
+    <string name="plant_water_left_percent">%1$d%%</string>
+    <string name="plant_water_left">water left</string>
+
+    <string name="plant_next_days">Next 10 days</string>
+    <string name="plant_frost_day">Frost %1$s</string>
+    <string name="plant_frost_days">Frost %1$s–%2$s</string>
+    <string name="plant_strip_day">%1$s: %2$d percent water left</string>
+    <string name="plant_strip_frost">frost</string>
+    <string name="plant_strip_rain">rain</string>
+    <string name="plant_strip_heat">heat</string>
+    <string name="plant_strip_next">next thing to do</string>
+
+    <string name="plant_still_learning">Still learning %1$s: %2$d of about 8 answers</string>
+    <string name="plant_knows_well">Knows %1$s well</string>
+
+    <string name="plant_answer_wet">Wet</string>
+
+    <string name="plant_week_this">This week</string>
+    <string name="plant_week_last">Last week</string>
+    <string name="plant_week_of">Week of %1$s</string>
+    <string name="plant_history_empty">Nothing logged yet.</string>
+    <string name="plant_history_check_in">%1$s: soil check, %2$s</string>
+
+    <string name="plant_edit_entry">Edit entry</string>
+    <string name="plant_day_before">Day before</string>
+    <string name="plant_day_after">Day after</string>
+    <string name="plant_entry_drained">Water ran out of the bottom</string>
+    <string name="plant_entry_future">That day has not come yet.</string>
+    <string name="plant_entry_failed">Could not save: %1$s</string>
+</resources>
