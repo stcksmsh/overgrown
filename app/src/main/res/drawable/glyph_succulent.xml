@@ -5,6 +5,8 @@
     android:height="48dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
+    <!-- Scaled about the base so the outer leaves stay inside the 48-unit box. -->
+    <group android:pivotX="24" android:pivotY="40" android:scaleX="0.85" android:scaleY="0.85">
     <group android:pivotX="24" android:pivotY="40" android:rotation="-56">
       <path android:fillColor="#FF000000" android:pathData="M18.5,24 a5.5,14 0 1,0 11,0 a5.5,14 0 1,0 -11,0 z" />
     </group>
@@ -17,5 +19,6 @@
     </group>
     <group android:pivotX="24" android:pivotY="40" android:rotation="56">
       <path android:fillColor="#FF000000" android:pathData="M18.5,24 a5.5,14 0 1,0 11,0 a5.5,14 0 1,0 -11,0 z" />
+    </group>
     </group>
 </vector>
