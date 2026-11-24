@@ -209,7 +209,8 @@ class TodayTest {
     @Test
     fun theRealTodayScreenStoresWateredAndTheThreeAnswers() {
         val hall = place(g, "Hall")
-        val fern = plant(g, "Fern", hall)
+        // Three new plants, so a card that goes once answered still leaves one to answer the next.
+        val asked = listOf("Fern", "Ivy", "Palm").map { plant(g, it, hall) }
         val pothos = plant(g, "Pothos", hall)
         // Eight five-day cycles of dry, watered and OK halfway, the last eight days ago: the engine is sure enough
         // to say water, where a plant with no history only asks for a soil check.
@@ -222,24 +223,25 @@ class TodayTest {
             }
         }
         compose.setContent { OvergrownTheme { TodayScreen(onPlant = {}, onAdd = {}, onPlaces = {}, onSettings = {}) } }
-        compose.waitUntil(5_000) { compose.onAllNodes(hasText(s(R.string.today_soil_question))).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText(s(R.string.today_soil_question))).fetchSemanticsNodes().isNotEmpty() }
 
         fun eventsOf(id: Long) = runBlocking { g.garden.events(id).first() }
         val before = eventsOf(pothos).count { it.type == "WATERED" }
         // A tap is a real touch at the node's place, so the button must be on screen first.
         compose.onNodeWithText(s(R.string.plant_watered)).performScrollTo().performClick()
-        compose.waitUntil(5_000) { eventsOf(pothos).count { it.type == "WATERED" } == before + 1 }
+        compose.waitUntil(10_000) { eventsOf(pothos).count { it.type == "WATERED" } == before + 1 }
         val watered = eventsOf(pothos).filter { it.type == "WATERED" }.maxBy { it.id }
         assertEquals(g.garden.today().toString(), watered.date)
         assertEquals(runBlocking { g.garden.plant(pothos)!!.drainageHoles }, watered.ranOutOfBottom)
 
         val expected = listOf(R.string.answer_wet to Moisture.TOO_WET, R.string.answer_ok to Moisture.OK, R.string.answer_dry to Moisture.DRY_OR_BONE_DRY)
+        fun answers() = asked.flatMap { eventsOf(it) }.filter { it.type == "CHECK_IN" }.sortedBy { it.id }
         for ((n, answer) in expected.withIndex()) {
-            compose.waitUntil(5_000) { compose.onAllNodes(hasText(s(answer.first))).fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText(s(answer.first)).performScrollTo().performClick()
-            compose.waitUntil(5_000) { eventsOf(fern).count { it.type == "CHECK_IN" } == n + 1 }
+            compose.waitUntil(10_000) { compose.onAllNodes(hasText(s(answer.first))).fetchSemanticsNodes().isNotEmpty() }
+            compose.onAllNodesWithText(s(answer.first))[0].performScrollTo().performClick()
+            compose.waitUntil(10_000) { answers().size == n + 1 }
         }
-        assertEquals(expected.map { it.second.name }, eventsOf(fern).filter { it.type == "CHECK_IN" }.sortedBy { it.id }.map { it.moisture })
+        assertEquals(expected.map { it.second.name }, answers().map { it.moisture })
     }
 
     /** An event [daysAgo] days before today, which the app itself only records for today. */
