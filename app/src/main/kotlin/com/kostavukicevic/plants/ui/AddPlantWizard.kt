@@ -80,7 +80,13 @@ import com.kostavukicevic.plants.ui.theme.Spacing
 import com.kostavukicevic.plants.ui.theme.StateBlock
 import com.kostavukicevic.plants.ui.theme.Type
 import com.kostavukicevic.plants.weather.PlaceMatch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.math.BigDecimal
+import java.math.MathContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
@@ -133,6 +139,24 @@ internal fun width(s: String): Double? = positive(s)?.takeIf { it <= MAX_WIDTH_C
 internal fun oneDecimal(x: Double): String {
     val tenths = (x * 10).roundToLong()
     return if (tenths % 10 == 0L) (tenths / 10).toString() else String.format(Locale.ROOT, "%.1f", tenths / 10.0)
+}
+
+/** Significant digits a stored number is shown with: enough to give back what was typed, few enough to drop float noise. */
+private const val STORED_DIGITS = 6
+
+/** A stored number as the fields show it, so 0.25 stays 0.25 and 13.999999999999998 reads 14. */
+internal fun plain(x: Double): String = BigDecimal(x).round(MathContext(STORED_DIGITS)).stripTrailingZeros().toPlainString()
+
+/** A stored volume within this share of the computed one counts as computed, so it is not shown as an override. */
+private const val VOLUME_MATCH = 0.01
+
+/** The pot step's width and litres fields for a stored plant; litres are blank when they follow from the width. */
+internal fun storedPot(p: PlantEntity): Pair<String, String> {
+    // The wizard stores the height it computed, which gives the width back; older plants only have a volume.
+    val w = plain(p.potHeightCm?.let { it / heightToWidth(p.potShape) } ?: potWidthCm(p.potVolumeL, p.potShape))
+    val computed = width(w)?.let { potVolumeL(it, p.potShape) }
+    val matches = computed != null && abs(computed - p.potVolumeL) <= p.potVolumeL * VOLUME_MATCH
+    return w to if (matches) "" else plain(p.potVolumeL)
 }
 
 // ---- Answers ------------------------------------------------------------------------------
@@ -215,6 +239,9 @@ internal class WizardState(acquiredOn: String) {
     var sun by mutableStateOf<Answer?>(null)
     var light by mutableStateOf<String?>(null)
 
+    /** The plant this wizard has written, so a second Save updates it instead of adding another. */
+    var savedPlantId by mutableStateOf<Long?>(null)
+
     /** The plant goes to a place this wizard creates: chosen, or no place of the kind exists yet. */
     fun creating(places: List<PlaceEntity>) = newPlace || places.none { it.outdoor == outdoor }
 
@@ -269,7 +296,7 @@ internal class WizardState(acquiredOn: String) {
                     s.step, s.loaded, s.showErrors, s.name, s.speciesSlug, s.speciesLabel, s.archetype, s.look?.ordinal,
                     s.outdoor, s.placeId, s.newPlace, s.placeName, s.cityQuery, s.cityPicked, s.lat, s.lon, s.placeAdvanced,
                     s.potWidth, s.shape, s.material, s.drainage, s.nursery, s.canopy, s.volumeOverride, s.potAdvanced, s.acquiredOn,
-                    s.rain?.ordinal, s.wind?.ordinal, s.sun?.ordinal, s.light,
+                    s.rain?.ordinal, s.wind?.ordinal, s.sun?.ordinal, s.light, s.savedPlantId,
                 )
             },
             restore = { saved ->
@@ -286,7 +313,7 @@ internal class WizardState(acquiredOn: String) {
                     cityPicked = strOrNull(); lat = str(); lon = str(); placeAdvanced = bool()
                     potWidth = str(); shape = str(); material = str(); drainage = bool(); nursery = bool(); canopy = str()
                     volumeOverride = str(); potAdvanced = bool(); acquiredOn = str()
-                    rain = answer(); wind = answer(); sun = answer(); light = strOrNull()
+                    rain = answer(); wind = answer(); sun = answer(); light = strOrNull(); savedPlantId = v.next() as Long?
                 }
             },
         )
@@ -295,8 +322,8 @@ internal class WizardState(acquiredOn: String) {
 
 private const val STEPS = 4
 
-/** A stored volume within this share of the computed one counts as computed, so it is not shown as an override. */
-private const val VOLUME_MATCH = 0.01
+/** Outlives the screen, so leaving it does not cancel the forecast fetch for a new outdoor place. */
+private val afterSave = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
 /**
  * Adding a plant, or editing one ([plantId]), in four steps: what plant, where, the pot, sun and rain.
@@ -310,25 +337,26 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
     val plants by g.garden.plants.collectAsState(emptyList())
     val st = rememberSaveable(saver = WizardState.saver) { WizardState(g.garden.today().toString()) }
     var saving by remember { mutableStateOf(false) }
+    var missing by remember { mutableStateOf(false) }
 
     LaunchedEffect(plantId) {
         if (plantId == null || st.loaded) return@LaunchedEffect
-        val p = g.garden.plant(plantId) ?: return@LaunchedEffect
+        val p = g.garden.plant(plantId)
+        if (p == null) { missing = true; return@LaunchedEffect }
         val place = g.garden.place(p.placeId)
         st.name = p.name; st.speciesSlug = p.speciesSlug; st.archetype = p.archetypeId
         st.speciesLabel = p.speciesSlug?.let { careDb?.species(it) }?.let { it.commonNames["en"]?.firstOrNull()?.name ?: it.taxon.acceptedName }
+            // A species this build's database lacks keeps its stored name rather than searching again.
+            ?: p.speciesSlug?.let { p.name }
         if (p.speciesSlug == null) st.look = Look.entries.firstOrNull { it.archetype != null && it.archetype == p.archetypeId }
         if (place != null) { st.outdoor = place.outdoor; st.pickPlace(place) }
         st.shape = p.potShape; st.material = p.potMaterial; st.drainage = p.drainageHoles; st.nursery = p.inNurseryPot
-        st.canopy = oneDecimal(p.canopyWidthCm); st.acquiredOn = p.acquiredOn
-        // The wizard stores the height it computed, which gives the width back; older plants only have a volume.
-        st.potWidth = oneDecimal(p.potHeightCm?.let { it / heightToWidth(p.potShape) } ?: potWidthCm(p.potVolumeL, p.potShape))
-        val computed = st.computedVolumeL()
-        if (computed == null || abs(computed - p.potVolumeL) > p.potVolumeL * VOLUME_MATCH) {
-            st.volumeOverride = oneDecimal(p.potVolumeL); st.potAdvanced = true
-        }
+        st.canopy = plain(p.canopyWidthCm); st.acquiredOn = p.acquiredOn
+        val (w, litres) = storedPot(p)
+        st.potWidth = w; st.volumeOverride = litres; st.potAdvanced = litres.isNotEmpty()
         st.loaded = true
     }
+    if (missing) { MissingPlant(onDone); return }
 
     val known = places ?: emptyList()
     fun back() {
@@ -342,8 +370,10 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
         saving = true
         scope.launch {
             try {
-                savePlantAndPlace(g, st, plantId, known)
+                val newOutdoorPlace = savePlantAndPlace(g, st, plantId, known)
                 g.scheduler.reschedule(); g.changed(); onDone()
+                // A new outdoor place has no forecast yet, as in EditPlaceScreen; the screen does not wait for it.
+                if (newOutdoorPlace) afterSave.launch { refreshAfterSave(g) }
             } finally {
                 saving = false
             }
@@ -379,25 +409,42 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
     }
 }
 
-private suspend fun savePlantAndPlace(g: Graph, st: WizardState, plantId: Long?, places: List<PlaceEntity>) {
+private suspend fun refreshAfterSave(g: Graph) {
+    // A thrown fetch is already marked failed; only keep it from ending the app.
+    try {
+        g.refreshWeather(foreground = true)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        android.util.Log.w("Overgrown", "weather refresh failed", e)
+    }
+    g.scheduler.reschedule()
+    g.changed()
+}
+
+/** Writes the answers; true when it created an outdoor place. */
+private suspend fun savePlantAndPlace(g: Graph, st: WizardState, plantId: Long?, places: List<PlaceEntity>): Boolean {
     val outdoor = st.outdoor == true
     val rain = st.rain?.let(::rainOf) ?: "PARTIAL"
     val wind = st.wind?.let(::windOf) ?: "NORMAL"
     val creating = st.creating(places)
     // save() checked every step before calling this, so none of these returns is taken.
-    val volume = st.volumeL() ?: return
-    val potWidth = width(st.potWidth) ?: return
-    val canopy = width(st.canopy) ?: return
+    val volume = st.volumeL() ?: return false
+    val potWidth = width(st.potWidth) ?: return false
+    val canopy = width(st.canopy) ?: return false
     val placeId = if (creating) {
-        val lat = st.latitude() ?: return
-        val lon = st.longitude() ?: return
+        val lat = st.latitude() ?: return false
+        val lon = st.longitude() ?: return false
         g.garden.savePlace(
             PlaceEntity(
                 name = st.placeName.trim(), outdoor = outdoor, latitude = lat, longitude = lon,
                 rainExposure = if (outdoor) rain else "OPEN", windExposure = if (outdoor) wind else "NORMAL",
                 lightClass = if (outdoor) null else st.light,
             ),
-        )
+        ).also {
+            // From here on the wizard points at the place it made, so a second Save does not make another.
+            st.placeId = it; st.newPlace = false
+        }
     } else {
         val p = places.first { it.id == st.placeId }
         val updated = if (p.outdoor) {
@@ -409,21 +456,41 @@ private suspend fun savePlantAndPlace(g: Graph, st: WizardState, plantId: Long?,
         if (updated != p) g.garden.savePlace(updated)
         p.id
     }
-    val base = plantId?.let { g.garden.plant(it) }
-        ?: PlantEntity(name = "", placeId = placeId, canopyWidthCm = canopy, potVolumeL = volume, acquiredOn = st.acquiredOn)
-    g.garden.savePlant(
+    val stored = (plantId ?: st.savedPlantId)?.let { g.garden.plant(it) }
+    val base = stored ?: PlantEntity(name = "", placeId = placeId, canopyWidthCm = canopy, potVolumeL = volume, acquiredOn = st.acquiredOn)
+    // Fields showing what was stored keep the stored number: rounding for display must not rewrite it.
+    val potKept = stored != null && st.shape == stored.potShape && (st.potWidth to st.volumeOverride) == storedPot(stored)
+    val canopyKept = stored != null && st.canopy == plain(stored.canopyWidthCm)
+    st.savedPlantId = g.garden.savePlant(
         base.copy(
             name = st.name.trim(), placeId = placeId, speciesSlug = st.speciesSlug, archetypeId = st.archetype,
-            canopyWidthCm = canopy, potVolumeL = volume, potHeightCm = potWidth * heightToWidth(st.shape),
+            canopyWidthCm = if (canopyKept) base.canopyWidthCm else canopy,
+            potVolumeL = if (potKept) base.potVolumeL else volume,
+            potHeightCm = if (potKept) base.potHeightCm else potWidth * heightToWidth(st.shape),
             potShape = st.shape, potMaterial = st.material, drainageHoles = st.drainage, inNurseryPot = st.nursery,
             acquiredOn = st.acquiredOn,
         ),
     )
-    // A new outdoor place has no forecast yet, as in EditPlaceScreen.
-    if (creating && outdoor) g.refreshWeather(foreground = true)
+    return creating && outdoor
 }
 
 // ---- Frame --------------------------------------------------------------------------------
+
+/** The plant to edit is gone, deleted elsewhere: say so, and the only button leaves. */
+@Composable
+private fun MissingPlant(onDone: () -> Unit) {
+    val c = Overgrown.colors
+    BackHandler(onBack = onDone)
+    Column(
+        Modifier.fillMaxSize().background(c.ground).statusBarsPadding().navigationBarsPadding().padding(Spacing.screen),
+        verticalArrangement = Arrangement.spacedBy(Spacing.grid * 4),
+    ) {
+        Text(stringResource(R.string.wizard_plant_missing), style = Type.body, color = c.ink)
+        Button(onClick = onDone, modifier = Modifier.heightIn(min = Spacing.minTouchTarget)) {
+            Text(stringResource(R.string.back), style = Type.label)
+        }
+    }
+}
 
 @Composable
 private fun WizardTop(step: Int, onBack: () -> Unit) {
@@ -729,7 +796,7 @@ private fun ExposureStep(st: WizardState, places: List<PlaceEntity>, plants: Lis
     Title(stringResource(if (outdoor) R.string.wizard_exposure_outdoor_title else R.string.wizard_exposure_indoor_title))
     if (!st.creating(places)) {
         val place = places.firstOrNull { it.id == st.placeId }
-        val others = plants.filter { it.placeId == st.placeId && it.id != plantId }
+        val others = plants.filter { it.placeId == st.placeId && it.id != (plantId ?: st.savedPlantId) }
         if (place != null && others.isNotEmpty()) {
             Text(
                 stringResource(R.string.wizard_shared_place, place.name, others.joinToString(", ") { it.name }),

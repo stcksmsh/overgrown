@@ -334,6 +334,114 @@ class WizardTest {
         assertTrue(plants().isEmpty())
     }
 
+    private fun stored(plant: PlantEntity): Long = runBlocking {
+        val room = g.garden.savePlace(PlaceEntity(name = "Room", outdoor = false, latitude = 44.8, longitude = 20.5, lightClass = "MEDIUM"))
+        g.garden.savePlant(plant.copy(placeId = room))
+    }
+
+    private fun startEditing(id: Long, name: String) {
+        start(id)
+        compose.waitUntil(5_000) { compose.onAllNodes(hasSetTextAction() and hasText(name)).fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    /** Made with the single form before the wizard: no height, and litres typed in. */
+    private val oldFormPlant = PlantEntity(
+        name = "Old form plant", placeId = 0, archetypeId = "indoor-tropical-foliage", canopyWidthCm = 12.35,
+        potVolumeL = 0.25, potHeightCm = null, potShape = "STANDARD", acquiredOn = "2026-01-01",
+    )
+
+    @Test
+    fun savingAnUntouchedOldFormPlantLeavesItsPotAndWidthAsStored() {
+        val id = stored(oldFormPlant)
+        val before = runBlocking { g.garden.plant(id) }
+        startEditing(id, "Old form plant")
+        saveAndWait()
+        assertEquals(before, runBlocking { g.garden.plant(id) })
+    }
+
+    @Test
+    fun savingAnUntouchedWizardPlantWithATwoDecimalWidthLeavesItAsStored() {
+        val id = stored(
+            PlantEntity(
+                name = "Wizard plant", placeId = 0, archetypeId = "indoor-tropical-foliage", canopyWidthCm = 25.0,
+                potVolumeL = potVolumeL(12.34, "STANDARD"), potHeightCm = 12.34 * STANDARD_HEIGHT_TO_WIDTH, acquiredOn = "2026-01-01",
+            ),
+        )
+        val before = runBlocking { g.garden.plant(id) }
+        startEditing(id, "Wizard plant")
+        press(R.string.wizard_next_where)
+        press(R.string.wizard_next_pot)
+        compose.onNode(hasSetTextAction() and hasText(s(R.string.wizard_pot_width))).assert(hasText("12.34"))
+        saveAndWait()
+        assertEquals(before, runBlocking { g.garden.plant(id) })
+    }
+
+    @Test
+    fun changingOnlyTheShapeRecomputesThePot() {
+        val id = stored(oldFormPlant)
+        startEditing(id, "Old form plant")
+        press(R.string.wizard_next_where)
+        press(R.string.wizard_next_pot)
+        tap(R.string.shape_tall)
+        saveAndWait()
+
+        val p = plants().single()
+        val w = plain(potWidthCm(0.25, "STANDARD")).toDouble()
+        assertEquals("TALL", p.potShape)
+        assertEquals(potVolumeL(w, "TALL"), p.potVolumeL, 1e-9)
+        assertEquals(w * TALL_HEIGHT_TO_WIDTH, p.potHeightCm!!, 1e-9)
+        assertEquals(12.35, p.canopyWidthCm, 0.0)
+    }
+
+    @Test
+    fun savingAgainAfterRotationUpdatesInsteadOfAddingAnotherPlantAndPlace() {
+        val tester = StateRestorationTester(compose)
+        tester.setContent { OvergrownTheme { AddPlantWizard(null, onDone = { done = true }, careDb = FIXTURE_DB) } }
+        field(R.string.wizard_name).performTextInput("Zzplant")
+        press(R.string.wizard_next_where)
+        tap(R.string.place_indoor)
+        field(R.string.wizard_place_name).performTextInput("Kitchen")
+        tap(R.string.wizard_advanced)
+        field(R.string.field_latitude).performTextInput("44.8")
+        field(R.string.field_longitude).performTextInput("20.5")
+        press(R.string.wizard_next_pot)
+        field(R.string.wizard_pot_width).performTextInput("20")
+        field(R.string.wizard_plant_width).performTextInput("30")
+        press(R.string.wizard_next_exposure)
+        tap(R.string.answer_little)
+        saveAndWait()
+
+        tester.emulateSavedInstanceStateRestore()
+        done = false
+        assertStep(4)
+        saveAndWait()
+
+        assertEquals(1, plants().size)
+        assertEquals(1, places().size)
+        assertEquals(places().single().id, plants().single().placeId)
+    }
+
+    @Test
+    fun aPlantThatIsGoneSaysSoAndOnlyLeaves() {
+        start(9_999)
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(s(R.string.wizard_plant_missing)).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(s(R.string.save)).assertDoesNotExist()
+        compose.onNodeWithText(s(R.string.back)).performClick()
+        compose.waitForIdle()
+        assertTrue(done)
+        assertTrue(plants().isEmpty())
+    }
+
+    @Test
+    fun aSpeciesMissingFromTheDatabaseShowsTheStoredNameWithoutSearching() {
+        val id = stored(oldFormPlant.copy(name = "Testus gone", speciesSlug = "testus-gone", archetypeId = "indoor-succulent"))
+        startEditing(id, "Testus gone")
+        compose.onNodeWithContentDescription(s(R.string.wizard_change_named, "Testus gone")).assertExists()
+        compose.onNodeWithText(s(R.string.wizard_no_match)).assertDoesNotExist()
+        saveAndWait()
+        assertEquals("testus-gone", plants().single().speciesSlug)
+    }
+
     companion object {
         /** Clearly made-up entries: tests never use real care data. */
         internal val FIXTURE_DB = CareDb(

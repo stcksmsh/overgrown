@@ -55,5 +55,6 @@
     <string name="answer_little">A little</string>
     <string name="answer_no">No</string>
     <string name="answer_unsure">Not sure</string>
-    <string name="wizard_shared_place">These answers belong to %1$s, so they also change them for %2$s.</string>
+    <string name="wizard_shared_place">Changes here also apply to %2$s in %1$s.</string>
+    <string name="wizard_plant_missing">This plant is no longer here. It may have been deleted.</string>
 </resources>
