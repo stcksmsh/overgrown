@@ -116,6 +116,8 @@ class ListsScreenshotTest(private val dark: Boolean, private val fontScale: Floa
         start()
         openPlants()
         waitFor(s(R.string.delete_named, "Pothos"), description = true)
+        // Place names come from their own query and can land a frame later than the plants.
+        waitFor("Kitchen window")
         capture("plants")
     }
 
@@ -125,6 +127,7 @@ class ListsScreenshotTest(private val dark: Boolean, private val fontScale: Floa
         start()
         openPlants()
         waitFor(s(R.string.delete_named, "Fern"), description = true)
+        waitFor("Kitchen window")
         compose.onNodeWithContentDescription(s(R.string.delete_named, "Fern")).performClick()
         waitFor(s(R.string.deleted, "Fern"))
         capture("undo_snackbar")
