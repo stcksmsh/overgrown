@@ -16,6 +16,7 @@ fun PlacesScreen(undo: UndoDelete, onBack: () -> Unit, onEdit: (Long) -> Unit, o
     val deleted = stringResource(R.string.deleted)
     val inUse = stringResource(R.string.place_in_use)
     val undoLabel = stringResource(R.string.undo)
+    val failed = stringResource(R.string.delete_failed)
 
     ListPage(
         title = stringResource(R.string.places_title),
@@ -40,7 +41,7 @@ fun PlacesScreen(undo: UndoDelete, onBack: () -> Unit, onEdit: (Long) -> Unit, o
                         undo.say(inUse.format(p.name, users.joinToString(", ") { it.name }))
                         return@onDelete
                     }
-                    undo.delete(key, deleted.format(p.name), undoLabel) {
+                    undo.delete(key, deleted.format(p.name), undoLabel, failed.format(p.name)) {
                         // A plant may have been put here while the snackbar was showing.
                         if (g.garden.plants.first().none { it.placeId == p.id }) g.garden.deletePlace(p.id) else undo.hidden -= key
                         g.changed()

@@ -4,6 +4,11 @@ package com.kostavukicevic.plants.ui
 import android.app.Application
 import android.content.ComponentName
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -129,10 +134,10 @@ class NavigationTest {
         restore.setContent { OvergrownTheme { App(null) } }
         tab(R.string.plants_title).performClick()
         openMenu(R.string.places_title)
-        compose.onNodeWithText(s(R.string.places_empty)).assertExists()
+        waitFor(s(R.string.places_empty))
 
         restore.emulateSavedInstanceStateRestore()
-        compose.onNodeWithText(s(R.string.places_empty)).assertExists()
+        waitFor(s(R.string.places_empty))
         back()
         assertOn(R.string.plants_title)
         tab(R.string.plants_title).assertIsSelected()
@@ -147,7 +152,7 @@ class NavigationTest {
 
             openMenu(R.string.places_title)
             compose.onNodeWithText(s(R.string.places_title)).assertExists()
-            compose.onNodeWithText(s(R.string.places_empty)).assertExists()
+            waitFor(s(R.string.places_empty))
             compose.onAllNodes(isTab).assertCountEquals(0)
             back()
             assertOn(root)
@@ -280,6 +285,44 @@ class NavigationTest {
         compose.onAllNodes(isTab).assertCountEquals(0)
         back()
         assertOn(R.string.today_title)
+    }
+
+    @Test
+    fun aDeleteThatFailsBringsTheItemBackAndSaysSo() {
+        compose.setContent {
+            OvergrownTheme {
+                val snackbar = remember { SnackbarHostState() }
+                val scope = rememberCoroutineScope()
+                val undo = remember { UndoDelete(snackbar, scope) }
+                Box {
+                    ListPage(
+                        title = "Plants",
+                        onBack = null,
+                        addLabel = "Add plant",
+                        onAdd = {},
+                        empty = "No plants yet.",
+                        undo = undo,
+                        items = listOf(
+                            ListItem("plant:1", "Boris", null, null, onEdit = {}, onDelete = {
+                                undo.delete("plant:1", s(R.string.deleted, "Boris"), s(R.string.undo), s(R.string.delete_failed, "Boris")) {
+                                    throw IllegalStateException("database is closed")
+                                }
+                            }),
+                        ),
+                    )
+                    SnackbarHost(snackbar)
+                }
+            }
+        }
+        val delete = s(R.string.delete_named, "Boris")
+        compose.onNodeWithContentDescription(delete).performClick()
+        compose.onNodeWithContentDescription(delete).assertDoesNotExist()
+
+        // Past the 4 s "Deleted" snackbar but not past the failure message that follows it.
+        compose.mainClock.advanceTimeBy(5_000)
+        waitFor(s(R.string.delete_failed, "Boris"))
+        compose.onNodeWithText(s(R.string.deleted, "Boris")).assertDoesNotExist()
+        compose.onNodeWithContentDescription(delete).assertExists()
     }
 
     private companion object {

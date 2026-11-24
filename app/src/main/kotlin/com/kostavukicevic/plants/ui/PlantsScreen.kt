@@ -21,6 +21,7 @@ fun PlantsScreen(
     val places by g.garden.places.collectAsState(null)
     val deleted = stringResource(R.string.deleted)
     val undoLabel = stringResource(R.string.undo)
+    val failed = stringResource(R.string.delete_failed)
 
     ListPage(
         title = stringResource(R.string.plants_title),
@@ -39,7 +40,7 @@ fun PlantsScreen(
                 onOpen = { onPlant(p.id) },
                 onEdit = { onEdit(p.id) },
                 onDelete = {
-                    undo.delete(key, deleted.format(p.name), undoLabel) {
+                    undo.delete(key, deleted.format(p.name), undoLabel, failed.format(p.name)) {
                         g.garden.deletePlant(p.id)
                         g.scheduler.reschedule()
                         g.changed()

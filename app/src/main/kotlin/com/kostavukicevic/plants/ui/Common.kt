@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.ui
 
+import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -52,6 +53,7 @@ import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.graph
 import com.kostavukicevic.plants.ui.theme.Spacing
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
@@ -203,13 +205,31 @@ class UndoDelete(private val snackbar: SnackbarHostState, private val scope: Cor
     /** Keys of items waiting to be deleted, or deleted; lists leave them out. */
     val hidden = mutableStateListOf<String>()
 
-    fun delete(key: String, message: String, undoLabel: String, commit: suspend () -> Unit) {
+    /** [failed] is shown, and the item comes back, if [commit] throws. */
+    fun delete(key: String, message: String, undoLabel: String, failed: String, commit: suspend () -> Unit) {
         hidden += key
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
             // With an action, showSnackbar defaults to Indefinite; the delete must commit on its own.
-            if (snackbar.showSnackbar(message, undoLabel, duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) hidden -= key
-            else withContext(NonCancellable) { commit() }
+            if (snackbar.showSnackbar(message, undoLabel, duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) {
+                hidden -= key
+                return@launch
+            }
+            val ok = withContext(NonCancellable) {
+                try {
+                    commit()
+                    true
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w("UndoDelete", "delete of $key failed", e)
+                    false
+                }
+            }
+            if (!ok) {
+                hidden -= key
+                say(failed)
+            }
         }
     }
 
