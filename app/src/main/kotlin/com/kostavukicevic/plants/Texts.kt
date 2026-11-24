@@ -7,11 +7,15 @@ import com.kostavukicevic.plants.data.Reminder
 import com.kostavukicevic.plants.engine.Action
 import com.kostavukicevic.plants.engine.Alert
 import com.kostavukicevic.plants.engine.AlertType
+import com.kostavukicevic.plants.engine.Coefficients
 import com.kostavukicevic.plants.engine.HoldReason
 import com.kostavukicevic.plants.engine.Moisture
 import com.kostavukicevic.plants.engine.PromptReason
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.daysUntil
+import kotlinx.datetime.format.DayOfWeekNames
 import kotlinx.datetime.format.MonthNames
+import kotlinx.datetime.format.Padding
 import kotlinx.datetime.format.char
 import kotlinx.datetime.format
 import kotlinx.datetime.TimeZone
@@ -22,7 +26,58 @@ import kotlin.time.Instant
 object Texts {
     private val dayFormat = LocalDate.Format { day(); char(' '); monthName(MonthNames.ENGLISH_ABBREVIATED) }
 
+    private val weekdayFormat = LocalDate.Format { dayOfWeek(DayOfWeekNames.ENGLISH_ABBREVIATED) }
+    // A no-break space keeps "6 Dec" on one line.
+    private val shortDayFormat = LocalDate.Format { day(Padding.NONE); char('\u00A0'); monthName(MonthNames.ENGLISH_ABBREVIATED) }
+
     fun date(d: LocalDate): String = d.format(dayFormat)
+
+    /** A day seen from [today]: the weekday within six days, where it cannot be mistaken, else "6 Dec". */
+    fun day(d: LocalDate, today: LocalDate): String = d.format(if (today.daysUntil(d) in 0..6) weekdayFormat else shortDayFormat)
+
+    /**
+     * The word for a share of water left, on the engine's check-in answer bands (as depletion, 1 - water left):
+     * below [Coefficients.BAND_TOO_WET_MAX] is wet, below [Coefficients.BAND_OK_MAX] moist,
+     * below [Coefficients.BAND_DRY_MAX] getting dry, and dry from there.
+     */
+    fun waterLevel(c: Context, waterLeft: Double): String {
+        val depletion = 1 - waterLeft
+        return c.getString(
+            when {
+                depletion < Coefficients.BAND_TOO_WET_MAX -> R.string.level_wet
+                depletion < Coefficients.BAND_OK_MAX -> R.string.level_moist
+                depletion < Coefficients.BAND_DRY_MAX -> R.string.level_getting_dry
+                else -> R.string.level_dry
+            },
+        )
+    }
+
+    /** One short sentence per kind of weather alert, over the days it falls on: "Frost Mon-Tue, Thu." */
+    fun alertSummary(c: Context, alerts: List<Alert>, today: LocalDate): String =
+        alerts.groupBy { if (it.type == AlertType.ROOT_FREEZE_STRONG) AlertType.ROOT_FREEZE_CAUTION else it.type }
+            .entries.sortedBy { (_, a) -> a.minOf { it.date } }
+            .joinToString(" ") { (type, a) ->
+                val days = dayRuns(a.map { it.date }).map { (first, last) ->
+                    if (first == last) day(first, today) else c.getString(R.string.today_day_range, day(first, today), day(last, today))
+                }.reduce { acc, run -> c.getString(R.string.today_day_list, acc, run) }
+                when (type) {
+                    AlertType.ROOT_FREEZE_CAUTION, AlertType.ROOT_FREEZE_STRONG -> c.getString(R.string.today_alert_frost, days)
+                    AlertType.HEAT -> c.getString(R.string.today_alert_heat, days)
+                    AlertType.HEAVY_RAIN -> c.getString(R.string.today_alert_heavy_rain, days)
+                    AlertType.WIND -> c.getString(R.string.today_alert_wind, days)
+                    AlertType.WATERLOGGING -> c.getString(R.string.today_alert_waterlogging)
+                }
+            }
+
+    /** Runs of consecutive days, so a gap day is never inside a range: Mon, Wed is two runs, not Mon-Wed. */
+    private fun dayRuns(dates: List<LocalDate>): List<Pair<LocalDate, LocalDate>> {
+        val runs = mutableListOf<Pair<LocalDate, LocalDate>>()
+        for (d in dates.distinct().sorted()) {
+            val last = runs.lastOrNull()
+            if (last != null && last.second.daysUntil(d) == 1) runs[runs.lastIndex] = last.first to d else runs += d to d
+        }
+        return runs
+    }
 
     /** Local date and time, e.g. "23 Nov 10:04". */
     fun dateTime(at: Instant): String {

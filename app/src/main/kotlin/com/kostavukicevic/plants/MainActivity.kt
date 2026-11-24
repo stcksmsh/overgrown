@@ -73,7 +73,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             val g = graph
             g.scheduler.ensureDailyRefresh()
-            g.garden.refreshWeather(foreground = true)
+            g.refreshWeather(foreground = true)
             g.scheduler.reschedule()
             g.changed()
         }
