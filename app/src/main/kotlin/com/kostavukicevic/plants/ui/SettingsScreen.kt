@@ -49,7 +49,9 @@ fun SettingsScreen(onBack: () -> Unit) {
                     try {
                         DocumentsContract.deleteDocument(c.contentResolver, target)
                     } catch (_: java.io.FileNotFoundException) {
-                        // The provider reports any failure to delete this way; the message below still says the export failed.
+                        // Best effort: the message below still says the export failed.
+                    } catch (_: RuntimeException) {
+                        // Providers without delete throw UnsupportedOperationException, others SecurityException; same as above.
                     }
                 }
                 e.message

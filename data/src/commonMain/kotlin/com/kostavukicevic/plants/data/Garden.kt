@@ -25,6 +25,7 @@ import com.kostavukicevic.plants.weather.ResponseStore
 import com.kostavukicevic.plants.weather.WeatherService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -134,7 +135,8 @@ class Garden(
         deleteFiles(listOf(photo.file))
     }
 
-    private suspend fun deleteFiles(names: Collection<String>) = withContext(Dispatchers.IO) {
+    // NonCancellable: a rollback or cleanup that stops halfway leaves orphan files or rows without files.
+    private suspend fun deleteFiles(names: Collection<String>) = withContext(NonCancellable + Dispatchers.IO) {
         for (name in names) File(photoDir, name).delete()
     }
 
@@ -261,7 +263,7 @@ class Garden(
                         require(++entries <= MAX_ZIP_ENTRIES) { "too many entries in the file" }
                         require(safeEntry(name)) { "unsafe path in the file: $name" }
                         when {
-                            name == Export.ZIP_JSON -> text = readBounded(z, MAX_JSON_BYTES).decodeToString().also { total += it.length }
+                            name == Export.ZIP_JSON -> text = readBounded(z, MAX_JSON_BYTES).also { total += it.size }.decodeToString()
                             entry.isDirectory -> Unit
                             name.startsWith(Export.ZIP_PHOTOS) -> {
                                 val file = name.removePrefix(Export.ZIP_PHOTOS)
@@ -276,7 +278,7 @@ class Garden(
             }
             return replace(parse(text), staging)
         } finally {
-            withContext(Dispatchers.IO) { staging.deleteRecursively() }
+            withContext(NonCancellable + Dispatchers.IO) { staging.deleteRecursively() }
         }
     }
 
@@ -303,6 +305,9 @@ class Garden(
         try {
             withContext(Dispatchers.IO) {
                 photoDir.mkdirs()
+                // Checked up front so a full disk refuses the import instead of failing halfway through the copies.
+                val needed = photos.sumOf { File(staging, it.file).length() }
+                if (needed + FREE_SPACE_MARGIN_BYTES > photoDir.usableSpace) throw java.io.IOException("not enough free space for the photos")
                 for (p in photos) {
                     // Names are random, so a live file with this name is this same photo: never overwrite it.
                     if (p.file in old && File(photoDir, p.file).isFile) continue
@@ -422,7 +427,10 @@ private val SAFE_NAME = Regex("[A-Za-z0-9][A-Za-z0-9._-]*")
  */
 internal const val MAX_JSON_BYTES = 32L * 1024 * 1024
 internal const val MAX_PHOTO_BYTES = 32L * 1024 * 1024
-internal const val MAX_ZIP_TOTAL_BYTES = 4L * 1024 * 1024 * 1024
+internal const val MAX_ZIP_TOTAL_BYTES = 1L * 1024 * 1024 * 1024
+
+/** Left free after an import's photo copies, so the database and the rest of the phone can still write. */
+private const val FREE_SPACE_MARGIN_BYTES = 64L * 1024 * 1024
 internal const val MAX_ZIP_ENTRIES = 20_000
 
 /** Weather client cache in the database. */
