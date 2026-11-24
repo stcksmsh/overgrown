@@ -23,11 +23,14 @@ import com.kostavukicevic.plants.weather.FetchResult
 import com.kostavukicevic.plants.weather.OpenMeteo
 import com.kostavukicevic.plants.weather.ResponseStore
 import com.kostavukicevic.plants.weather.WeatherService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -36,6 +39,14 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.io.BufferedInputStream
+import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
+import java.util.UUID
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import kotlin.time.Instant
 
 /** The app's single entry to stored data, weather and the engine. */
@@ -47,6 +58,8 @@ class Garden(
     private val careDb: () -> CareDb?,
     private val now: () -> Instant,
     private val timeZone: () -> TimeZone,
+    /** App-private directory holding the photo files; excluded from Auto Backup. */
+    private val photoDir: File,
 ) {
     private val dao = db.dao()
 
@@ -64,8 +77,17 @@ class Garden(
     suspend fun plant(id: Long) = dao.plant(id)
     suspend fun savePlace(p: PlaceEntity) = dao.upsertPlace(p).let { if (p.id != 0L) p.id else it }
     suspend fun savePlant(p: PlantEntity) = dao.upsertPlant(p).let { if (p.id != 0L) p.id else it }
-    suspend fun deletePlant(id: Long) = dao.deletePlantFully(id)
-    suspend fun deletePlace(id: Long) = dao.deletePlaceFully(id)
+    suspend fun deletePlant(id: Long) {
+        val photos = dao.photosOf(id)
+        dao.deletePlantFully(id)
+        deleteFiles(photos.map { it.file })
+    }
+
+    suspend fun deletePlace(id: Long) {
+        val photos = dao.plantIdsAt(id).flatMap { dao.photosOf(it) }
+        dao.deletePlaceFully(id)
+        deleteFiles(photos.map { it.file })
+    }
     suspend fun deleteEvent(id: Long) = dao.deleteEvent(id)
 
     suspend fun watered(plantId: Long, ranOutOfBottom: Boolean, moisture: String? = null) =
@@ -84,6 +106,42 @@ class Garden(
     suspend fun repotted(plantId: Long) {
         dao.insertEvent(EventEntity(plantId = plantId, date = today().toString(), type = "REPOTTED"))
         dao.plant(plantId)?.let { dao.upsertPlant(it.copy(lastRepotOn = today().toString())) }
+    }
+
+    fun photos(plantId: Long) = dao.photosFlow(plantId)
+    fun photoFile(photo: PhotoEntity) = File(photoDir, photo.file)
+
+    /** Stores the image bytes as they are, under a new name, and records them for the plant on the given day. */
+    suspend fun addPhoto(plantId: Long, bytes: ByteArray, date: LocalDate = today()): Long {
+        require(bytes.isNotEmpty()) { "empty photo" }
+        val name = UUID.randomUUID().toString() + extension(bytes)
+        val file = File(photoDir, name)
+        withContext(Dispatchers.IO) {
+            photoDir.mkdirs()
+            file.writeBytes(bytes)
+        }
+        return try {
+            dao.insertPhoto(PhotoEntity(plantId = plantId, date = date.toString(), file = name))
+        } catch (e: Exception) {
+            withContext(Dispatchers.IO) { file.delete() }
+            throw e
+        }
+    }
+
+    suspend fun deletePhoto(id: Long) {
+        val photo = dao.photo(id) ?: return
+        dao.deletePhoto(id)
+        deleteFiles(listOf(photo.file))
+    }
+
+    private suspend fun deleteFiles(names: Collection<String>) = withContext(Dispatchers.IO) {
+        for (name in names) File(photoDir, name).delete()
+    }
+
+    private fun extension(b: ByteArray) = when {
+        b.size >= 2 && b[0] == 0xFF.toByte() && b[1] == 0xD8.toByte() -> ".jpg"
+        b.size >= 4 && b[0] == 0x89.toByte() && b[1] == 'P'.code.toByte() && b[2] == 'N'.code.toByte() && b[3] == 'G'.code.toByte() -> ".png"
+        else -> ""
     }
 
     suspend fun logMass(plantId: Long, grams: Double, note: String = "") {
@@ -149,18 +207,113 @@ class Garden(
         Export(
             format = Export.FORMAT, version = Export.VERSION, appVersion = appVersion, exportedAt = now().toString(),
             places = dao.allPlaces(), plants = dao.allPlants(), events = dao.allEvents(),
-            weather = dao.allWeather(), calibration = dao.allCalibration(),
+            weather = dao.allWeather(), calibration = dao.allCalibration(), photos = dao.allPhotos(),
         ),
     )
 
-    /** Replaces everything with the file's contents, in one transaction. */
-    suspend fun importJson(text: String) {
+    /**
+     * The full export: a zip with [Export.ZIP_JSON] and every photo file under [Export.ZIP_PHOTOS].
+     * Closes [out]. A photo whose file is gone is still listed in the JSON; import skips it.
+     */
+    suspend fun exportZip(appVersion: String, out: OutputStream) {
+        val text = exportJson(appVersion)
+        val photos = dao.allPhotos()
+        withContext(Dispatchers.IO) {
+            ZipOutputStream(out).use { zip ->
+                zip.putNextEntry(ZipEntry(Export.ZIP_JSON))
+                zip.write(text.encodeToByteArray())
+                zip.closeEntry()
+                for (p in photos) {
+                    val f = File(photoDir, p.file)
+                    if (!f.isFile) continue
+                    zip.putNextEntry(ZipEntry(Export.ZIP_PHOTOS + p.file))
+                    f.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+            }
+        }
+    }
+
+    /**
+     * Replaces everything with a zip export or a plain JSON export, in one transaction: a bad file changes nothing.
+     * Returns how many photos were left out because the file did not contain their image.
+     */
+    suspend fun import(input: InputStream): Int {
+        val source = BufferedInputStream(input)
+        val zip = withContext(Dispatchers.IO) {
+            source.mark(2)
+            (source.read() == 'P'.code && source.read() == 'K'.code).also { source.reset() }
+        }
+        if (!zip) return importJson(withContext(Dispatchers.IO) { source.readBytes().decodeToString() })
+
+        val staging = File(photoDir.path + ".import")
+        try {
+            val text = withContext(Dispatchers.IO) {
+                staging.deleteRecursively()
+                staging.mkdirs()
+                var text: String? = null
+                ZipInputStream(source).use { z ->
+                    while (true) {
+                        val entry = z.nextEntry ?: break
+                        val name = entry.name
+                        require(safeEntry(name)) { "unsafe path in the file: $name" }
+                        when {
+                            name == Export.ZIP_JSON -> text = z.readBytes().decodeToString()
+                            entry.isDirectory -> Unit
+                            name.startsWith(Export.ZIP_PHOTOS) -> {
+                                val file = name.removePrefix(Export.ZIP_PHOTOS)
+                                require(SAFE_NAME.matches(file)) { "unexpected entry in the file: $name" }
+                                File(staging, file).outputStream().use { z.copyTo(it) }
+                            }
+                        }
+                    }
+                }
+                text ?: throw IllegalArgumentException("no ${Export.ZIP_JSON} in the file")
+            }
+            return replace(parse(text), staging)
+        } finally {
+            withContext(Dispatchers.IO) { staging.deleteRecursively() }
+        }
+    }
+
+    /** A plain JSON export. Its photos have no image here, so none is kept. */
+    suspend fun importJson(text: String): Int = replace(parse(text), null)
+
+    private fun parse(text: String): Export {
         val e = json.decodeFromString(Export.serializer(), text)
         require(e.format == Export.FORMAT) { "not an Overgrown export" }
         require(e.version <= Export.VERSION) { "export version ${e.version} is newer than this app" }
         validate(e) // before anything is replaced: a bad file changes nothing
-        dao.replaceAll(e.places, e.plants, e.events, e.weather, e.calibration)
+        return e
     }
+
+    /**
+     * New photo files are copied in first and removed again if the database refuses the import;
+     * the old ones are deleted only after it succeeded. Returns how many photos had no image in [staging].
+     */
+    private suspend fun replace(parsed: Export, staging: File?): Int {
+        val (photos, missing) = parsed.photos.partition { staging != null && File(staging, it.file).isFile }
+        val old = dao.allPhotos().map { it.file }.toSet()
+        val copied = withContext(Dispatchers.IO) {
+            photoDir.mkdirs()
+            // A name already in use is the same photo (names are random), exported from this garden.
+            for (p in photos) File(staging, p.file).copyTo(File(photoDir, p.file), overwrite = true)
+            photos.map { it.file }.filter { it !in old }
+        }
+        try {
+            dao.replaceAll(parsed.places, parsed.plants, parsed.events, parsed.weather, parsed.calibration, photos)
+        } catch (t: Throwable) {
+            deleteFiles(copied)
+            throw t
+        }
+        deleteFiles(old - photos.map { it.file }.toSet())
+        return missing.size
+    }
+
+    /** Zip slip: an entry that could land outside the staging directory refuses the whole file. */
+    private fun safeEntry(name: String) =
+        !name.startsWith("/") && !name.startsWith("\\") && !(name.length > 1 && name[1] == ':') &&
+            name.split('/', '\\').none { it == ".." }
 
     /** Every value the planner will parse, checked now; throws IllegalArgumentException naming the first bad one. */
     private fun validate(e: Export) {
@@ -192,6 +345,11 @@ class Garden(
             date(w.date, "weather")
         }
         for (c in e.calibration) require(c.plantId in plantIds && c.grams > 0) { "bad calibration reading ${c.id}" }
+        for (p in e.photos) {
+            require(p.plantId in plantIds) { "photo ${p.id} refers to a missing plant" }
+            date(p.date, "photo ${p.id}")
+            require(SAFE_NAME.matches(p.file)) { "bad file name for photo ${p.id}" }
+        }
     }
 
     suspend fun calibrationCsv(): String = buildString {
@@ -216,12 +374,21 @@ data class Export(
     val events: List<EventEntity>,
     val weather: List<WeatherDayEntity>,
     val calibration: List<CalibrationEntity>,
+    /** Absent in version 1 exports. */
+    val photos: List<PhotoEntity> = emptyList(),
 ) {
     companion object {
         const val FORMAT = "overgrown-export"
-        const val VERSION = 1
+        /** 2 added photos. */
+        const val VERSION = 2
+        /** Zip layout: the JSON at the root, photo files in a folder beside it. */
+        const val ZIP_JSON = "garden.json"
+        const val ZIP_PHOTOS = "photos/"
     }
 }
+
+/** A plain file name: letters, digits, dot, dash, underscore, not starting with a dot. */
+private val SAFE_NAME = Regex("[A-Za-z0-9][A-Za-z0-9._-]*")
 
 /** Weather client cache in the database. */
 class DbResponseStore(private val dao: GardenDao) : ResponseStore {

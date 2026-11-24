@@ -53,7 +53,7 @@ class Graph(context: Context) {
             .getOrNull()
     }
 
-    val garden = Garden(db, settings, WeatherService(openMeteo, metNorway, settings), openMeteo, { careDb }, now, zone)
+    val garden = Garden(db, settings, WeatherService(openMeteo, metNorway, settings), openMeteo, { careDb }, now, zone, AndroidStorage.photos(context))
     val scheduler = Scheduler(context.applicationContext, this)
 
     /** Bumped after any change, so screens recompute. */

@@ -1,0 +1,540 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "83e2bfd634e5d386271bbf156276e535",
+    "entities": [
+      {
+        "tableName": "place",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `outdoor` INTEGER NOT NULL, `latitude` REAL NOT NULL, `longitude` REAL NOT NULL, `altitudeM` REAL, `rainExposure` TEXT NOT NULL, `windExposure` TEXT NOT NULL, `lightClass` TEXT, `lux` REAL, `dryAir` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "outdoor",
+            "columnName": "outdoor",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "latitude",
+            "columnName": "latitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "longitude",
+            "columnName": "longitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "altitudeM",
+            "columnName": "altitudeM",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "rainExposure",
+            "columnName": "rainExposure",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "windExposure",
+            "columnName": "windExposure",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightClass",
+            "columnName": "lightClass",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lux",
+            "columnName": "lux",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "dryAir",
+            "columnName": "dryAir",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "plant",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `placeId` INTEGER NOT NULL, `speciesSlug` TEXT, `archetypeId` TEXT, `canopyWidthCm` REAL NOT NULL, `potVolumeL` REAL NOT NULL, `potHeightCm` REAL, `potShape` TEXT NOT NULL, `potMaterial` TEXT NOT NULL, `drainageHoles` INTEGER NOT NULL, `inNurseryPot` INTEGER NOT NULL, `rootBound` INTEGER NOT NULL, `acquiredOn` TEXT NOT NULL, `lastRepotOn` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "placeId",
+            "columnName": "placeId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "speciesSlug",
+            "columnName": "speciesSlug",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "archetypeId",
+            "columnName": "archetypeId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "canopyWidthCm",
+            "columnName": "canopyWidthCm",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "potVolumeL",
+            "columnName": "potVolumeL",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "potHeightCm",
+            "columnName": "potHeightCm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "potShape",
+            "columnName": "potShape",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "potMaterial",
+            "columnName": "potMaterial",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "drainageHoles",
+            "columnName": "drainageHoles",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "inNurseryPot",
+            "columnName": "inNurseryPot",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rootBound",
+            "columnName": "rootBound",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "acquiredOn",
+            "columnName": "acquiredOn",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastRepotOn",
+            "columnName": "lastRepotOn",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_plant_placeId",
+            "unique": false,
+            "columnNames": [
+              "placeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_plant_placeId` ON `${TABLE_NAME}` (`placeId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "event",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `plantId` INTEGER NOT NULL, `date` TEXT NOT NULL, `type` TEXT NOT NULL, `ranOutOfBottom` INTEGER, `moisture` TEXT, `snoozedUntil` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "plantId",
+            "columnName": "plantId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ranOutOfBottom",
+            "columnName": "ranOutOfBottom",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "moisture",
+            "columnName": "moisture",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "snoozedUntil",
+            "columnName": "snoozedUntil",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_event_plantId_date",
+            "unique": false,
+            "columnNames": [
+              "plantId",
+              "date"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_event_plantId_date` ON `${TABLE_NAME}` (`plantId`, `date`)"
+          }
+        ]
+      },
+      {
+        "tableName": "weather_day",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`placeId` INTEGER NOT NULL, `date` TEXT NOT NULL, `tMinC` REAL NOT NULL, `tMaxC` REAL NOT NULL, `precipitationMm` REAL NOT NULL, `meanWindMs` REAL, `meanRelativeHumidityPct` REAL, `et0Mm` REAL, `provider` TEXT NOT NULL, `fetchedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`placeId`, `date`))",
+        "fields": [
+          {
+            "fieldPath": "placeId",
+            "columnName": "placeId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tMinC",
+            "columnName": "tMinC",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tMaxC",
+            "columnName": "tMaxC",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "precipitationMm",
+            "columnName": "precipitationMm",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "meanWindMs",
+            "columnName": "meanWindMs",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "meanRelativeHumidityPct",
+            "columnName": "meanRelativeHumidityPct",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "et0Mm",
+            "columnName": "et0Mm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAtEpochMs",
+            "columnName": "fetchedAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "placeId",
+            "date"
+          ]
+        }
+      },
+      {
+        "tableName": "climatology",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`placeId` INTEGER NOT NULL, `month` INTEGER NOT NULL, `tMinC` REAL NOT NULL, `tMaxC` REAL NOT NULL, `precipitationMm` REAL NOT NULL, `meanWindMs` REAL, `meanRelativeHumidityPct` REAL, `et0Mm` REAL, PRIMARY KEY(`placeId`, `month`))",
+        "fields": [
+          {
+            "fieldPath": "placeId",
+            "columnName": "placeId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "month",
+            "columnName": "month",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tMinC",
+            "columnName": "tMinC",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tMaxC",
+            "columnName": "tMaxC",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "precipitationMm",
+            "columnName": "precipitationMm",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "meanWindMs",
+            "columnName": "meanWindMs",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "meanRelativeHumidityPct",
+            "columnName": "meanRelativeHumidityPct",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "et0Mm",
+            "columnName": "et0Mm",
+            "affinity": "REAL"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "placeId",
+            "month"
+          ]
+        }
+      },
+      {
+        "tableName": "response_cache",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`key` TEXT NOT NULL, `body` TEXT NOT NULL, `fetchedAtEpochMs` INTEGER NOT NULL, `expiresEpochMs` INTEGER, `lastModified` TEXT, `notBeforeEpochMs` INTEGER, `consecutiveFailures` INTEGER NOT NULL, PRIMARY KEY(`key`))",
+        "fields": [
+          {
+            "fieldPath": "key",
+            "columnName": "key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "body",
+            "columnName": "body",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAtEpochMs",
+            "columnName": "fetchedAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expiresEpochMs",
+            "columnName": "expiresEpochMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "lastModified",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "notBeforeEpochMs",
+            "columnName": "notBeforeEpochMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "consecutiveFailures",
+            "columnName": "consecutiveFailures",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "key"
+          ]
+        }
+      },
+      {
+        "tableName": "calibration",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `plantId` INTEGER NOT NULL, `atEpochMs` INTEGER NOT NULL, `grams` REAL NOT NULL, `note` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "plantId",
+            "columnName": "plantId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "atEpochMs",
+            "columnName": "atEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "grams",
+            "columnName": "grams",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_calibration_plantId",
+            "unique": false,
+            "columnNames": [
+              "plantId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_calibration_plantId` ON `${TABLE_NAME}` (`plantId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "photo",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `plantId` INTEGER NOT NULL, `date` TEXT NOT NULL, `file` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "plantId",
+            "columnName": "plantId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "file",
+            "columnName": "file",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_photo_plantId_date",
+            "unique": false,
+            "columnNames": [
+              "plantId",
+              "date"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_photo_plantId_date` ON `${TABLE_NAME}` (`plantId`, `date`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '83e2bfd634e5d386271bbf156276e535')"
+    ]
+  }
+}

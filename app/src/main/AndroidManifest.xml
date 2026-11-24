@@ -31,5 +31,16 @@
         <receiver
             android:name=".notify.ActionReceiver"
             android:exported="false" />
+
+        <!-- Lets the camera app write one photo into the app's cache; no permission is needed for that. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.photos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/photo_paths" />
+        </provider>
     </application>
 </manifest>

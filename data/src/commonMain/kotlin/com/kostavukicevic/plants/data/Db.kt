@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.data
 
+import androidx.room.AutoMigration
 import androidx.room.ConstructedBy
 import androidx.room.Dao
 import androidx.room.Database
@@ -121,6 +122,18 @@ data class CalibrationEntity(
     val note: String = "",
 )
 
+/** A photo of a plant. The image is a file in the app's private photo directory, never in the database. */
+@Serializable
+@Entity(tableName = "photo", indices = [Index("plantId", "date")])
+data class PhotoEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val plantId: Long,
+    /** The day the photo was taken, as an ISO date. */
+    val date: String,
+    /** A plain file name inside the photo directory, never a path. */
+    val file: String,
+)
+
 @Dao
 interface GardenDao {
     @Query("SELECT * FROM place ORDER BY name") fun places(): Flow<List<PlaceEntity>>
@@ -158,26 +171,36 @@ interface GardenDao {
     @Query("SELECT * FROM calibration WHERE plantId = :plantId ORDER BY atEpochMs") fun calibrationFlow(plantId: Long): Flow<List<CalibrationEntity>>
     @Query("SELECT * FROM calibration ORDER BY plantId, atEpochMs") suspend fun allCalibration(): List<CalibrationEntity>
 
+    @Insert suspend fun insertPhoto(p: PhotoEntity): Long
+    @Query("SELECT * FROM photo WHERE plantId = :plantId ORDER BY date DESC, id DESC") fun photosFlow(plantId: Long): Flow<List<PhotoEntity>>
+    @Query("SELECT * FROM photo WHERE plantId = :plantId") suspend fun photosOf(plantId: Long): List<PhotoEntity>
+    @Query("SELECT * FROM photo ORDER BY id") suspend fun allPhotos(): List<PhotoEntity>
+    @Query("SELECT * FROM photo WHERE id = :id") suspend fun photo(id: Long): PhotoEntity?
+    @Query("DELETE FROM photo WHERE id = :id") suspend fun deletePhoto(id: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun importPlaces(p: List<PlaceEntity>)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun importPlants(p: List<PlantEntity>)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun importEvents(e: List<EventEntity>)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun importCalibration(c: List<CalibrationEntity>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun importPhotos(p: List<PhotoEntity>)
     @Query("DELETE FROM place") suspend fun clearPlaces()
     @Query("DELETE FROM plant") suspend fun clearPlants()
     @Query("DELETE FROM event") suspend fun clearEvents()
     @Query("DELETE FROM weather_day") suspend fun clearWeather()
     @Query("DELETE FROM calibration") suspend fun clearCalibration()
     @Query("DELETE FROM climatology") suspend fun clearClimatology()
+    @Query("DELETE FROM photo") suspend fun clearPhotos()
     @Query("DELETE FROM event WHERE plantId = :plantId") suspend fun deleteEventsOf(plantId: Long)
     @Query("DELETE FROM calibration WHERE plantId = :plantId") suspend fun deleteCalibrationOf(plantId: Long)
+    @Query("DELETE FROM photo WHERE plantId = :plantId") suspend fun deletePhotosOf(plantId: Long)
     @Query("SELECT id FROM plant WHERE placeId = :placeId") suspend fun plantIdsAt(placeId: Long): List<Long>
     @Query("DELETE FROM weather_day WHERE placeId = :placeId") suspend fun deleteWeatherAt(placeId: Long)
     @Query("DELETE FROM climatology WHERE placeId = :placeId") suspend fun deleteClimatologyAt(placeId: Long)
 
-    /** A plant and everything recorded about it. */
+    /** A plant and everything recorded about it. The caller deletes the photo files. */
     @Transaction
     suspend fun deletePlantFully(plantId: Long) {
-        deleteEventsOf(plantId); deleteCalibrationOf(plantId); deletePlant(plantId)
+        deleteEventsOf(plantId); deleteCalibrationOf(plantId); deletePhotosOf(plantId); deletePlant(plantId)
     }
 
     /** A place, its plants and its weather. */
@@ -191,20 +214,22 @@ interface GardenDao {
     @Transaction
     suspend fun replaceAll(
         places: List<PlaceEntity>, plants: List<PlantEntity>, events: List<EventEntity>,
-        weather: List<WeatherDayEntity>, calibration: List<CalibrationEntity>,
+        weather: List<WeatherDayEntity>, calibration: List<CalibrationEntity>, photos: List<PhotoEntity>,
     ) {
         // Climatology is keyed by place id and not exported: an imported place 1 may be another city.
-        clearCalibration(); clearEvents(); clearWeather(); clearClimatology(); clearPlants(); clearPlaces()
-        importPlaces(places); importPlants(plants); importEvents(events); upsertWeather(weather); importCalibration(calibration)
+        clearPhotos(); clearCalibration(); clearEvents(); clearWeather(); clearClimatology(); clearPlants(); clearPlaces()
+        importPlaces(places); importPlants(plants); importEvents(events); upsertWeather(weather); importCalibration(calibration); importPhotos(photos)
     }
 }
 
 @Database(
     entities = [
         PlaceEntity::class, PlantEntity::class, EventEntity::class, WeatherDayEntity::class,
-        ClimatologyEntity::class, ResponseEntity::class, CalibrationEntity::class,
+        ClimatologyEntity::class, ResponseEntity::class, CalibrationEntity::class, PhotoEntity::class,
     ],
-    version = 1,
+    version = 2,
+    // 2 adds the photo table and changes nothing else.
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
 )
 @ConstructedBy(GardenDbConstructor::class)
 abstract class GardenDb : RoomDatabase() {
