@@ -14,6 +14,7 @@ import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.RoomDatabaseConstructor
 import androidx.room.Transaction
+import androidx.room.Update
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
@@ -153,6 +154,8 @@ interface GardenDao {
     @Query("SELECT * FROM event WHERE plantId = :plantId ORDER BY date DESC, id DESC") fun eventsFlow(plantId: Long): Flow<List<EventEntity>>
     @Query("SELECT * FROM event ORDER BY id") suspend fun allEvents(): List<EventEntity>
     @Query("DELETE FROM event WHERE id = :id") suspend fun deleteEvent(id: Long)
+    @Query("SELECT * FROM event WHERE id = :id") suspend fun event(id: Long): EventEntity?
+    @Update suspend fun updateEvent(e: EventEntity)
 
     /** A later forecast for a day replaces an earlier one; that day's last forecast is its pseudo-observation. */
     @Upsert suspend fun upsertWeather(days: List<WeatherDayEntity>)
