@@ -6,7 +6,7 @@ Handover for the next coordinator. Read this, then run `nonslop status`. The own
 
 - `stcksmsh/overgrown` (public, GPL-3.0-only): app, engine, weather, storage. Local `/secondary/Programming/Github/Overgrown`. Submodule `overgrown-data` pinned at `7756c25`.
 - `stcksmsh/overgrown-data` (private, AGPL-3.0-only): care database. Reviewed archetypes: hardy-potted-conifer and the four indoor ones (data D9). Species entries are drafts.
-- CI is OFF until close to V1 (D37): workflow disabled, `.nonslop.toml [merge] allow_no_ci = true`. The local test command is the gate; every brief must require it. Re-enable both before the first beta.
+- CI is OFF until close to V1 (D37): the `CI` workflow is disabled in GitHub (`gh workflow disable CI`; the file `.github/workflows/ci.yml` is unchanged, `gh workflow enable CI` restores it) and `.nonslop.toml [merge] allow_no_ci = true`. The local test command is the gate; every brief must require it. Re-enable both before the first beta.
 - Merging: the owner said "merge each time". Merge app PRs yourself once `nonslop slice verify` passes at the head, a fresh review (clean or minor) is recorded at that head (record it BEFORE calling merge), and the branch contains current main. If the permission check refuses, ask the owner once for a standing "merge each time". Data-repo PRs: the owner runs `! gh pr merge <n> -R stcksmsh/overgrown-data --merge`.
 - Care data: the agent decides (owner is not a botanist; never ask him to approve plant data). Fresh-context source check, then mark reviewed.
 - Speed: the owner wants fast iteration. Two builders in parallel on non-overlapping scopes; each slice its own `res/values/strings_<slice>.xml`; send back only real bugs (must-fix), batch the rest into one round or a later polish slice.
@@ -24,7 +24,7 @@ Handover for the next coordinator. Read this, then run `nonslop status`. The own
 
 ## Next, in order
 
-1. Settings (D31.11: notification time 08:00, theme follow-system/light/dark, metric only, export/import with brick confirmation, weighing moved here) in `strings_settings.xml`.
+1. Settings (owner answers S1-S3 below: one reminder at 08:00, theme follows system/light/dark, metric only; export/import with brick confirmation; weighing moved here per D31.11) in `strings_settings.xml`.
 2. "Use my location": Natural Earth populated places (public domain), approximate permission on tap, rounded to ~1 km.
 3. Polish slice: leading-zero dates in history ("04 Nov"); unused strings in strings.xml (plant_state, plant_confidence_*, plant_learned, notif_alert_title, refreshing); dark-mode empty learning dots; Delete as brick per DESIGN; minors in PR bodies of #21, #25, #27 (#27: unlocked read-modify-write of the posted-events pref; overlap split case).
 4. Data: ~12 archetypes, then ~300 common names mapped to them (agent decides, source-checked).
