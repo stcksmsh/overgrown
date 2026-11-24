@@ -156,6 +156,15 @@ class AlertEventsTest {
     }
 
     @Test
+    fun dismissComesBackWhenColdGetsStrongTheSameDay() {
+        val event = cold(ROOT_FREEZE_CAUTION to mon, ROOT_FREEZE_CAUTION to tue)
+        val acks = acked(emptyList(), event, dismissedOn = mon)
+        assertEquals(emptyList(), applyAcks(listOf(event), acks, mon).first)
+        val worse = cold(ROOT_FREEZE_CAUTION to mon, ROOT_FREEZE_STRONG to tue)
+        assertEquals(listOf(worse), applyAcks(listOf(worse), acks, mon).first)
+    }
+
+    @Test
     fun ackedReplacesTheEarlierDoneForTheSameEvent() {
         val event = cold(ROOT_FREEZE_CAUTION to mon)
         val worse = cold(ROOT_FREEZE_STRONG to mon)

@@ -92,13 +92,14 @@ data class AlertAck(
  *
  * Done hides the event until it gets more severe or a plant not in it at Done time joins it; a matched Done
  * takes the event's later end, so an extended event stays hidden until its new end. Dismiss hides the event
- * on the day it was given. Returns the visible events and the acks to keep: those whose range has ended and
+ * on the day it was given, unless it gets more severe. Returns the visible events and the acks to keep: those whose range has ended and
  * dismissals from earlier days are dropped.
  */
 fun applyAcks(events: List<AlertEvent>, acks: List<AlertAck>, today: LocalDate): Pair<List<AlertEvent>, List<AlertAck>> {
     val kept = acks.filter { LocalDate.parse(it.end) >= today && (it.dismissedOn == null || LocalDate.parse(it.dismissedOn) == today) }.toMutableList()
     val visible = events.filter { e ->
-        val dismissed = kept.any { it.dismissedOn != null && it.overlaps(e) }
+        // A frost warning that turned strong after "not now" is the dangerous case: it must not stay hidden.
+        val dismissed = kept.any { it.dismissedOn != null && it.overlaps(e) && e.severity.rank() <= it.severity.rank() }
         val i = kept.indexOfFirst { it.dismissedOn == null && it.overlaps(e) && e.severity.rank() <= it.severity.rank() && it.plantIds.containsAll(e.plants.map { p -> p.id }) }
         if (i >= 0 && e.end > LocalDate.parse(kept[i].end)) kept[i] = kept[i].copy(end = e.end.toString())
         !dismissed && i < 0
