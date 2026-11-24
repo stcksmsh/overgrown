@@ -104,7 +104,11 @@ data class WeatherDay(
     val tMeanC: Double get() = (tMinC + tMaxC) / 2
 }
 
-enum class Moisture { TOO_WET, OK, DRY, BONE_DRY }
+/**
+ * A soil-moisture answer. [DRY_OR_BONE_DRY] is the quick three-way question's "Dry" (Wet / OK /
+ * Dry), which does not tell Dry from Bone dry (docs/DECISIONS.md D31.4).
+ */
+enum class Moisture { TOO_WET, OK, DRY, BONE_DRY, DRY_OR_BONE_DRY }
 
 sealed interface Event {
     val date: LocalDate

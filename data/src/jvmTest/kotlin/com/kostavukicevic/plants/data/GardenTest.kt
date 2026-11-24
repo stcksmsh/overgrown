@@ -108,6 +108,19 @@ class GardenTest {
         Planner.status(fern, place, emptyList(), emptyList(), emptyList(), null, today).state.depletion
 
     @Test
+    fun aQuickDryLeadsToTheSameActionAsDry() {
+        fun after(answer: String) = Planner.status(
+            fern, indoor("MEDIUM"),
+            listOf(EventEntity(id = 1, plantId = 1, date = today.plus(DatePeriod(days = -1)).toString(), type = "CHECK_IN", moisture = answer)),
+            emptyList(), emptyList(), null, today,
+        ).today
+        val dry = after("DRY")
+        assertTrue(dry is Action.WaterNow || dry is Action.CheckSoil, "after Dry: $dry")
+        assertEquals(dry::class, after("DRY_OR_BONE_DRY")::class)
+        assertEquals(Action.None::class, after("OK")::class)
+    }
+
+    @Test
     fun indoorUseFollowsLightAndDryAirWithoutWeather() {
         val s = Planner.status(fern, indoor("MEDIUM"), emptyList(), emptyList(), emptyList(), null, today)
         assertIs<Place.Indoor>(s.engine.place)

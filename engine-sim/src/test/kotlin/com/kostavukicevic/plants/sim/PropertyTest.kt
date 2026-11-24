@@ -175,7 +175,8 @@ class PropertyTest {
 
     /**
      * A plant that really uses twice (or half) what the engine predicts. The person answers the
-     * true band at every prompt.
+     * true band at every prompt, or, with the quick Wet / OK / Dry question, the quick "Dry" for
+     * either dry band.
      *
      * What the brief's learning rule guarantees, and this checks:
      * - harmless: after [HARMLESS_AFTER] answers the person never reports soil two bands drier
@@ -196,7 +197,7 @@ class PropertyTest {
             .map { it.copy(place = Place.Indoor(44.82, LightClass.MEDIUM), profile = it.profile.copy(winterRules = false)) }
             // A daily prompt cannot protect a pot that loses more than 15 % of its water a day.
             .filter { WaterBalance.dailyUseMl(it, day, 2.0) / WaterBalance.capacityMl(it.pot) <= 0.15 }
-        checkAll(indoorPlants, Arb.element(2.0, 0.5)) { plant, trueK ->
+        checkAll(indoorPlants, Arb.element(2.0, 0.5), Arb.boolean()) { plant, trueK, quick ->
             val capacity = WaterBalance.capacityMl(plant.pot)
             val intended = bandOf(WaterBalance.dryFraction(plant.profile))
             var s = Engine.initial(plant)
@@ -207,14 +208,15 @@ class PropertyTest {
                 if (answers >= HARMLESS_AFTER + 30) break
                 val action = Engine.recommend(plant, s, listOf(day, day)).action
                 if (action is Action.CheckSoil || action is Action.WaterNow) {
-                    val answer = bandOf(truth)
+                    val trueBand = bandOf(truth)
+                    val answer = if (quick && trueBand.ordinal >= Moisture.DRY.ordinal) Moisture.DRY_OR_BONE_DRY else trueBand
                     answers++
-                    val tooDry = answer.ordinal >= intended.ordinal + 2
+                    val tooDry = trueBand.ordinal >= intended.ordinal + 2
                     // Told to water while clearly wet. A plant prompted at the "too wet" edge (wet feet) is meant to be wet.
                     val wateredWet = answer == Moisture.TOO_WET && action is Action.WaterNow &&
                         WaterBalance.dryFraction(plant.profile) > Coefficients.BAND_TOO_WET_MAX + 0.05
                     if (tooDry || wateredWet) lastHarm = answers
-                    if (answer == Moisture.DRY || answer == Moisture.BONE_DRY || action is Action.WaterNow) {
+                    if (trueBand.ordinal >= Moisture.DRY.ordinal || action is Action.WaterNow) {
                         s = Engine.apply(plant, s, Event.Watered(day.date, ranOutOfBottom = true, moisture = answer))
                         truth = 0.0
                     } else {

@@ -146,7 +146,8 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
         }
         Text(stringResource(R.string.plant_check_in), style = MaterialTheme.typography.titleMedium)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (m in Moisture.entries) OutlinedButton(onClick = { act { g.garden.checkIn(plantId, m.name) } }) { Text(Texts.moisture(c, m)) }
+            // The detailed answers; the quick "Dry" belongs to the Wet / OK / Dry prompts (D31.4).
+            for (m in listOf(Moisture.TOO_WET, Moisture.OK, Moisture.DRY, Moisture.BONE_DRY)) OutlinedButton(onClick = { act { g.garden.checkIn(plantId, m.name) } }) { Text(Texts.moisture(c, m)) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { act { g.garden.moved(plantId) } }) { Text(stringResource(R.string.plant_moved)) }
