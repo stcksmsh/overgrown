@@ -42,7 +42,7 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 
 @Composable
-fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onSettings: () -> Unit) {
+fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit, onSettings: () -> Unit) {
     val g = rememberGraph()
     val c = LocalContext.current
     val tick = changeTick()
@@ -62,7 +62,7 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onSettings: () -> Un
         title = stringResource(R.string.today_title),
         actions = {
             TextButton(onClick = onAdd) { Text(stringResource(R.string.add_plant)) }
-            TextButton(onClick = onSettings) { Text(stringResource(R.string.settings)) }
+            TopMenu(onPlaces, onSettings)
         },
     ) {
         if (!notifAllowed && Build.VERSION.SDK_INT >= 33) {

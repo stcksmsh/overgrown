@@ -13,6 +13,20 @@
     <string name="edit">Edit</string>
     <string name="yes">Yes</string>
     <string name="no">No</string>
+    <string name="undo">Undo</string>
+    <string name="deleted">Deleted %1$s</string>
+    <string name="delete_failed">Could not delete %1$s.</string>
+    <string name="edit_named">Edit %1$s</string>
+    <string name="delete_named">Delete %1$s</string>
+    <string name="top_menu">Places and settings</string>
+
+    <!-- Plants and Places lists -->
+    <string name="plants_title">Plants</string>
+    <string name="plants_empty">No plants yet.</string>
+    <string name="places_title">Places</string>
+    <string name="places_empty">No places yet.</string>
+    <string name="add_place">Add place</string>
+    <string name="place_in_use">%1$s still has plants: %2$s. Move or delete them first.</string>
 
     <!-- Today -->
     <string name="today_title">Today</string>
