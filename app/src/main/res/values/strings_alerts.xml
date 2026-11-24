@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- Weather alert events: the Today card and the alert notification. -->
+<resources>
+    <!-- What the weather does, over the event's days. -->
+    <string name="event_cold">Cold nights %1$s.</string>
+    <string name="event_cold_strong">Severe frost %1$s.</string>
+    <!-- What to do, naming every plant in the event. -->
+    <string name="event_do_cold">Move %1$s against a wall.</string>
+    <string name="event_do_cold_strong">Move %1$s somewhere sheltered.</string>
+    <string name="event_do_heat">Shade %1$s and check the soil more often.</string>
+    <string name="event_do_heavy_rain">Make sure %1$s can drain.</string>
+    <string name="event_do_wind">Move %1$s out of the wind.</string>
+    <string name="event_do_waterlogging">Tip the standing water out of %1$s.</string>
+    <!-- Plant names: "Boris and Fern"; three or more use today_day_list before the last. -->
+    <string name="event_names_last">%1$s and %2$s</string>
+    <!-- Notification titles start with the event: "Frost Mon-Wed: Boris". -->
+    <string name="notif_event_frost">Frost %1$s: %2$s</string>
+    <string name="notif_event_heat">Heat %1$s: %2$s</string>
+    <string name="notif_event_heavy_rain">Heavy rain %1$s: %2$s</string>
+    <string name="notif_event_wind">Wind %1$s: %2$s</string>
+    <string name="notif_event_waterlogging">Waterlogged roots: %1$s</string>
+    <string name="alert_done">Done</string>
+    <string name="alert_dismiss">Dismiss</string>
+</resources>

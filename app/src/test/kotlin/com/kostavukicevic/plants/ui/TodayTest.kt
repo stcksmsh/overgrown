@@ -164,15 +164,17 @@ class TodayTest {
                 fixture("Elm", Action.WaterNow(500, PromptReason.DRY_BY_MODEL), depletion = 0.9, alerts = frost),
             ),
         )
-        val alert = compose.onAllNodesWithText(s(R.string.alert_root_freeze_caution, "25 Nov")).fetchSemanticsNodes().maxOf { it.positionInRoot.y }
+        val card = "${s(R.string.event_cold, "Wed")} ${s(R.string.event_do_cold, "Cedar and Elm")}"
+        val alert = compose.onAllNodesWithText(card).fetchSemanticsNodes().maxOf { it.positionInRoot.y }
         val water = compose.onAllNodesWithText(s(R.string.plant_watered)).fetchSemanticsNodes().map { it.positionInRoot.y }
         val soil = top(s(R.string.today_soil_question))
         val fine = compose.onAllNodesWithText(s(R.string.tile_fine_check, "Thu"), substring = true).fetchSemanticsNodes().minOf { it.positionInRoot.y }
         assertTrue("alerts above Do now", alert < water.min())
         assertTrue("Do now above All fine", maxOf(water.max(), soil) < fine)
-        // Elm has an alert and a water card, and is not also a resting tile; Cedar has an alert block and a tile.
-        compose.onAllNodesWithText("Elm").assertCountEquals(2)
-        compose.onAllNodesWithText("Cedar").assertCountEquals(2)
+        // Cedar and Elm share one alert card. Elm also has a water card and is not also a resting tile; Cedar has a tile.
+        compose.onAllNodesWithText(card).assertCountEquals(1)
+        compose.onAllNodesWithText("Elm").assertCountEquals(1)
+        compose.onAllNodesWithText("Cedar").assertCountEquals(1)
         compose.onAllNodesWithText("Ash").assertCountEquals(1)
         compose.onAllNodes(hasText(s(R.string.tile_fine_check, "Fri"))).assertCountEquals(1)
     }

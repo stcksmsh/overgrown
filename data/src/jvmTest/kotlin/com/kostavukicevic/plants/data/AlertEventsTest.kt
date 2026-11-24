@@ -86,6 +86,15 @@ class AlertEventsTest {
     }
 
     @Test
+    fun keyChangesWithSeverityAndPlantsButNotWithTheEnd() {
+        fun key(vararg s: PlantStatus) = alertEvents(s.toList(), mon).single().key
+        val caution = key(boris(ROOT_FREEZE_CAUTION to mon, ROOT_FREEZE_CAUTION to tue))
+        assertEquals(caution, key(boris(ROOT_FREEZE_CAUTION to mon, ROOT_FREEZE_CAUTION to tue, ROOT_FREEZE_CAUTION to wed)))
+        assertTrue(caution != key(boris(ROOT_FREEZE_CAUTION to mon, ROOT_FREEZE_STRONG to tue)))
+        assertTrue(caution != key(boris(ROOT_FREEZE_CAUTION to mon, ROOT_FREEZE_CAUTION to tue), fern(ROOT_FREEZE_CAUTION to tue)))
+    }
+
+    @Test
     fun differentKindsAreSeparateEvents() {
         val events = alertEvents(listOf(boris(ROOT_FREEZE_CAUTION to mon, WIND to mon)), mon)
         assertEquals(listOf("COLD $mon..$mon ROOT_FREEZE_CAUTION [Boris]", "WIND $mon..$mon WIND [Boris]"), events.summary())

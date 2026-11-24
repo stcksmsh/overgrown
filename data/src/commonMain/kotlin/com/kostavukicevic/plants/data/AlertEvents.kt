@@ -32,7 +32,13 @@ data class AlertEvent(
     val severity: AlertType,
     /** Sorted by name. */
     val plants: List<PlantEntity>,
-)
+) {
+    /**
+     * Names the event for "notify once". Unlike the overlap match of [AlertAck], it changes when the event gets
+     * more severe or reaches another plant, which are exactly the cases that must notify again.
+     */
+    val key: String get() = "event-$kind-$start-$severity-${plants.map { it.id }.sorted().joinToString(",")}"
+}
 
 /**
  * Groups the per-plant, per-day alerts into events. Days before [today] are ignored. Plants in different
