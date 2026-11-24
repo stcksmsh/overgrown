@@ -7,8 +7,7 @@
     <string name="plant_water_left">water left</string>
 
     <string name="plant_next_days">Next 10 days</string>
-    <string name="plant_frost_day">Frost %1$s</string>
-    <string name="plant_frost_days">Frost %1$s–%2$s</string>
+    <string name="plant_frost_days">Frost %1$s</string>
     <string name="plant_strip_day">%1$s: %2$d percent water left</string>
     <string name="plant_strip_frost">frost</string>
     <string name="plant_strip_rain">rain</string>
@@ -31,5 +30,6 @@
     <string name="plant_day_after">Day after</string>
     <string name="plant_entry_drained">Water ran out of the bottom</string>
     <string name="plant_entry_future">That day has not come yet.</string>
-    <string name="plant_entry_failed">Could not save: %1$s</string>
+    <string name="plant_entry_before_acquired">That is before you got the plant (%1$s).</string>
+    <string name="plant_entry_failed">Could not save the change.</string>
 </resources>

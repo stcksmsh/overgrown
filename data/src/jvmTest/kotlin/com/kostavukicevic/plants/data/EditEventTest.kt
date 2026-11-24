@@ -86,8 +86,61 @@ class EditEventTest {
         garden.checkIn(p, "OK")
         val e = only(p)
 
-        assertFailsWith<IllegalArgumentException> { garden.updateEvent(e.copy(date = "2026-11-24")) }
+        assertFailsWith<EventDateFuture> { garden.updateEvent(e.copy(date = "2026-11-24")) }
         assertEquals(e, only(p))
+    }
+
+    @Test
+    fun dateBeforeAcquiredIsRefused() = runTest {
+        val p = plant()
+        garden.checkIn(p, "OK")
+        val e = only(p)
+
+        assertFailsWith<EventDateBeforeAcquired> { garden.updateEvent(e.copy(date = "2026-10-31")) }
+        garden.updateEvent(e.copy(date = "2026-11-01"))
+        assertEquals(e.copy(date = "2026-11-01"), only(p))
+    }
+
+    @Test
+    fun editingARepotMovesTheLastRepot() = runTest {
+        val p = plant()
+        garden.repotted(p)
+        val repot = only(p)
+        assertEquals("2026-11-23", garden.plant(p)?.lastRepotOn)
+
+        garden.updateEvent(repot.copy(date = "2026-11-10"))
+        assertEquals("2026-11-10", garden.plant(p)?.lastRepotOn)
+
+        garden.fed(p)
+        garden.updateEvent(repot.copy(date = "2026-11-12"))
+        assertEquals("2026-11-12", garden.plant(p)?.lastRepotOn)
+    }
+
+    @Test
+    fun deletingARepotFallsBackToTheOneBefore() = runTest {
+        val p = plant()
+        garden.repotted(p)
+        val older = only(p)
+        garden.updateEvent(older.copy(date = "2026-11-05"))
+        garden.repotted(p)
+        val newer = garden.events(p).first().first { it.id != older.id }
+
+        garden.deleteEvent(newer.id)
+        assertEquals("2026-11-05", garden.plant(p)?.lastRepotOn)
+
+        garden.deleteEvent(older.id)
+        assertEquals(null, garden.plant(p)?.lastRepotOn)
+    }
+
+    @Test
+    fun deletingAnotherEntryLeavesTheLastRepot() = runTest {
+        val p = plant()
+        garden.repotted(p)
+        garden.fed(p)
+        val fed = garden.events(p).first().first { it.type == "FED" }
+
+        garden.deleteEvent(fed.id)
+        assertEquals("2026-11-23", garden.plant(p)?.lastRepotOn)
     }
 
     @Test

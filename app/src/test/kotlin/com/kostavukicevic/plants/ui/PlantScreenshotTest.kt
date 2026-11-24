@@ -90,17 +90,17 @@ class PlantScreenshotTest(private val dark: Boolean, private val fontScale: Floa
     private fun log(plantId: Long, date: String, type: String, moisture: String? = null, ranOut: Boolean? = null) =
         runBlocking { db.dao().insertEvent(EventEntity(plantId = plantId, date = date, type = type, moisture = moisture, ranOutOfBottom = ranOut)) }
 
-    /** An outdoor juniper with frost on Friday and Saturday, rain on Monday, and entries this week and last. */
+    /** An outdoor juniper with frost on Friday and Monday, rain on Sunday between, and entries this week and last. */
     private fun outdoorPlant(): Long = runBlocking {
         val balcony = g.garden.savePlace(PlaceEntity(name = "Balcony", outdoor = true, latitude = 44.8, longitude = 20.5))
         val today = LocalDate(2026, 11, 24)
         db.dao().upsertWeather(
             (0 until 10).map { i ->
-                val frost = i == 3 || i == 4
+                val frost = i == 3 || i == 6
                 WeatherDayEntity(
                     placeId = balcony, date = today.plus(DatePeriod(days = i)).toString(),
                     tMinC = if (frost) -3.0 else 4.0, tMaxC = if (frost) 3.0 else 11.0,
-                    precipitationMm = if (i == 6) 8.0 else 0.0, provider = "test", fetchedAtEpochMs = PLANT_TEST_NOW.toEpochMilliseconds(),
+                    precipitationMm = if (i == 5) 8.0 else 0.0, provider = "test", fetchedAtEpochMs = PLANT_TEST_NOW.toEpochMilliseconds(),
                 )
             },
         )

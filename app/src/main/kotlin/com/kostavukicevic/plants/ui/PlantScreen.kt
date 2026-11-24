@@ -52,14 +52,18 @@ import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
 import com.kostavukicevic.plants.caredb.Context as CareContext
 import com.kostavukicevic.plants.data.CareSource
+import com.kostavukicevic.plants.data.EventDateBeforeAcquired
+import com.kostavukicevic.plants.data.EventDateFuture
 import com.kostavukicevic.plants.data.EventEntity
 import com.kostavukicevic.plants.data.OutlookDay
 import com.kostavukicevic.plants.data.PhotoEntity
 import com.kostavukicevic.plants.data.PlantStatus
+import com.kostavukicevic.plants.engine.Action
 import com.kostavukicevic.plants.engine.Coefficients
 import com.kostavukicevic.plants.ui.theme.Overgrown
 import com.kostavukicevic.plants.ui.theme.Spacing
 import com.kostavukicevic.plants.ui.theme.Type
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -148,7 +152,9 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
             )
 
             SurfaceCard {
-                Text(Texts.action(c, s.today), style = Type.body.copy(fontWeight = FontWeight.SemiBold), color = colors.ink)
+                // "Nothing to do" next to a frost warning reads as "no need to protect it"; only watering is meant.
+                val action = if (s.today == Action.None && outlook.any { it.frost }) stringResource(R.string.today_nothing_to_water) else Texts.action(c, s.today)
+                Text(action, style = Type.body.copy(fontWeight = FontWeight.SemiBold), color = colors.ink)
                 Texts.reason(c, s)?.let { Text(it, style = Type.secondary, color = colors.ink) }
                 for (r in s.reminders) Text(Texts.reminder(c, r), style = Type.secondary, color = colors.ink)
                 for (a in s.alerts) Text(Texts.alert(c, a), style = Type.secondary, color = colors.errorText)
@@ -166,7 +172,8 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
             LearningDots(
                 name = s.plant.name,
                 // The engine keeps no answer count; every logged soil answer is one (check-ins and answers given when watering).
-                answers = log.count { it.moisture != null },
+                // Entries waiting out a delete's Undo no longer count.
+                answers = log.count { it.moisture != null && "event:${it.id}" !in undo.hidden },
                 learned = s.state.belief.sd < Coefficients.CONFIDENT_SD,
             )
 
@@ -230,19 +237,25 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
             error = editError,
             onDismiss = { editing = null },
             onSave = { edited ->
-                if (LocalDate.parse(edited.date) > g.garden.today()) {
-                    editError = res.getString(R.string.plant_entry_future)
-                } else {
-                    scope.launch {
-                        try {
-                            g.garden.updateEvent(edited)
-                            editing = null
-                            // The engine replays from the events, so the plant and Today recompute.
-                            g.scheduler.reschedule()
-                            g.changed()
-                        } catch (x: IllegalArgumentException) {
-                            editError = res.getString(R.string.plant_entry_failed, x.message)
-                        }
+                scope.launch {
+                    editError = try {
+                        g.garden.updateEvent(edited)
+                        null
+                    } catch (x: CancellationException) {
+                        throw x
+                    } catch (_: EventDateFuture) {
+                        res.getString(R.string.plant_entry_future)
+                    } catch (x: EventDateBeforeAcquired) {
+                        res.getString(R.string.plant_entry_before_acquired, Texts.date(x.acquiredOn))
+                    } catch (_: Exception) {
+                        // A database failure, or a value the dialog should not have offered; the details mean nothing to the person.
+                        res.getString(R.string.plant_entry_failed)
+                    }
+                    if (editError == null) {
+                        editing = null
+                        // The engine replays from the events, so the plant and Today recompute.
+                        g.scheduler.reschedule()
+                        g.changed()
                     }
                 }
             },

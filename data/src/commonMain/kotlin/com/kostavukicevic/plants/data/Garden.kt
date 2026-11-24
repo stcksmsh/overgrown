@@ -56,6 +56,10 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import kotlin.time.Instant
 
+class EventDateFuture(date: LocalDate) : IllegalArgumentException("date is in the future: $date")
+class EventDateBeforeAcquired(date: LocalDate, val acquiredOn: LocalDate) :
+    IllegalArgumentException("date $date is before the plant was acquired on $acquiredOn")
+
 /** One day of the plant screen's strip; [waterLeft] is 0..1 at the start of the day. */
 data class OutlookDay(val date: LocalDate, val waterLeft: Double, val frost: Boolean, val rain: Boolean, val heat: Boolean)
 
@@ -98,21 +102,37 @@ class Garden(
         dao.deletePlaceFully(id)
         deleteFiles(photos.map { it.file })
     }
-    suspend fun deleteEvent(id: Long) = dao.deleteEvent(id)
+    suspend fun deleteEvent(id: Long) {
+        val stored = dao.event(id)
+        dao.deleteEvent(id)
+        if (stored?.type == "REPOTTED") syncLastRepot(stored.plantId)
+    }
 
     /**
      * Changes a logged event's date, answer and drained flag; its plant, type and snooze end stay.
-     * Refuses a future date, a check-in without an answer and an answer the planner could not
-     * parse, as import does. Throws IllegalArgumentException naming what is wrong.
+     * Refuses a future date, a date before the plant was acquired (the planner starts there and would
+     * drop the entry), a check-in without an answer and an answer the planner could not parse, as
+     * import does. Throws [EventDateFuture], [EventDateBeforeAcquired] or IllegalArgumentException.
      */
     suspend fun updateEvent(edited: EventEntity) {
         val stored = requireNotNull(dao.event(edited.id)) { "no event ${edited.id}" }
+        val plant = requireNotNull(dao.plant(stored.plantId)) { "no plant ${stored.plantId}" }
         // Both parse calls throw IllegalArgumentException on a bad value.
         val date = LocalDate.parse(edited.date)
-        require(date <= today()) { "date is in the future: $date" }
+        if (date > today()) throw EventDateFuture(date)
+        val acquiredOn = LocalDate.parse(plant.acquiredOn)
+        if (date < acquiredOn) throw EventDateBeforeAcquired(date, acquiredOn)
         if (stored.type == "CHECK_IN") require(edited.moisture != null) { "a check-in needs an answer" }
         edited.moisture?.let(Moisture::valueOf)
         dao.updateEvent(stored.copy(date = edited.date, moisture = edited.moisture, ranOutOfBottom = edited.ranOutOfBottom))
+        if (stored.type == "REPOTTED") syncLastRepot(stored.plantId)
+    }
+
+    /** Keeps the plant's last repot on its latest repot entry, or none, so the reminder follows the history. */
+    private suspend fun syncLastRepot(plantId: Long) {
+        val plant = dao.plant(plantId) ?: return
+        val last = dao.events(plantId).lastOrNull { it.type == "REPOTTED" }?.date
+        dao.upsertPlant(plant.copy(lastRepotOn = last))
     }
 
     suspend fun watered(plantId: Long, ranOutOfBottom: Boolean, moisture: String? = null) =

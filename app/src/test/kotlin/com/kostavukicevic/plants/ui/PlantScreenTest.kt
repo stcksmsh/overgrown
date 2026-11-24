@@ -158,6 +158,41 @@ class PlantScreenTest {
     }
 
     @Test
+    fun aDateBeforeThePlantWasAcquiredIsRefused() {
+        log("2026-11-01", "FED")
+        start()
+        val edit = s(R.string.edit_named, "01 Nov: fed")
+        waitFor(edit, description = true)
+
+        compose.onNodeWithContentDescription(edit).performScrollTo().performClick()
+        compose.onNodeWithText(s(R.string.plant_day_before)).performClick()
+        compose.onNodeWithText(s(R.string.save)).performClick()
+
+        waitFor(s(R.string.plant_entry_before_acquired, "01 Nov"))
+        assertEquals("2026-11-01", stored().single().date)
+    }
+
+    @Test
+    fun learningCountStopsAtEight() {
+        for (day in 10..19) log("2026-11-$day", "CHECK_IN", "OK")
+        start()
+        waitFor(s(R.string.plant_still_learning, "Fern", 8))
+    }
+
+    @Test
+    fun anAnswerWaitingOutItsUndoIsNotCounted() {
+        log("2026-11-24", "CHECK_IN", "OK")
+        start()
+        waitFor(s(R.string.plant_still_learning, "Fern", 1))
+
+        val line = s(R.string.plant_history_check_in, "24 Nov", s(R.string.moisture_ok))
+        compose.onNodeWithContentDescription(s(R.string.delete_named, line)).performScrollTo().performClick()
+        waitFor(s(R.string.plant_still_learning, "Fern", 0))
+        compose.onNodeWithText(s(R.string.undo)).performClick()
+        waitFor(s(R.string.plant_still_learning, "Fern", 1))
+    }
+
+    @Test
     fun deleteHidesUndoRestoresAndExpiryDeletes() {
         log("2026-11-24", "WATERED")
         start()

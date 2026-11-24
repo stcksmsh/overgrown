@@ -218,10 +218,9 @@ fun DayStrip(days: List<OutlookDay>, next: LocalDate?) {
             Row(Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.plant_next_days), style = Type.label, color = colors.ink, modifier = Modifier.weight(1f))
                 if (frost.isNotEmpty()) {
-                    val first = dayName(frost.first().date)
-                    val last = dayName(frost.last().date)
+                    // Every frost day by name: a range would cover the gap days between frosts ("Fri, Mon", not "Fri–Mon").
                     Text(
-                        if (frost.size == 1) stringResource(R.string.plant_frost_day, first) else stringResource(R.string.plant_frost_days, first, last),
+                        stringResource(R.string.plant_frost_days, frost.joinToString(", ") { dayName(it.date) }),
                         style = Type.label,
                         color = colors.errorText,
                     )
@@ -298,7 +297,8 @@ fun LearningDots(name: String, answers: Int, learned: Boolean) {
             Text(stringResource(R.string.plant_knows_well, name), style = Type.body.copy(fontWeight = FontWeight.SemiBold), color = colors.ink)
             return@SurfaceCard
         }
-        Text(stringResource(R.string.plant_still_learning, name, answers), style = Type.body.copy(fontWeight = FontWeight.SemiBold), color = colors.ink)
+        // "about 8" is a guide, not a limit; past it the app is still learning, and "11 of about 8" reads as a mistake.
+        Text(stringResource(R.string.plant_still_learning, name, answers.coerceAtMost(LEARNING_DOTS)), style = Type.body.copy(fontWeight = FontWeight.SemiBold), color = colors.ink)
         // The text above carries the count for TalkBack.
         Row(Modifier.clearAndSetSemantics {}, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             for (i in 0 until LEARNING_DOTS) {
