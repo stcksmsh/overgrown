@@ -58,7 +58,7 @@ fun forStorage(bytes: ByteArray): ByteArray {
     if (bounds.outWidth <= 0) return bytes // not decodable here: keep it as it is
     val options = BitmapFactory.Options().apply { inSampleSize = sampleFor(bounds, DOWNSCALED_LONG_SIDE_PX) }
     val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: return bytes
-    val upright = fit(decoded, DOWNSCALED_LONG_SIDE_PX, orientation(ByteArrayInputStream(bytes)))
+    val upright = scaleUpright(decoded, DOWNSCALED_LONG_SIDE_PX, orientation(ByteArrayInputStream(bytes)))
     return ByteArrayOutputStream().also { upright.compress(Bitmap.CompressFormat.JPEG, 90, it) }.toByteArray()
 }
 
@@ -72,7 +72,7 @@ fun thumbnail(file: File, longSidePx: Int): Bitmap? {
         inPreferredConfig = Bitmap.Config.RGB_565 // half the memory; photos have no transparency
     }
     val decoded = BitmapFactory.decodeFile(file.path, options) ?: return null
-    return fit(decoded, longSidePx, file.inputStream().use { orientation(it) })
+    return scaleUpright(decoded, longSidePx, file.inputStream().use { orientation(it) })
 }
 
 /** The largest power of two that keeps the decoded long side at or above [longSidePx]: the cheap part of the scaling. */
@@ -87,7 +87,7 @@ private fun orientation(input: InputStream): Int =
     exif(input)?.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) ?: ExifInterface.ORIENTATION_NORMAL
 
 /** Scales down to [longSidePx] and rotates upright in one pass, so at most one more bitmap is made; the input is recycled. */
-private fun fit(bitmap: Bitmap, longSidePx: Int, orientation: Int): Bitmap {
+private fun scaleUpright(bitmap: Bitmap, longSidePx: Int, orientation: Int): Bitmap {
     val degrees = when (orientation) {
         ExifInterface.ORIENTATION_ROTATE_90 -> 90f
         ExifInterface.ORIENTATION_ROTATE_180 -> 180f
