@@ -11,9 +11,16 @@ import kotlin.test.assertTrue
  * and the compiler keeps only entries with `status: reviewed`, so what is reviewed here is what ships.
  */
 class CareDataPinTest {
-    private val dataRoot = generateSequence(File("").absoluteFile) { it.parentFile }
-        .map { File(it, "overgrown-data") }
-        .first { File(it, "archetypes").isDirectory }
+    // Stop at this project's root: walking further could reach another checkout's submodule.
+    private val dataRoot = File(
+        generateSequence(File("").absoluteFile) { it.parentFile }
+            .first { File(it, "settings.gradle.kts").isFile },
+        "overgrown-data",
+    ).also {
+        check(File(it, "archetypes").isDirectory) {
+            "overgrown-data submodule not initialised: run git submodule update --init"
+        }
+    }
 
     private fun status(file: File): String =
         file.readLines().first { it.startsWith("status:") }.removePrefix("status:").trim()
