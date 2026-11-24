@@ -10,12 +10,16 @@ import com.kostavukicevic.plants.data.Garden
 import com.kostavukicevic.plants.data.Settings
 import com.kostavukicevic.plants.notify.Notifier
 import com.kostavukicevic.plants.notify.Scheduler
+import com.kostavukicevic.plants.weather.FetchResult
 import com.kostavukicevic.plants.weather.HttpResponse
 import com.kostavukicevic.plants.weather.HttpTransport
 import com.kostavukicevic.plants.weather.MetNorway
 import com.kostavukicevic.plants.weather.OpenMeteo
 import com.kostavukicevic.plants.weather.WeatherService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.TimeZone
 import java.net.HttpURLConnection
@@ -59,6 +63,33 @@ class Graph(context: Context) {
     /** Bumped after any change, so screens recompute. */
     val changes = kotlinx.coroutines.flow.MutableStateFlow(0)
     fun changed() { changes.value++ }
+
+    private val fetchCount = MutableStateFlow(0)
+    private val fetchingNow = MutableStateFlow(false)
+
+    private val lastFetchFailed = MutableStateFlow(false)
+
+    /** True while a weather fetch started through [refreshWeather] runs, so Today can say so whoever started it. */
+    val fetching: StateFlow<Boolean> = fetchingNow
+
+    /** The last fetch through [refreshWeather] got no forecast anywhere and a request failed. */
+    val fetchFailed: StateFlow<Boolean> = lastFetchFailed
+
+    /** [Garden.refreshWeather], counted in [fetching]. Counted, not flagged, so two overlapping fetches end once both have. */
+    suspend fun refreshWeather(foreground: Boolean): Map<Long, FetchResult> {
+        fetchingNow.value = fetchCount.updateAndGet { it + 1 } > 0
+        var failed = true
+        try {
+            return garden.refreshWeather(foreground).also { failed = failedEverywhere(it) }
+        } finally {
+            lastFetchFailed.value = failed
+            fetchingNow.value = fetchCount.updateAndGet { it - 1 } > 0
+        }
+    }
+
+    /** A rate limit or a fresh cache is not a failure. */
+    private fun failedEverywhere(results: Map<Long, FetchResult>): Boolean =
+        results.values.any { it is FetchResult.Failed } && results.values.none { it is FetchResult.Fresh || it is FetchResult.Cached }
 }
 
 /** HttpURLConnection, from the platform: no HTTP library needed. */

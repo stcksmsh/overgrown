@@ -20,6 +20,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.kostavukicevic.plants.App
 import com.kostavukicevic.plants.Graph
+import com.kostavukicevic.plants.MainActivity
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
 import com.kostavukicevic.plants.data.CareSource
@@ -42,12 +43,14 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import kotlin.time.Instant
 import androidx.compose.ui.test.assertIsEnabled
@@ -364,6 +367,36 @@ class TodayTest {
         compose.onNodeWithText(s(R.string.refresh)).performScrollTo().performClick()
         waitForText(s(R.string.forecast_failed))
         compose.onNodeWithText(s(R.string.forecast_never)).assertDoesNotExist()
+    }
+
+    @Test
+    fun theFetchOnOpeningTheAppShowsOnTodayUntilItEnds() {
+        val answer = CompletableDeferred<HttpResponse>()
+        weatherBy { url, _ -> if ("archive" in url) HttpResponse(503, emptyMap(), "") else answer.await() }
+        outdoorPlant()
+        // The real activity: its onResume starts the fetch, as when the app is opened.
+        val app = Robolectric.buildActivity(MainActivity::class.java).setup()
+        try {
+            waitForText(s(R.string.forecast_loading))
+            compose.onNodeWithText(s(R.string.refresh)).assertIsNotEnabled()
+            assertTrue(g.fetching.value)
+
+            answer.complete(HttpResponse(200, emptyMap(), forecastBody()))
+            waitForText(s(R.string.forecast_fetched, ""), substring = true)
+            compose.onNodeWithText(s(R.string.forecast_loading)).assertDoesNotExist()
+            assertFalse(g.fetching.value)
+        } finally {
+            app.close()
+        }
+    }
+
+    @Test
+    fun aFailedFetchEndsFetchingAndIsMarkedFailed() {
+        weatherBy { _, _ -> throw IOException("offline") }
+        outdoorPlant()
+        runBlocking { g.refreshWeather(foreground = true) }
+        assertFalse(g.fetching.value)
+        assertTrue(g.fetchFailed.value)
     }
 
     companion object {

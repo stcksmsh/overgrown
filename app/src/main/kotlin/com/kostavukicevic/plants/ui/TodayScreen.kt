@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -37,7 +38,6 @@ import com.kostavukicevic.plants.data.PlantStatus
 import com.kostavukicevic.plants.notify.Notifier
 import com.kostavukicevic.plants.ui.theme.Overgrown
 import com.kostavukicevic.plants.ui.theme.Spacing
-import com.kostavukicevic.plants.weather.FetchResult
 import kotlinx.coroutines.CancellationException
 import com.kostavukicevic.plants.ui.theme.Type
 import com.kostavukicevic.plants.weather.MetNorway
@@ -57,8 +57,9 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
     val lastFetch by produceState<Pair<Long, String?>?>(null, tick, statuses) {
         value = statuses?.filter { it.place.outdoor }?.map { it.place.id }?.distinct()?.mapNotNull { g.garden.lastFetchOnce(it) }?.maxOrNull()?.let { it to g.garden.lastProvider() }
     }
-    var refreshing by remember { mutableStateOf(false) }
-    var failed by remember { mutableStateOf(false) }
+    // Any fetch, also the one on opening the app, not only this screen's Refresh.
+    val refreshing by g.fetching.collectAsState()
+    val failed by g.fetchFailed.collectAsState()
     val scope = rememberCoroutineScope()
 
     var notifAllowed by remember { mutableStateOf(Notifier.allowed(c)) }
@@ -93,16 +94,14 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
         ) {
             // Indoor places use no weather, so a garden of only indoor plants shows none of this.
             if (list.any { it.place.outdoor }) WeatherStatus(lastFetch, Clock.System.now(), refreshing, failed) {
-                refreshing = true
                 scope.launch {
-                    failed = try {
-                        failedEverywhere(g.garden.refreshWeather(foreground = true))
+                    // A thrown fetch is already marked failed; only keep it from ending the app.
+                    try {
+                        g.refreshWeather(foreground = true)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        true
-                    } finally {
-                        refreshing = false
+                        android.util.Log.w("Overgrown", "weather refresh failed", e)
                     }
                     g.scheduler.reschedule()
                     g.changed()
@@ -112,10 +111,6 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
     }
     LaunchedEffect(Unit) { notifAllowed = Notifier.allowed(c) }
 }
-
-/** No place got a forecast and at least one request failed. A rate limit or a fresh cache is not a failure. */
-private fun failedEverywhere(results: Map<Long, FetchResult>): Boolean =
-    results.values.any { it is FetchResult.Failed } && results.values.none { it is FetchResult.Fresh || it is FetchResult.Cached }
 
 /**
  * Forecast age, refresh and the provider's credit, kept quiet below the cards. The credit stays next to the
