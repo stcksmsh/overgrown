@@ -8,6 +8,7 @@ import kotlinx.datetime.plus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class RulesTest {
@@ -185,5 +186,39 @@ class RulesTest {
         assertTrue(kotlin.math.abs(after.belief.logKMean) < 0.1, "moved to ${after.belief.logKMean}")
         assertTrue(after.belief.logKVariance < state.belief.logKVariance)
         assertTrue(after.depletion in 0.3..0.7)
+    }
+
+    @Test
+    fun quickDryCoversTheDryAndBoneDryBands() {
+        val band = Learning.band(Moisture.DRY_OR_BONE_DRY)
+        assertEquals(Coefficients.BAND_OK_MAX..1.0, band)
+        assertNotEquals(Learning.band(Moisture.DRY), band)
+        assertNotEquals(Learning.band(Moisture.BONE_DRY), band)
+    }
+
+    @Test
+    fun quickDryIsOpenAboveFromTheDryBandsLowerEdge() {
+        // An open-above band's update depends only on its lower edge relative to the prediction,
+        // so a quick Dry at prediction d must equal a Bone dry at d scaled by the ratio of the edges.
+        val d = 0.5
+        val quick = Learning.update(KBelief(), d, Moisture.DRY_OR_BONE_DRY, drySideFast = true).belief
+        val boneDry = Learning.update(KBelief(), d * Coefficients.BAND_DRY_MAX / Coefficients.BAND_OK_MAX, Moisture.BONE_DRY, drySideFast = true).belief
+        assertEquals(boneDry.logKMean, quick.logKMean, 1e-9)
+        assertEquals(boneDry.logKVariance, quick.logKVariance, 1e-9)
+
+        val dry = Learning.update(KBelief(), d, Moisture.DRY, drySideFast = true).belief
+        assertTrue(quick.logKMean > dry.logKMean + 0.01, "quick ${quick.logKMean}, dry ${dry.logKMean}")
+    }
+
+    @Test
+    fun quickDryWhenAlreadyBoneDryKeepsK() {
+        val b = KBelief()
+        val quick = Learning.update(b, 0.98, Moisture.DRY_OR_BONE_DRY, drySideFast = false)
+        // Agrees with the prediction, like Bone dry would: K stays and confidence is not lowered.
+        assertEquals(b.logKMean, quick.belief.logKMean)
+        assertTrue(quick.belief.logKVariance <= b.logKVariance)
+        assertEquals(0.98, quick.depletion)
+        // A plain Dry here would call the prediction too dry.
+        assertTrue(Learning.update(b, 0.98, Moisture.DRY, drySideFast = false).belief.logKMean < b.logKMean)
     }
 }

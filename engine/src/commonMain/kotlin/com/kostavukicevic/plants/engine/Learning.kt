@@ -47,12 +47,16 @@ object Learning {
     private val logKMin = ln(C.K_MIN)
     private val logKMax = ln(C.K_MAX)
 
-    /** Depletion band for an answer, as [low, high]. "Bone dry" is open above: an empty pot hides how long it has been empty. */
+    /**
+     * Depletion band for an answer, as [low, high]. A band reaching 1.0 ("Bone dry", and the quick
+     * "Dry" that covers Dry and Bone dry) is open above: an empty pot hides how long it has been empty.
+     */
     fun band(moisture: Moisture): ClosedFloatingPointRange<Double> = when (moisture) {
         Moisture.TOO_WET -> 0.0..C.BAND_TOO_WET_MAX
         Moisture.OK -> C.BAND_TOO_WET_MAX..C.BAND_OK_MAX
         Moisture.DRY -> C.BAND_OK_MAX..C.BAND_DRY_MAX
         Moisture.BONE_DRY -> C.BAND_DRY_MAX..1.0
+        Moisture.DRY_OR_BONE_DRY -> C.BAND_OK_MAX..1.0
     }
 
     fun addVariance(b: KBelief, amount: Double): KBelief =
@@ -74,7 +78,7 @@ object Learning {
         val d = predictedDepletion.coerceAtLeast(C.MIN_PREDICTED_DEPLETION)
         val band = band(moisture)
         val lo = if (band.start <= 0.0) Double.NEGATIVE_INFINITY else ln(band.start / d)
-        val hi = if (moisture == Moisture.BONE_DRY) Double.POSITIVE_INFINITY else ln(band.endInclusive / d)
+        val hi = if (band.endInclusive >= 1.0) Double.POSITIVE_INFINITY else ln(band.endInclusive / d)
         val inBand = predictedDepletion in band
 
         var p = b.logKVariance
