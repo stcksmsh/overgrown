@@ -15,6 +15,8 @@ import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
 import com.kostavukicevic.plants.data.AlertAck
 import com.kostavukicevic.plants.data.Garden
+import com.kostavukicevic.plants.data.GardenDb
+import com.kostavukicevic.plants.data.WeatherDayEntity
 import com.kostavukicevic.plants.engine.Action
 import com.kostavukicevic.plants.engine.PromptReason
 import com.kostavukicevic.plants.ui.heatWave
@@ -41,8 +43,12 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
 /** What the notifications offer and what their actions store, through the real ActionReceiver. */
@@ -57,6 +63,8 @@ class NotificationsTest {
     fun setUp() {
         g = useTestDatabase()
         Notifier.createChannels(app)
+        // WorkManager outlives a test and plant ids repeat, so an earlier test's job could stand in for this one's.
+        WorkManager.getInstance(app).cancelAllWork().result.get()
     }
 
     private fun allow(granted: Boolean = true) =
@@ -261,9 +269,12 @@ class NotificationsTest {
             .filter { it.state == WorkInfo.State.ENQUEUED }.also { assertTrue("more than one prompt job", it.size <= 1) }.singleOrNull()
     }
 
-    /** When the pending prompt job for [plantId] will run, in local time, or null when none is pending. */
+    /**
+     * When the pending prompt job for [plantId] will run, in local time, or null when none is pending. Rounded to
+     * the nearest minute: the delay is cut to whole milliseconds, which can put a job at 19:59:59.999.
+     */
     private fun promptJobAt(plantId: Long): LocalDateTime? =
-        promptJob(plantId)?.let { Instant.fromEpochMilliseconds(it.nextScheduleTimeMillis).toLocalDateTime(TimeZone.currentSystemDefault()) }
+        promptJob(plantId)?.let { Instant.fromEpochMilliseconds(it.nextScheduleTimeMillis + 30_000).toLocalDateTime(TimeZone.currentSystemDefault()) }
 
     private fun LocalDateTime.minuteOnly() = date.atTime(hour, minute)
 
@@ -316,18 +327,25 @@ class NotificationsTest {
         assertTrue("today's prompt waits $wait ms", wait <= 2 * 60_000)
     }
 
+    /** The local time [hours] ago, to the minute: a chosen time the job is not late for, day or night. */
+    private fun hoursAgo(hours: Int): LocalTime {
+        val t = (Clock.System.now() - hours.hours).toLocalDateTime(TimeZone.currentSystemDefault())
+        return LocalTime(t.hour, t.minute)
+    }
+
     @Test
     fun thePromptJobPostsOnceAndArmsTomorrows() {
         allow()
         val fern = plant(g, "Fern", place(g, "Hall"))
         val today = runBlocking { g.garden.today() }
+        val time = hoursAgo(1)
         runBlocking {
-            g.settings.setReminderTime(LocalTime(7, 30))
+            g.settings.setReminderTime(time)
             g.scheduler.runPrompt(fern)
         }
         assertTrue(g.scheduler.promptPosted(fern, today))
         assertEquals(1, nm.allNotifications.size)
-        assertEquals(today.plus(DatePeriod(days = 1)).atTime(7, 30), promptJobAt(fern)!!.minuteOnly())
+        assertEquals(today.plus(DatePeriod(days = 1)).atTime(time), promptJobAt(fern)!!.minuteOnly())
         // A second run the same day (a late duplicate) posts nothing new.
         app.getSystemService(NotificationManager::class.java).cancelAll()
         runBlocking { g.scheduler.runPrompt(fern) }
@@ -345,5 +363,113 @@ class NotificationsTest {
         assertFalse("a plant that no longer exists", g.scheduler.promptPosted(fern + 1000, today))
         g.scheduler.forgetPrompts()
         assertFalse(g.scheduler.promptPosted(fern, today))
+    }
+
+    @Test
+    fun aPromptThatCannotBePostedStillArmsTomorrowsAndNotSooner() {
+        allow(granted = false)
+        val fern = plant(g, "Fern", place(g, "Hall"))
+        val today = runBlocking { g.garden.today() }
+        val time = hoursAgo(1)
+        runBlocking {
+            g.settings.setReminderTime(time)
+            g.scheduler.runPrompt(fern)
+        }
+        assertTrue(nm.allNotifications.isEmpty())
+        assertFalse(g.scheduler.promptPosted(fern, today))
+        // Tomorrow at the chosen time: neither lost until a refresh nor retried at once.
+        assertEquals(today.plus(DatePeriod(days = 1)).atTime(time), promptJobAt(fern)!!.minuteOnly())
+    }
+
+    @Test
+    fun anImportKeepsTheShownPromptOfAPlantThatIsStillThere() {
+        val hall = place(g, "Hall")
+        val fern = plant(g, "Fern", hall)
+        val ivy = plant(g, "Ivy", hall)
+        val today = runBlocking { g.garden.today() }
+        g.scheduler.markPromptPosted(fern, today)
+        g.scheduler.markPromptPosted(ivy, today)
+        runBlocking {
+            val before = g.garden.plants.first()
+            // The same garden, except that Ivy's id now belongs to another plant.
+            g.garden.importJson(g.garden.exportJson("test").replace("\"Ivy\"", "\"Cactus\""))
+            g.scheduler.imported(before)
+        }
+        assertTrue("the same plant was prompted today", g.scheduler.promptPosted(fern, today))
+        assertFalse("another plant under a reused id", g.scheduler.promptPosted(ivy, today))
+    }
+
+    @Test
+    fun twoWorkersPostingOneEventAtOncePostItOnce() {
+        allow()
+        heatWave(g, "Boris")
+        val e = runBlocking { g.garden.alertEvents() }.single()
+        val prefs = app.getSharedPreferences("posted_alerts", 0)
+        repeat(20) { round ->
+            prefs.edit().clear().commit()
+            val start = CountDownLatch(1)
+            val posted = AtomicInteger()
+            val workers = (1..4).map {
+                thread {
+                    start.await()
+                    if (runBlocking { g.scheduler.postEvent(AlertAck.of(e)) }) posted.incrementAndGet()
+                }
+            }
+            start.countDown()
+            workers.forEach { it.join(10_000) }
+            assertTrue("round $round", workers.none { it.isAlive })
+            assertEquals("round $round", 1, posted.get())
+        }
+    }
+
+    @Test
+    fun doneOnANotificationCoversBothPartsOfAnEventARefreshSplit() {
+        allow()
+        heatWave(g, "Boris")
+        val e = runBlocking { g.garden.alertEvents() }.single()
+        assertTrue(runBlocking { g.scheduler.postEvent(AlertAck.of(e)) })
+        val n = nm.getNotification(Notifier.ALERT_TAG, Notifier.alertId(AlertAck.of(e)))
+        // A refresh finds the middle day mild, so the posted heat wave is now two events.
+        val db = Garden::class.java.getDeclaredField("db").apply { isAccessible = true }.get(g.garden) as GardenDb
+        val middle = e.start.plus(DatePeriod(days = 1))
+        val placeId = runBlocking { g.garden.plant(e.plants.single().id) }!!.placeId
+        runBlocking {
+            db.dao().upsertWeather(listOf(WeatherDayEntity(placeId, middle.toString(), 18.0, 22.0, 0.0, provider = "OPEN_METEO", fetchedAtEpochMs = Clock.System.now().toEpochMilliseconds())))
+        }
+        assertEquals(2, runBlocking { g.garden.alertEvents() }.size)
+        tap(n.actions[0])
+        waitUntil("Done is stored for both parts") { runBlocking { g.garden.alertEvents() }.isEmpty() }
+    }
+
+    @Test
+    fun aJobHeldUpIntoTheNightWaitsForTheChosenTime() {
+        allow()
+        val saved = java.util.TimeZone.getDefault()
+        try {
+            // A zone where it is now between 02:00 and 03:00, whatever the clock says.
+            val utc = Clock.System.now().toLocalDateTime(TimeZone.UTC)
+            val offset = ((2 - utc.hour) % 24 + 24) % 24
+            val hours = if (offset > 14) offset - 24 else offset
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("GMT" + (if (hours < 0) "-" else "+") + "%02d:00".format(kotlin.math.abs(hours))))
+            assertEquals(2, Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).hour)
+            val fern = plant(g, "Fern", place(g, "Hall"))
+            val today = runBlocking { g.garden.today() }
+            // Yesterday's 20:00 prompt, delayed past midnight: not posted at night, armed for 20:00 today.
+            runBlocking {
+                g.settings.setReminderTime(LocalTime(20, 0))
+                g.scheduler.runPrompt(fern)
+            }
+            assertTrue(nm.allNotifications.isEmpty())
+            assertFalse(g.scheduler.promptPosted(fern, today))
+            assertEquals(today.atTime(20, 0), promptJobAt(fern)!!.minuteOnly())
+            // A chosen time at night is kept: a job an hour after it posts.
+            runBlocking {
+                g.settings.setReminderTime(hoursAgo(1))
+                g.scheduler.runPrompt(fern)
+            }
+            assertEquals(1, nm.allNotifications.size)
+        } finally {
+            java.util.TimeZone.setDefault(saved)
+        }
     }
 }
