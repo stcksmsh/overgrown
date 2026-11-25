@@ -15,6 +15,9 @@ import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.data.ThemeChoice
 import com.kostavukicevic.plants.ui.theme.OvergrownTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalTime
@@ -52,6 +55,21 @@ class SettingsTest {
 
     private fun gone(text: String) = compose.waitUntil(5_000) { compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isEmpty() }
 
+    /**
+     * Reads a stored value off the main thread while [compose] keeps the main looper running; fails after 5 s, so
+     * a read that waits for a value doubles as a bounded wait for it. A runBlocking read on the main thread can
+     * deadlock: the screen's own collector may hold DataStore's first read and need the main thread to finish it.
+     */
+    private fun <T> stored(read: suspend () -> T): T {
+        val value = CoroutineScope(Dispatchers.IO).async { read() }
+        try {
+            compose.waitUntil(5_000) { value.isCompleted }
+        } finally {
+            value.cancel()
+        }
+        return runBlocking { value.await() }
+    }
+
     private fun startedActivity(): Intent? = shadowOf(compose.activity).nextStartedActivity
 
     @Test
@@ -76,16 +94,16 @@ class SettingsTest {
 
     @Test
     fun weighingIsOnTheScreenWithDeveloperModeOff() {
-        assertFalse(runBlocking { g.settings.developerMode.first() })
+        assertFalse(stored { g.settings.developerMode.first() })
         compose.onNode(isToggleable() and hasContentDescription(s(R.string.settings_weighing))).performScrollTo().performClick()
-        compose.waitUntil(5_000) { runBlocking { g.settings.weighing.first() } }
-        assertFalse(runBlocking { g.settings.developerMode.first() })
+        stored { g.settings.weighing.first { it } }
+        assertFalse(stored { g.settings.developerMode.first() })
     }
 
     @Test
     fun aThemeTapIsStored() {
         compose.onNodeWithText(s(R.string.settings_theme_dark)).performScrollTo().performClick()
-        compose.waitUntil(5_000) { runBlocking { g.settings.theme.first() } == ThemeChoice.DARK }
+        stored { g.settings.theme.first { it == ThemeChoice.DARK } }
     }
 
     @Test
@@ -96,6 +114,6 @@ class SettingsTest {
         waitFor(s(R.string.settings_time_set))
         compose.onNodeWithText(s(R.string.cancel)).performClick()
         gone(s(R.string.settings_time_set))
-        assertEquals(LocalTime(8, 0), runBlocking { g.settings.reminderTime.first() })
+        assertEquals(LocalTime(8, 0), stored { g.settings.reminderTime.first() })
     }
 }

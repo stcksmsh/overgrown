@@ -25,7 +25,8 @@ fun PlacesScreen(undo: UndoDelete, onBack: () -> Unit, onEdit: (Long) -> Unit, o
         onAdd = onAdd,
         empty = stringResource(R.string.places_empty),
         undo = undo,
-        items = places?.map { p ->
+        // Shown once the plants are known too, so a delete tap never lands before the in-use check can run.
+        items = places?.takeIf { plants != null }?.map { p ->
             val key = "place:${p.id}"
             ListItem(
                 key = key,
@@ -36,7 +37,7 @@ fun PlacesScreen(undo: UndoDelete, onBack: () -> Unit, onEdit: (Long) -> Unit, o
                 onDelete = onDelete@{
                     // Deleting a place deletes its plants with it, so a place in use is never deleted from here.
                     // Plants waiting on their own Undo still count: they still exist.
-                    val users = plants?.filter { it.placeId == p.id } ?: return@onDelete
+                    val users = plants.orEmpty().filter { it.placeId == p.id }
                     if (users.isNotEmpty()) {
                         undo.say(inUse.format(p.name, users.joinToString(", ") { it.name }))
                         return@onDelete
