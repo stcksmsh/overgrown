@@ -13,6 +13,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.LinearEasing
@@ -22,7 +24,6 @@ import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -76,7 +77,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.lifecycleScope
 import com.kostavukicevic.plants.data.ThemeChoice
-import com.kostavukicevic.plants.data.TransitionChoice
 import com.kostavukicevic.plants.ui.AddPlantWizard
 import com.kostavukicevic.plants.ui.EditPlaceScreen
 import com.kostavukicevic.plants.ui.LocalScreenIsTop
@@ -95,6 +95,7 @@ import com.kostavukicevic.plants.ui.theme.Radius
 import com.kostavukicevic.plants.ui.theme.Spacing
 import com.kostavukicevic.plants.ui.theme.Type
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -195,7 +196,7 @@ sealed interface Screen {
  * One back stack. Today is always at the bottom and the Plants tab is Plants right above it, so system back
  * from Plants lands on Today and back from Today leaves the app.
  *
- * Screens change with the transition chosen in Settings (D44). The shown screen follows the top of the stack
+ * Screens change with the Shared transition, the only one (D44, D45). The shown screen follows the top of the stack
  * through a seekable transition, so the predictive back gesture can drag the pop with the finger.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -218,11 +219,14 @@ internal fun App(openPlant: Long?) {
     }
     val top = stack.last()
     val shown = remember { SeekableTransitionState(top) }
-    val choice by context.graph.settings.transition.collectAsState(TransitionChoice.SHARED)
+
+    // With animations removed the new screen shows in the frame the stack changes: snapping in the effect below would
+    // leave the old one drawn for a frame.
+    fun snapIfInstant() { if (instant) scope.launch(start = CoroutineStart.UNDISPATCHED) { shown.snapTo(stack.last()) } }
 
     // A screen's own buttons act only while it is the top: a second tap on a card that is already leaving does nothing.
-    fun go(from: Screen, to: Screen) { if (stack.last() == from) stack += to }
-    fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
+    fun go(from: Screen, to: Screen) { if (stack.last() == from) stack += to; snapIfInstant() }
+    fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex); snapIfInstant() }
     fun back(from: Screen) { if (stack.last() == from) back() }
 
     LaunchedEffect(top) { if (instant) shown.snapTo(top) else shown.animateTo(top) }
@@ -279,7 +283,7 @@ internal fun App(openPlant: Long?) {
             if (screen.isTab) {
                 Tabs(
                     plants = screen == Screen.Plants,
-                    onToday = { if (stack.last() == screen) stack.removeRange(1, stack.size) },
+                    onToday = { if (stack.last() == screen) stack.removeRange(1, stack.size); snapIfInstant() },
                     onPlants = { if (screen != Screen.Plants) go(screen, Screen.Plants) },
                     modifier = Modifier.onSizeChanged { tabsHeight = it.height },
                 )
@@ -301,27 +305,26 @@ internal fun App(openPlant: Long?) {
             }
         },
     ) { padding ->
-        if (instant) {
-            Box(Modifier.padding(padding).consumeWindowInsets(padding)) { screenContent(top) }
-        } else {
-            SharedTransitionLayout(Modifier.padding(padding).consumeWindowInsets(padding)) {
-                val screens = rememberTransition(shown, label = "screens")
-                // Today and Plants show the same plant under the same keys; switching tabs is a plain crossfade.
-                val tabSwitch = screens.currentState != screens.targetState && screens.currentState.isTab && screens.targetState.isTab
-                screens.AnimatedContent(
-                    transitionSpec = {
-                        val i = stack.indexOf(initialState)
-                        val t = stack.indexOf(targetState)
-                        screenTransition(choice, initialState, targetState, pop = i == -1 || (t != -1 && t < i))
-                    },
-                    contentKey = { it.key() },
-                ) { screen ->
-                    CompositionLocalProvider(
-                        LocalSharedTransition provides this@SharedTransitionLayout.takeIf { choice == TransitionChoice.SHARED && !tabSwitch },
-                        LocalScreenTransition provides this,
-                        LocalScreenIsTop provides (screen == top),
-                    ) { screenContent(screen) }
-                }
+        // One tree whether or not animations are removed, so turning them off while the app is away keeps each
+        // screen's state; with them off the specs are empty and the transition snaps.
+        SharedTransitionLayout(Modifier.padding(padding).consumeWindowInsets(padding)) {
+            val screens = rememberTransition(shown, label = "screens")
+            // Today and Plants show the same plant under the same keys; switching tabs is a plain crossfade.
+            val tabSwitch = screens.currentState != screens.targetState && screens.currentState.isTab && screens.targetState.isTab
+            screens.AnimatedContent(
+                transitionSpec = {
+                    val i = stack.indexOf(initialState)
+                    val t = stack.indexOf(targetState)
+                    if (instant) EnterTransition.None togetherWith ExitTransition.None
+                    else screenTransition(initialState, targetState, pop = i == -1 || (t != -1 && t < i))
+                },
+                contentKey = { it.key() },
+            ) { screen ->
+                CompositionLocalProvider(
+                    LocalSharedTransition provides this@SharedTransitionLayout.takeIf { !instant && !tabSwitch },
+                    LocalScreenTransition provides this,
+                    LocalScreenIsTop provides (screen == top),
+                ) { screenContent(screen) }
             }
         }
     }
@@ -330,33 +333,26 @@ internal fun App(openPlant: Long?) {
 private val Screen.isTab get() = this == Screen.Today || this == Screen.Plants
 
 /**
- * The motion from [from] to [to] (D44). Switching tabs is always a short crossfade. Otherwise a push, or a [pop]
- * with the screens' roles reversed: Shared fades the two screens while the plant's card, name and glyph grow into
- * the plant screen (other screens slide as in Slide); Slide moves the new screen in from the right over the old,
- * which shifts a little left; Fade fades the old screen out, then the new one in from slightly smaller.
+ * The motion from [from] to [to] (D44, D45). Switching tabs is a short crossfade. Otherwise a push, or a [pop] with
+ * the screens' roles reversed: into or out of the plant screen from a list the two screens fade while the plant's
+ * card, name and glyph grow into the plant screen; any other screen slides in from the right over the old one,
+ * which shifts a little left.
  */
-private fun screenTransition(choice: TransitionChoice, from: Screen, to: Screen, pop: Boolean): ContentTransform {
+private fun screenTransition(from: Screen, to: Screen, pop: Boolean): ContentTransform {
     if (from.isTab && to.isTab) {
         // The new tab fades in over the old one, which stays opaque until it goes: two half-faded screens would let
         // the background through and dim the tabs in the middle.
         return fadeIn(tween(Motion.SHORT4, easing = Motion.Emphasized)) togetherWith fadeOut(tween(0, delayMillis = Motion.SHORT4))
     }
     val plantFromList = (from is Screen.Plant && to.isTab) || (to is Screen.Plant && from.isTab)
-    val t = when {
-        choice == TransitionChoice.SHARED && plantFromList ->
-            fadeIn(tween(Motion.MEDIUM2, easing = Motion.Emphasized)) togetherWith fadeOut(tween(Motion.MEDIUM2, easing = Motion.Emphasized))
-        choice == TransitionChoice.FADE -> {
-            val out = Motion.MEDIUM2 * 35 / 100
-            val inSpec = tween<Float>(Motion.MEDIUM2 - out, delayMillis = out, easing = Motion.EmphasizedDecelerate)
-            (fadeIn(inSpec) + scaleIn(inSpec, initialScale = FADE_THROUGH_SCALE)) togetherWith fadeOut(tween(out, easing = Motion.EmphasizedAccelerate))
-        }
-        else -> {
-            val spec = tween<IntOffset>(Motion.MEDIUM2, easing = Motion.Emphasized)
-            if (pop) {
-                slideInHorizontally(spec) { -(it * SLIDE_UNDER).toInt() } togetherWith slideOutHorizontally(spec) { it }
-            } else {
-                slideInHorizontally(spec) { it } togetherWith slideOutHorizontally(spec) { -(it * SLIDE_UNDER).toInt() }
-            }
+    val t = if (plantFromList) {
+        fadeIn(tween(Motion.MEDIUM2, easing = Motion.Emphasized)) togetherWith fadeOut(tween(Motion.MEDIUM2, easing = Motion.Emphasized))
+    } else {
+        val spec = tween<IntOffset>(Motion.MEDIUM2, easing = Motion.Emphasized)
+        if (pop) {
+            slideInHorizontally(spec) { -(it * SLIDE_UNDER).toInt() } togetherWith slideOutHorizontally(spec) { it }
+        } else {
+            slideInHorizontally(spec) { it } togetherWith slideOutHorizontally(spec) { -(it * SLIDE_UNDER).toInt() }
         }
     }
     // The leaving screen of a pop stays on top as it goes.
@@ -365,9 +361,6 @@ private fun screenTransition(choice: TransitionChoice, from: Screen, to: Screen,
 
 /** How far the screen underneath a slide shifts left, as a share of its width. */
 private const val SLIDE_UNDER = 0.2f
-
-/** Material fade through: the incoming screen grows from this scale. */
-private const val FADE_THROUGH_SCALE = 0.92f
 
 @Composable
 private fun Tabs(plants: Boolean, onToday: () -> Unit, onPlants: () -> Unit, modifier: Modifier = Modifier) {

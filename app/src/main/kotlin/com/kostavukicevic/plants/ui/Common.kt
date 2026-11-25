@@ -74,7 +74,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** The shared-element scope while the "Shared" transition is chosen (D44); null otherwise, and outside App. */
+/** The shared-element scope as screens change (D44); null while switching tabs, with animations removed, and outside App. */
 @OptIn(ExperimentalSharedTransitionApi::class)
 internal val LocalSharedTransition = compositionLocalOf<SharedTransitionScope?> { null }
 
@@ -86,7 +86,7 @@ internal val LocalScreenIsTop = compositionLocalOf { true }
 
 /**
  * Marks [part] ("card", "name" or "glyph") of the plant or list item [key] as the same thing on Today, on Plants
- * and on the plant screen, so with the "Shared" transition it grows from one into the other. Does nothing otherwise.
+ * and on the plant screen, so it grows from one into the other as the screen changes. Does nothing otherwise.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable

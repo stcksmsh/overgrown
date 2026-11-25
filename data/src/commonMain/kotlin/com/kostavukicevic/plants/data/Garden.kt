@@ -558,7 +558,6 @@ class Settings(private val store: DataStore<Preferences>) : FallbackState {
     private val reminderMinuteKey = intPreferencesKey("reminder_minute")
     private val themeKey = stringPreferencesKey("theme")
     private val weighingKey = booleanPreferencesKey("weighing")
-    private val transitionKey = stringPreferencesKey("transition")
     private val acksSerializer = ListSerializer(AlertAck.serializer())
 
     override suspend fun useFallback() = store.data.first()[fallbackKey] ?: false
@@ -590,12 +589,6 @@ class Settings(private val store: DataStore<Preferences>) : FallbackState {
     val weighing: Flow<Boolean> get() = store.data.map { it[weighingKey] ?: it[developerKey] ?: false }
     suspend fun setWeighing(on: Boolean) { store.edit { it[weighingKey] = on } }
 
-    /** Which screen transition to use, while the owner chooses one (docs/DECISIONS.md D44). */
-    val transition: Flow<TransitionChoice> get() = store.data.map { p ->
-        TransitionChoice.entries.find { it.name == p[transitionKey] } ?: TransitionChoice.SHARED
-    }
-    suspend fun setTransition(t: TransitionChoice) { store.edit { it[transitionKey] = t.name } }
-
     /** Done and Dismiss on alert events, as JSON. An unreadable value is treated as none, so alerts show again. */
     suspend fun alertAcks(): List<AlertAck> = decodeAcks(store.data.first()[alertAcksKey])
 
@@ -621,6 +614,3 @@ class Settings(private val store: DataStore<Preferences>) : FallbackState {
 
 /** The app theme: the system's light or dark, or one of them always. */
 enum class ThemeChoice { SYSTEM, LIGHT, DARK }
-
-/** The screen transition variants under trial: a shared element into the plant screen, a slide, or a fade through. */
-enum class TransitionChoice { SHARED, SLIDE, FADE }

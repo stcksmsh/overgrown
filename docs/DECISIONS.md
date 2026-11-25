@@ -346,3 +346,12 @@ Screens no longer swap at once. Three variants are built so the owner can compar
   - A plant opened from a notification starts with the plant on top, so it has no enter animation.
   - Deleting a plant from its own page pops like Back. The leaving page may lose its body as the plant goes.
   - Shared with a card that is partly scrolled off screen still grows from where the card is, including the part off screen; it looks right. A card scrolled fully out of the list is not composed, so there is nothing to grow from; the plant screen then crossfades in alone.
+
+## D45. Shared is the transition; test builds are optimised
+
+The owner tried the three variants of D44 in a release build and kept the default: "The transitions in the app as it stands look ok". Shared is now the only transition.
+
+- **The switch is gone.** The variant enum, `Settings.transition` and the Settings > Developer options > Transitions row are removed, with the Slide and Fade code. Opening a plant from a list still grows its card into the plant screen; every other push and pop slides, as it did under Shared. Tabs, predictive back, `LocalScreenIsTop` and the timings are unchanged.
+- **A stored choice is ignored.** Phones that stored Slide or Fade keep a `transition` key in their preferences. Nothing reads it, so the app starts with Shared; no migration removes it, since an unused string costs nothing.
+- **One tree with animations removed.** D44 drew the screen in a plain box when the animator duration scale was 0, so changing the scale while the app was away swapped the whole tree on return and dropped every screen's unsaved state (an open menu, a dialog). The animated container now stays; with the scale at 0 its specs are empty, no shared elements run, and each change of the back stack snaps the transition in the same frame, so the new screen still shows on the next frame.
+- **Beta build type.** Debug builds felt janky on the owner's phone and a release build of the same code was "good now". `:app:assembleFossBeta` builds the release configuration (R8, resource shrinking, the same `proguard-rules.pro`) signed with the debug key and under the same application id, so it installs over the debug builds already on the phone. The release build type is unchanged. Test APKs are built this way from now on.

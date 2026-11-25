@@ -34,7 +34,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.data.ThemeChoice
-import com.kostavukicevic.plants.data.TransitionChoice
 import com.kostavukicevic.plants.ui.theme.StateBlock
 import com.kostavukicevic.plants.ui.theme.Type
 import com.kostavukicevic.plants.weather.MetNorway
@@ -56,7 +55,6 @@ fun SettingsScreen(onBack: () -> Unit) {
     val developer by g.settings.developerMode.collectAsState(false)
     val weighing by g.settings.weighing.collectAsState(false)
     val theme by g.settings.theme.collectAsState(ThemeChoice.SYSTEM)
-    val transition by g.settings.transition.collectAsState(TransitionChoice.SHARED)
     val time by g.settings.reminderTime.collectAsState(null)
     var message by remember { mutableStateOf<String?>(null) }
     var fontLicence by remember { mutableStateOf(false) }
@@ -150,16 +148,6 @@ fun SettingsScreen(onBack: () -> Unit) {
         SwitchRow(stringResource(R.string.developer_mode), developer) { on -> scope.launch { g.settings.setDeveloperMode(on) } }
         if (developer) {
             TextButton(onClick = { exportCsv.launch("overgrown-calibration.csv") }) { Text(stringResource(R.string.export_calibration)) }
-            // Only until the owner picks one of the three (D44).
-            Choice(
-                stringResource(R.string.settings_transitions),
-                listOf(
-                    TransitionChoice.SHARED to stringResource(R.string.settings_transitions_shared),
-                    TransitionChoice.SLIDE to stringResource(R.string.settings_transitions_slide),
-                    TransitionChoice.FADE to stringResource(R.string.settings_transitions_fade),
-                ),
-                transition,
-            ) { t -> scope.launch { g.settings.setTransition(t) } }
         }
 
         HorizontalDivider()
