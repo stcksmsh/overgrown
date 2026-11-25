@@ -88,7 +88,7 @@ class NotificationsTest {
         while (!condition()) {
             check(System.currentTimeMillis() < end) { "timed out waiting for $what" }
             shadowOf(Looper.getMainLooper()).idle()
-            Thread.yield()
+            Thread.sleep(20)
         }
     }
 
