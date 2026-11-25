@@ -4,11 +4,14 @@ package com.kostavukicevic.plants.ui
 import android.provider.Settings
 import androidx.activity.BackEventCompat
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.lifecycle.Lifecycle
 import com.kostavukicevic.plants.App
 import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
@@ -35,11 +38,12 @@ class TransitionsTest(private val choice: TransitionChoice) {
     val rules: RuleChain = RuleChain.outerRule(RegisterHostActivity()).around(compose)
 
     private lateinit var g: Graph
+    private var boris = 0L
 
     @Before
     fun setUp() {
         g = useTestDatabase()
-        plant(g, "Boris", place(g, "Hall"))
+        boris = plant(g, "Boris", place(g, "Hall"))
         runBlocking { g.settings.setTransition(choice) }
     }
 
@@ -132,6 +136,70 @@ class TransitionsTest(private val choice: TransitionChoice) {
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.mainClock.advanceTimeBy(Motion.MEDIUM2 * 2L)
         assertEquals("one back reaches Today", true, todayShown && !plantShown)
+    }
+
+    private fun tab(id: Int) = compose.onNode(isTab and hasText(s(id))).performClick()
+
+    /** Where each "Boris" text is drawn, top left in the root. */
+    private fun borisAt() = compose.onAllNodes(hasText("Boris"), useUnmergedTree = true).fetchSemanticsNodes().map { it.positionInRoot }.toSet()
+
+    @Test
+    fun switchingTabsCrossfadesWithoutGrowingTheCardIntoTheRow() {
+        startOnToday()
+        val onToday = borisAt().single()
+        tab(R.string.plants_title)
+        compose.waitUntil(5_000) { count(s(R.string.today_title)) == 1 }
+        compose.waitForIdle()
+        val onPlants = borisAt().single()
+        tab(R.string.today_title)
+        compose.waitForIdle()
+
+        compose.mainClock.autoAdvance = false
+        tab(R.string.plants_title)
+        // Every frame each Boris is where it rests; a shared element would be somewhere between.
+        val seen = mutableSetOf<Offset>()
+        repeat(Motion.SHORT4 / 16) {
+            compose.mainClock.advanceTimeByFrame()
+            seen += borisAt()
+        }
+        assertEquals(setOf(onToday, onPlants), seen)
+        compose.mainClock.advanceTimeBy(Motion.MEDIUM2.toLong())
+        assertEquals(setOf(onPlants), borisAt())
+    }
+
+    @Test
+    fun backDuringThePopFromTheWizardLeavesTheScreenBelowToo() {
+        startOnToday()
+        openBoris()
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        // Deleted elsewhere while his page is open: the wizard opens on "this plant is gone", whose back handler is always on.
+        runBlocking { g.garden.deletePlant(boris) }
+        compose.onNodeWithText(s(R.string.edit)).performClick()
+        val gone = s(R.string.wizard_plant_missing)
+        compose.waitUntil(5_000) { count(gone) > 0 }
+
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText(s(R.string.back)).performClick()
+        compose.mainClock.advanceTimeBy(Motion.MEDIUM2 / 2L)
+        assertTrue("the wizard is still leaving", count(gone) > 0)
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.mainClock.advanceTimeBy(Motion.MEDIUM2 * 3L)
+        assertTrue("back reached Today", todayShown)
+    }
+
+    @Test
+    fun removingAnimationsWhileAwayIsSeenOnReturn() {
+        startOnToday()
+        compose.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+        Settings.Global.putFloat(compose.activity.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        compose.waitUntil(5_000) { count("Boris") > 0 }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        compose.onAllNodes(hasText("Boris")).onFirst().performClick()
+        compose.mainClock.advanceTimeByFrame()
+        assertTrue("Today is still drawn", !todayShown)
     }
 
     companion object {

@@ -81,6 +81,9 @@ internal val LocalSharedTransition = compositionLocalOf<SharedTransitionScope?> 
 /** The enter and exit of the screen this is drawn in; null outside App. */
 internal val LocalScreenTransition = compositionLocalOf<AnimatedVisibilityScope?> { null }
 
+/** False in a screen that is leaving: its back handlers stand down so a back press goes to the screen below (D44). */
+internal val LocalScreenIsTop = compositionLocalOf { true }
+
 /**
  * Marks [part] ("card", "name" or "glyph") of the plant or list item [key] as the same thing on Today, on Plants
  * and on the plant screen, so with the "Shared" transition it grows from one into the other. Does nothing otherwise.

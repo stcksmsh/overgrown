@@ -56,6 +56,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -72,11 +73,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.IntOffset
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.lifecycleScope
 import com.kostavukicevic.plants.data.ThemeChoice
 import com.kostavukicevic.plants.data.TransitionChoice
 import com.kostavukicevic.plants.ui.AddPlantWizard
 import com.kostavukicevic.plants.ui.EditPlaceScreen
+import com.kostavukicevic.plants.ui.LocalScreenIsTop
 import com.kostavukicevic.plants.ui.LocalScreenTransition
 import com.kostavukicevic.plants.ui.LocalSharedTransition
 import com.kostavukicevic.plants.ui.PlacesScreen
@@ -205,8 +208,14 @@ internal fun App(openPlant: Long?) {
     val scope = rememberCoroutineScope()
     val undo = remember { UndoDelete(snackbar, scope) }
     val context = LocalContext.current
-    // With "Remove animations" on, the animator duration scale is 0 and screens change at once.
-    val instant = remember { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
+    // With "Remove animations" on, the animator duration scale is 0 and screens change at once. It can change while
+    // the app is away, so it is read again on each return.
+    fun animationsOff() = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+    var instant by remember { mutableStateOf(animationsOff()) }
+    LifecycleResumeEffect(Unit) {
+        instant = animationsOff()
+        onPauseOrDispose {}
+    }
     val top = stack.last()
     val shown = remember { SeekableTransitionState(top) }
     val choice by context.graph.settings.transition.collectAsState(TransitionChoice.SHARED)
@@ -218,19 +227,18 @@ internal fun App(openPlant: Long?) {
 
     LaunchedEffect(top) { if (instant) shown.snapTo(top) else shown.animateTo(top) }
     PredictiveBackHandler(enabled = stack.size > 1) { progress ->
-        val from = stack.last()
         val to = stack[stack.lastIndex - 1]
         try {
             progress.collect { if (!instant) shown.seekTo(it.progress, to) }
             back()
         } catch (e: CancellationException) {
-            // The gesture was cancelled: play the pop back to where the finger started, then rest on the same screen.
+            // The gesture was cancelled: play the pop back to where the finger started, then rest on the top screen.
             scope.launch {
                 val from0 = shown.fraction
                 animate(from0, 0f, animationSpec = tween((from0 * Motion.MEDIUM2).toInt(), easing = LinearEasing)) { f, _ ->
                     scope.launch { shown.seekTo(f) }
                 }
-                shown.snapTo(from)
+                shown.snapTo(stack.last())
             }
             throw e
         }
@@ -297,7 +305,10 @@ internal fun App(openPlant: Long?) {
             Box(Modifier.padding(padding).consumeWindowInsets(padding)) { screenContent(top) }
         } else {
             SharedTransitionLayout(Modifier.padding(padding).consumeWindowInsets(padding)) {
-                rememberTransition(shown, label = "screens").AnimatedContent(
+                val screens = rememberTransition(shown, label = "screens")
+                // Today and Plants show the same plant under the same keys; switching tabs is a plain crossfade.
+                val tabSwitch = screens.currentState != screens.targetState && screens.currentState.isTab && screens.targetState.isTab
+                screens.AnimatedContent(
                     transitionSpec = {
                         val i = stack.indexOf(initialState)
                         val t = stack.indexOf(targetState)
@@ -306,8 +317,9 @@ internal fun App(openPlant: Long?) {
                     contentKey = { it.key() },
                 ) { screen ->
                     CompositionLocalProvider(
-                        LocalSharedTransition provides this@SharedTransitionLayout.takeIf { choice == TransitionChoice.SHARED },
+                        LocalSharedTransition provides this@SharedTransitionLayout.takeIf { choice == TransitionChoice.SHARED && !tabSwitch },
                         LocalScreenTransition provides this,
+                        LocalScreenIsTop provides (screen == top),
                     ) { screenContent(screen) }
                 }
             }
@@ -325,7 +337,9 @@ private val Screen.isTab get() = this == Screen.Today || this == Screen.Plants
  */
 private fun screenTransition(choice: TransitionChoice, from: Screen, to: Screen, pop: Boolean): ContentTransform {
     if (from.isTab && to.isTab) {
-        return fadeIn(tween(Motion.SHORT4, easing = Motion.Emphasized)) togetherWith fadeOut(tween(Motion.SHORT4, easing = Motion.Emphasized))
+        // The new tab fades in over the old one, which stays opaque until it goes: two half-faded screens would let
+        // the background through and dim the tabs in the middle.
+        return fadeIn(tween(Motion.SHORT4, easing = Motion.Emphasized)) togetherWith fadeOut(tween(0, delayMillis = Motion.SHORT4))
     }
     val plantFromList = (from is Screen.Plant && to.isTab) || (to is Screen.Plant && from.isTab)
     val t = when {
