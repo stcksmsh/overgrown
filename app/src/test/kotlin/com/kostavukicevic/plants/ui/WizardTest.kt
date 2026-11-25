@@ -450,6 +450,36 @@ class WizardTest {
     }
 
     @Test
+    fun aSaveFailureIsClearedWhenTheStepChanges() {
+        val id = stored(oldFormPlant)
+        interceptDao(g) { method, args, real ->
+            if (method.name == "upsertPlant") throw IllegalStateException("disk full") else callReal(method, args, real)
+        }
+        startEditing(id, "Old form plant")
+        press(R.string.wizard_next_where)
+        assertStep(2)
+        press(R.string.save)
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(s(R.string.wizard_save_failed)).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(s(R.string.back)).performClick()
+        assertStep(1)
+        compose.onNodeWithText(s(R.string.wizard_save_failed)).assertDoesNotExist()
+    }
+
+    @Test
+    fun aSaveFailureIsClearedWhenAnAnswerChanges() {
+        val id = stored(oldFormPlant)
+        interceptDao(g) { method, args, real ->
+            if (method.name == "upsertPlant") throw IllegalStateException("disk full") else callReal(method, args, real)
+        }
+        startEditing(id, "Old form plant")
+        press(R.string.save)
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(s(R.string.wizard_save_failed)).fetchSemanticsNodes().isNotEmpty() }
+        field(R.string.wizard_name).performTextInput("x")
+        compose.waitForIdle()
+        compose.onNodeWithText(s(R.string.wizard_save_failed)).assertDoesNotExist()
+    }
+
+    @Test
     fun twoSaveTapsBeforeTheButtonIsRedrawnSaveOnce() {
         start()
         field(R.string.wizard_name).performTextInput("Zzplant")
@@ -637,6 +667,21 @@ class WizardTest {
         shadowOf(lm).setLocationEnabled(false)
         toNewOutdoorPlace()
         tap(R.string.wizard_use_location)
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(s(R.string.wizard_location_unavailable)).fetchSemanticsNodes().isNotEmpty() }
+        assertLocationUnavailableAndFieldsUnchanged()
+    }
+
+    @Test
+    fun useMyLocationWithAProviderOnButNoFixSaysSoAfterTheTimeoutAndLeavesTheFields() {
+        val app = compose.activity.application
+        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
+        val lm = app.getSystemService(LocationManager::class.java)
+        listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER).forEach { shadowOf(lm).setProviderEnabled(it, true) }
+        toNewOutdoorPlace()
+        tap(R.string.wizard_use_location)
+        compose.onNodeWithText(s(R.string.wizard_location_unavailable)).assertDoesNotExist()
+        // The 10 s timeout runs on the test clock, so nothing sleeps.
+        compose.mainClock.advanceTimeBy(10_500)
         compose.waitUntil(5_000) { compose.onAllNodesWithText(s(R.string.wizard_location_unavailable)).fetchSemanticsNodes().isNotEmpty() }
         assertLocationUnavailableAndFieldsUnchanged()
     }

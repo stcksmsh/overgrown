@@ -248,6 +248,12 @@ internal class WizardState(acquiredOn: String) {
     /** The plant this wizard has written, so a second Save updates it instead of adding another. */
     var savedPlantId by mutableStateOf<Long?>(null)
 
+    /** Every answer, so a change to any of them can be noticed. */
+    val answers get() = listOf(
+        name, speciesSlug, archetype, look, outdoor, placeId, newPlace, placeName, cityQuery, cityPicked, lat, lon,
+        potWidth, shape, material, drainage, nursery, canopy, volumeOverride, acquiredOn, rain, wind, sun, light,
+    )
+
     /** The plant goes to a place this wizard creates: chosen, or no place of the kind exists yet. */
     fun creating(places: List<PlaceEntity>) = newPlace || places.none { it.outdoor == outdoor }
 
@@ -377,6 +383,9 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
         st.loaded = true
     }
     if (missing) { MissingPlant(onDone); return }
+
+    // A failed save belongs to the step and answers it was tried on; the keys are unchanged while it is set.
+    LaunchedEffect(st.step, st.answers) { saveFailed = false }
 
     val known = places ?: emptyList()
     fun back() {
