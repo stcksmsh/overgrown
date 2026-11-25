@@ -466,6 +466,35 @@ class WizardTest {
     }
 
     @Test
+    fun aSaveThatCreatesAPlaceThenFailsKeepsItsMessageUntilSomethingChanges() {
+        interceptDao(g) { method, args, real ->
+            if (method.name == "upsertPlant") throw IllegalStateException("disk full") else callReal(method, args, real)
+        }
+        start()
+        field(R.string.wizard_name).performTextInput("Zzplant")
+        press(R.string.wizard_next_where)
+        tap(R.string.place_indoor)
+        field(R.string.wizard_place_name).performTextInput("Kitchen")
+        tap(R.string.wizard_advanced)
+        field(R.string.field_latitude).performTextInput("44.8")
+        field(R.string.field_longitude).performTextInput("20.5")
+        press(R.string.wizard_next_pot)
+        field(R.string.wizard_pot_width).performTextInput("20")
+        field(R.string.wizard_plant_width).performTextInput("30")
+        press(R.string.wizard_next_exposure)
+        tap(R.string.answer_little)
+        press(R.string.save)
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(s(R.string.wizard_save_failed)).fetchSemanticsNodes().isNotEmpty() }
+        // The place was written before the plant failed; that must not count as a change.
+        assertEquals(1, places().size)
+        compose.waitForIdle()
+        compose.onNodeWithText(s(R.string.wizard_save_failed)).assertExists()
+        tap(R.string.answer_no)
+        compose.waitForIdle()
+        compose.onNodeWithText(s(R.string.wizard_save_failed)).assertDoesNotExist()
+    }
+
+    @Test
     fun aSaveFailureIsClearedWhenAnAnswerChanges() {
         val id = stored(oldFormPlant)
         interceptDao(g) { method, args, real ->

@@ -362,7 +362,10 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
     val plants by g.garden.plants.collectAsState(emptyList())
     val st = rememberSaveable(saver = WizardState.saver) { WizardState(g.garden.today().toString()) }
     var saving by remember { mutableStateOf(false) }
-    var saveFailed by remember { mutableStateOf(false) }
+    // The step and answers a save failed on: the message shows only while they are unchanged. Taken after the failure,
+    // so answers the save itself wrote (a new place's id) do not count as the user's change.
+    var failedOn by remember { mutableStateOf<Pair<Int, List<Any?>>?>(null) }
+    val saveFailed = failedOn != null && failedOn == (st.step to st.answers)
     var missing by remember { mutableStateOf(false) }
 
     LaunchedEffect(plantId) {
@@ -384,9 +387,6 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
     }
     if (missing) { MissingPlant(onDone); return }
 
-    // A failed save belongs to the step and answers it was tried on; the keys are unchanged while it is set.
-    LaunchedEffect(st.step, st.answers) { saveFailed = false }
-
     val known = places ?: emptyList()
     fun back() {
         if (st.step > 1) { st.step--; st.showErrors = false } else onDone()
@@ -399,7 +399,7 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
         val firstBad = (1..STEPS).firstOrNull { !st.valid(it, known) }
         if (firstBad != null) { st.step = firstBad; st.showErrors = true; return }
         saving = true
-        saveFailed = false
+        failedOn = null
         scope.launch {
             try {
                 val newOutdoorPlace = savePlantAndPlace(g, st, plantId, known)
@@ -411,7 +411,7 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
             } catch (e: Exception) {
                 // A database failure; the answers stay, so Save can be tried again.
                 android.util.Log.w("Overgrown", "wizard save failed", e)
-                saveFailed = true
+                failedOn = st.step to st.answers
             } finally {
                 saving = false
             }
