@@ -229,6 +229,8 @@ internal class WizardState(acquiredOn: String) {
     var placeAdvanced by mutableStateOf(false)
 
     var potWidth by mutableStateOf("")
+    /** The width as loaded for an edit. Left as it is, it is accepted even above [MAX_WIDTH_CM], so an older large pot still saves. */
+    var storedPotWidth by mutableStateOf<String?>(null)
     var shape by mutableStateOf("STANDARD")
     var material by mutableStateOf("PLASTIC")
     var drainage by mutableStateOf(true)
@@ -286,7 +288,9 @@ internal class WizardState(acquiredOn: String) {
         if (placeName.isBlank() && near != null && near.km <= NEAR_KM) placeName = near.city.name
     }
 
-    fun computedVolumeL(): Double? = width(potWidth)?.let { potVolumeL(it, shape) }
+    fun potWidthValue(): Double? = if (potWidth == storedPotWidth) positive(potWidth) else width(potWidth)
+
+    fun computedVolumeL(): Double? = potWidthValue()?.let { potVolumeL(it, shape) }
 
     fun volumeL(): Double? = if (volumeOverride.isBlank()) computedVolumeL() else positive(volumeOverride)
 
@@ -300,7 +304,7 @@ internal class WizardState(acquiredOn: String) {
         } else {
             places.any { it.id == placeId && it.outdoor == outdoor }
         }
-        3 -> width(potWidth) != null && width(canopy) != null && volumeL() != null && acquiredOn.isNotEmpty()
+        3 -> potWidthValue() != null && width(canopy) != null && volumeL() != null && acquiredOn.isNotEmpty()
         else -> if (outdoor == true) rain != null && wind != null else light != null
     }
 
@@ -310,7 +314,7 @@ internal class WizardState(acquiredOn: String) {
                 arrayListOf<Any?>(
                     s.step, s.loaded, s.showErrors, s.name, s.speciesSlug, s.speciesLabel, s.archetype, s.look?.ordinal,
                     s.outdoor, s.placeId, s.newPlace, s.placeName, s.cityQuery, s.cityPicked, s.lat, s.lon, s.placeAdvanced,
-                    s.potWidth, s.shape, s.material, s.drainage, s.nursery, s.canopy, s.volumeOverride, s.potAdvanced, s.acquiredOn,
+                    s.potWidth, s.storedPotWidth, s.shape, s.material, s.drainage, s.nursery, s.canopy, s.volumeOverride, s.potAdvanced, s.acquiredOn,
                     s.rain?.ordinal, s.wind?.ordinal, s.sun?.ordinal, s.light, s.savedPlantId,
                 )
             },
@@ -326,7 +330,7 @@ internal class WizardState(acquiredOn: String) {
                     archetype = strOrNull(); look = (v.next() as Int?)?.let(Look.entries::get)
                     outdoor = v.next() as Boolean?; placeId = v.next() as Long?; newPlace = bool(); placeName = str(); cityQuery = str()
                     cityPicked = strOrNull(); lat = str(); lon = str(); placeAdvanced = bool()
-                    potWidth = str(); shape = str(); material = str(); drainage = bool(); nursery = bool(); canopy = str()
+                    potWidth = str(); storedPotWidth = strOrNull(); shape = str(); material = str(); drainage = bool(); nursery = bool(); canopy = str()
                     volumeOverride = str(); potAdvanced = bool(); acquiredOn = str()
                     rain = answer(); wind = answer(); sun = answer(); light = strOrNull(); savedPlantId = v.next() as Long?
                 }
@@ -352,6 +356,7 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
     val plants by g.garden.plants.collectAsState(emptyList())
     val st = rememberSaveable(saver = WizardState.saver) { WizardState(g.garden.today().toString()) }
     var saving by remember { mutableStateOf(false) }
+    var saveFailed by remember { mutableStateOf(false) }
     var missing by remember { mutableStateOf(false) }
 
     LaunchedEffect(plantId) {
@@ -368,7 +373,7 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
         st.shape = p.potShape; st.material = p.potMaterial; st.drainage = p.drainageHoles; st.nursery = p.inNurseryPot
         st.canopy = plain(p.canopyWidthCm); st.acquiredOn = p.acquiredOn
         val (w, litres) = storedPot(p)
-        st.potWidth = w; st.volumeOverride = litres; st.potAdvanced = litres.isNotEmpty()
+        st.potWidth = w; st.storedPotWidth = w; st.volumeOverride = litres; st.potAdvanced = litres.isNotEmpty()
         st.loaded = true
     }
     if (missing) { MissingPlant(onDone); return }
@@ -380,15 +385,24 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
     BackHandler(enabled = st.step > 1) { back() }
 
     fun save() {
+        // A second tap can land before the disabled button is drawn.
+        if (saving) return
         val firstBad = (1..STEPS).firstOrNull { !st.valid(it, known) }
         if (firstBad != null) { st.step = firstBad; st.showErrors = true; return }
         saving = true
+        saveFailed = false
         scope.launch {
             try {
                 val newOutdoorPlace = savePlantAndPlace(g, st, plantId, known)
                 g.scheduler.reschedule(); g.changed(); onDone()
                 // A new outdoor place has no forecast yet, as in EditPlaceScreen; the screen does not wait for it.
                 if (newOutdoorPlace) afterSave.launch { refreshAfterSave(g) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A database failure; the answers stay, so Save can be tried again.
+                android.util.Log.w("Overgrown", "wizard save failed", e)
+                saveFailed = true
             } finally {
                 saving = false
             }
@@ -420,6 +434,7 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
                 else -> ExposureStep(st, known, plants, plantId)
             }
             if (st.showErrors && !st.valid(st.step, known)) ErrorText(stringResource(R.string.wizard_fix_above))
+            if (saveFailed) ErrorText(stringResource(R.string.wizard_save_failed))
         }
     }
 }
@@ -445,7 +460,7 @@ private suspend fun savePlantAndPlace(g: Graph, st: WizardState, plantId: Long?,
     val creating = st.creating(places)
     // save() checked every step before calling this, so none of these returns is taken.
     val volume = st.volumeL() ?: return false
-    val potWidth = width(st.potWidth) ?: return false
+    val potWidth = st.potWidthValue() ?: return false
     val canopy = width(st.canopy) ?: return false
     val placeId = if (creating) {
         val lat = st.latitude() ?: return false
@@ -740,7 +755,7 @@ private fun UseMyLocation(st: WizardState) {
 private fun PotStep(st: WizardState) {
     val c = Overgrown.colors
     Title(stringResource(R.string.wizard_pot_title))
-    val badWidth = st.showErrors && width(st.potWidth) == null
+    val badWidth = st.showErrors && st.potWidthValue() == null
     val widthMessage = stringResource(R.string.wizard_width_invalid)
     DecimalField(stringResource(R.string.wizard_pot_width), st.potWidth, badWidth, widthMessage.takeIf { badWidth }) { st.potWidth = it }
     Text(stringResource(R.string.wizard_pot_shape), style = Type.secondary, color = c.ink)

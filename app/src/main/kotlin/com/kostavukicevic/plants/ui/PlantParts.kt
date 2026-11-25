@@ -64,10 +64,6 @@ import com.kostavukicevic.plants.ui.theme.waterLeftPercent
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.format.DayOfWeekNames
-import kotlinx.datetime.format.MonthNames
-import kotlinx.datetime.format.Padding
-import kotlinx.datetime.format.char
-import kotlinx.datetime.format
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
@@ -113,12 +109,9 @@ fun weekHeading(c: Context, monday: LocalDate, today: LocalDate): String {
     return when (monday) {
         thisWeek -> c.getString(R.string.plant_week_this)
         thisWeek.minus(DatePeriod(days = 7)) -> c.getString(R.string.plant_week_last)
-        else -> c.getString(R.string.plant_week_of, monday.format(weekFormat))
+        else -> c.getString(R.string.plant_week_of, Texts.date(monday))
     }
 }
-
-/** "9 Nov": the day without the leading zero that [Texts.date] gives. */
-private val weekFormat = LocalDate.Format { day(Padding.NONE); char(' '); monthName(MonthNames.ENGLISH_ABBREVIATED) }
 
 private fun dayName(d: LocalDate) = DayOfWeekNames.ENGLISH_ABBREVIATED.names[d.dayOfWeek.isoDayNumber - 1]
 
@@ -304,7 +297,8 @@ fun LearningDots(name: String, answers: Int, learned: Boolean) {
             for (i in 0 until LEARNING_DOTS) {
                 Box(
                     Modifier.weight(1f).height(10.dp).clip(RoundedCornerShape(Radius.barNarrow))
-                        .background(if (i < answers) StateBlock.Marigold.fill else colors.ground),
+                        // Ground nearly matches the surface in dark; outline is the token for marks on surface in both themes (D43).
+                        .background(if (i < answers) StateBlock.Marigold.fill else colors.outline),
                 )
             }
         }
@@ -337,9 +331,7 @@ fun HistoryRow(line: String, onEdit: () -> Unit, onDelete: () -> Unit) {
         TextButton(onClick = onEdit, modifier = Modifier.semantics { contentDescription = editLabel }) {
             Text(stringResource(R.string.edit), style = Type.label, color = colors.ink)
         }
-        TextButton(onClick = onDelete, modifier = Modifier.semantics { contentDescription = deleteLabel }) {
-            Text(stringResource(R.string.delete), style = Type.label, color = colors.errorText)
-        }
+        DeleteButton(onDelete, Modifier.semantics { contentDescription = deleteLabel })
     }
 }
 

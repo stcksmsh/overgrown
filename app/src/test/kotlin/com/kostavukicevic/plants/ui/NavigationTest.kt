@@ -34,6 +34,7 @@ import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.UrlTransport
 import com.kostavukicevic.plants.data.DbResponseStore
 import com.kostavukicevic.plants.data.Garden
+import com.kostavukicevic.plants.data.GardenDao
 import com.kostavukicevic.plants.data.GardenDb
 import com.kostavukicevic.plants.data.PlaceEntity
 import com.kostavukicevic.plants.data.PlantEntity
@@ -41,7 +42,11 @@ import com.kostavukicevic.plants.graph
 import com.kostavukicevic.plants.ui.theme.OvergrownTheme
 import com.kostavukicevic.plants.weather.MetNorway
 import com.kostavukicevic.plants.weather.WeatherService
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.TimeZone
@@ -58,6 +63,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import java.io.File
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Method
+import java.lang.reflect.Proxy
 import kotlin.time.Clock
 
 /** Bottom tabs, the top-bar menu, delete with Undo, and opening a plant from a notification, against a real database. */
@@ -277,6 +285,38 @@ class NavigationTest {
     }
 
     @Test
+    fun aPlaceCannotBeDeletedBeforeThePlantsHaveLoaded() {
+        val hall = place(g, "Hall")
+        plant(g, "Boris", hall)
+        val plantsGate = CompletableDeferred<Unit>()
+        // One flag per places query, set once it has emitted; the screen asks again on each recomposition.
+        val placesEmitted = mutableListOf<Boolean>()
+        interceptDao(g) { method, args, real ->
+            when (method.name) {
+                "plants" -> flow { plantsGate.await(); emitAll(real.plants()) }
+                "places" -> placesEmitted.size.let { i -> placesEmitted += false; real.places().onEach { placesEmitted[i] = true } }
+                else -> callReal(method, args, real)
+            }
+        }
+        start()
+        openMenu(R.string.places_title)
+        compose.waitForIdle()
+        compose.waitUntil(5_000) { placesEmitted.isNotEmpty() && placesEmitted.all { it } }
+        compose.waitForIdle()
+        // With the places known and the plants not, there is no Delete to tap: a tap now could not run the in-use check.
+        val delete = s(R.string.delete_named, "Hall")
+        compose.onNodeWithContentDescription(delete).assertDoesNotExist()
+
+        plantsGate.complete(Unit)
+        waitFor(delete, description = true)
+        compose.onNodeWithContentDescription(delete).performClick()
+        compose.onNodeWithText(s(R.string.place_in_use, "Hall", "Boris")).assertExists()
+        compose.mainClock.advanceTimeBy(SNACKBAR_GONE)
+        compose.waitForIdle()
+        assertNotNull(runBlocking { g.garden.place(hall) })
+    }
+
+    @Test
     fun aNotificationOpensItsPlant() {
         val boris = plant(g, "Boris", place(g, "Hall"))
         start(openPlant = boris)
@@ -362,6 +402,25 @@ internal fun useTestDatabase(): Graph {
     )
     Graph::class.java.getDeclaredField("garden").apply { isAccessible = true }.set(g, garden)
     return g
+}
+
+/**
+ * Puts [handler] in front of the test garden's DAO: it gets every call with the real DAO, so a test can hold back a
+ * query or make a write fail. [callReal] passes a call through.
+ */
+internal fun interceptDao(g: Graph, handler: (method: Method, args: Array<Any?>, real: GardenDao) -> Any?) {
+    val field = Garden::class.java.getDeclaredField("dao").apply { isAccessible = true }
+    val real = field.get(g.garden) as GardenDao
+    val proxy = Proxy.newProxyInstance(GardenDao::class.java.classLoader, arrayOf(GardenDao::class.java)) { _, method, args ->
+        handler(method, args ?: emptyArray(), real)
+    }
+    field.set(g.garden, proxy)
+}
+
+internal fun callReal(method: Method, args: Array<Any?>, real: GardenDao): Any? = try {
+    method.invoke(real, *args)
+} catch (e: InvocationTargetException) {
+    throw e.targetException
 }
 
 internal fun place(g: Graph, name: String): Long =

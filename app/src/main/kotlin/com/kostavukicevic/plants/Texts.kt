@@ -28,7 +28,7 @@ import kotlin.time.Instant
 
 /** Words for what the engine says. All text comes from resources. */
 object Texts {
-    private val dayFormat = LocalDate.Format { day(); char(' '); monthName(MonthNames.ENGLISH_ABBREVIATED) }
+    private val dayFormat = LocalDate.Format { day(Padding.NONE); char(' '); monthName(MonthNames.ENGLISH_ABBREVIATED) }
 
     private val weekdayFormat = LocalDate.Format { dayOfWeek(DayOfWeekNames.ENGLISH_ABBREVIATED) }
     // A no-break space keeps "6 Dec" on one line.

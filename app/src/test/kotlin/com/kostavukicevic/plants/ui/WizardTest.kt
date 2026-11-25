@@ -9,6 +9,7 @@ import android.location.Location
 import android.location.LocationManager
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
@@ -431,6 +432,88 @@ class WizardTest {
     }
 
     @Test
+    fun aSaveThatFailsSaysSoAndKeepsTheWizardOpen() {
+        val id = stored(oldFormPlant)
+        var fail = true
+        interceptDao(g) { method, args, real ->
+            if (method.name == "upsertPlant" && fail) throw IllegalStateException("disk full") else callReal(method, args, real)
+        }
+        startEditing(id, "Old form plant")
+        press(R.string.save)
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(s(R.string.wizard_save_failed)).fetchSemanticsNodes().isNotEmpty() }
+        assertFalse(done)
+
+        // The answers are still there, and Save works once the database does.
+        fail = false
+        saveAndWait()
+        compose.onNodeWithText(s(R.string.wizard_save_failed)).assertDoesNotExist()
+    }
+
+    @Test
+    fun twoSaveTapsBeforeTheButtonIsRedrawnSaveOnce() {
+        start()
+        field(R.string.wizard_name).performTextInput("Zzplant")
+        press(R.string.wizard_next_where)
+        tap(R.string.place_indoor)
+        field(R.string.wizard_place_name).performTextInput("Kitchen")
+        tap(R.string.wizard_advanced)
+        field(R.string.field_latitude).performTextInput("44.8")
+        field(R.string.field_longitude).performTextInput("20.5")
+        press(R.string.wizard_next_pot)
+        field(R.string.wizard_pot_width).performTextInput("20")
+        field(R.string.wizard_plant_width).performTextInput("30")
+        press(R.string.wizard_next_exposure)
+        tap(R.string.answer_little)
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText(s(R.string.save)) and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
+        val click = compose.onAllNodes(hasText(s(R.string.save)) and isEnabled())[0].fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
+        // Both taps in one frame, before the disabled button is drawn.
+        compose.runOnUiThread { click(); click() }
+
+        compose.waitUntil(5_000) { done }
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText(s(R.string.save)) and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(1, plants().size)
+        assertEquals(1, places().size)
+    }
+
+    private fun potPlant(widthCm: Double) = PlantEntity(
+        name = "Big tub", placeId = 0, archetypeId = "indoor-tropical-foliage", canopyWidthCm = 80.0,
+        potVolumeL = potVolumeL(widthCm, "STANDARD"), potHeightCm = widthCm * STANDARD_HEIGHT_TO_WIDTH, acquiredOn = "2026-01-01",
+    )
+
+    @Test
+    fun aStoredPotOf300SavesUntouched() = storedPotSavesUntouched(300.0)
+
+    /** Above the 300 cm limit for a typed width, but kept when the edit leaves it alone (D43). */
+    @Test
+    fun aStoredPotOf301SavesUntouched() = storedPotSavesUntouched(301.0)
+
+    private fun storedPotSavesUntouched(widthCm: Double) {
+        val id = stored(potPlant(widthCm))
+        val before = runBlocking { g.garden.plant(id) }
+        startEditing(id, "Big tub")
+        saveAndWait()
+        assertEquals(before, runBlocking { g.garden.plant(id) })
+    }
+
+    @Test
+    fun aStoredPotOver300ChangedToAnotherWidthOver300IsRefused() {
+        val id = stored(potPlant(301.0))
+        startEditing(id, "Big tub")
+        press(R.string.wizard_next_where)
+        press(R.string.wizard_next_pot)
+        compose.onNode(hasSetTextAction() and hasText(s(R.string.wizard_pot_width))).assert(hasText("301"))
+        field(R.string.wizard_pot_width).performTextReplacement("302")
+        press(R.string.save)
+        assertStep(3)
+        compose.onAllNodesWithText(s(R.string.wizard_width_invalid)).fetchSemanticsNodes().also { assertTrue(it.isNotEmpty()) }
+        assertFalse(done)
+
+        field(R.string.wizard_pot_width).performTextReplacement("300")
+        saveAndWait()
+        assertEquals(300.0 * STANDARD_HEIGHT_TO_WIDTH, runBlocking { g.garden.plant(id) }!!.potHeightCm!!, 1e-9)
+    }
+
+    @Test
     fun aPlantThatIsGoneSaysSoAndOnlyLeaves() {
         start(9_999)
         compose.waitUntil(5_000) { compose.onAllNodesWithText(s(R.string.wizard_plant_missing)).fetchSemanticsNodes().isNotEmpty() }
@@ -537,6 +620,43 @@ class WizardTest {
         compose.onNodeWithText(s(R.string.wizard_city_picked, "Belgrade, Serbia")).assertDoesNotExist()
         assertEquals("", typed(R.string.wizard_place_name))
         assertEquals("" to "", latLonFields())
+    }
+
+    private fun assertLocationUnavailableAndFieldsUnchanged() {
+        compose.onNodeWithText(s(R.string.wizard_location_unavailable)).performScrollTo().assertExists()
+        compose.onNodeWithText(s(R.string.wizard_city_picked, "Belgrade, Serbia")).assertDoesNotExist()
+        assertEquals("", typed(R.string.wizard_place_name))
+        assertEquals("" to "", latLonFields())
+    }
+
+    @Test
+    fun useMyLocationWithLocationOffSaysSoAndLeavesTheFields() {
+        val app = compose.activity.application
+        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
+        val lm = app.getSystemService(LocationManager::class.java)
+        shadowOf(lm).setLocationEnabled(false)
+        toNewOutdoorPlace()
+        tap(R.string.wizard_use_location)
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(s(R.string.wizard_location_unavailable)).fetchSemanticsNodes().isNotEmpty() }
+        assertLocationUnavailableAndFieldsUnchanged()
+    }
+
+    @Test
+    fun useMyLocationDoesNotAskGpsWhichApproximatePermissionCannotUse() {
+        val app = compose.activity.application
+        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
+        val lm = app.getSystemService(LocationManager::class.java)
+        listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER).forEach { shadowOf(lm).setProviderEnabled(it, false) }
+        shadowOf(lm).setProviderEnabled(LocationManager.GPS_PROVIDER, true)
+        toNewOutdoorPlace()
+        tap(R.string.wizard_use_location)
+        val unavailable = s(R.string.wizard_location_unavailable)
+        compose.waitUntil(5_000) {
+            // A GPS fix is on offer the whole time; taking it would fill the fields.
+            shadowOf(lm).simulateLocation(Location(LocationManager.GPS_PROVIDER).apply { latitude = 44.81234; longitude = 20.46789 })
+            compose.onAllNodesWithText(unavailable).fetchSemanticsNodes().isNotEmpty()
+        }
+        assertLocationUnavailableAndFieldsUnchanged()
     }
 
     companion object {

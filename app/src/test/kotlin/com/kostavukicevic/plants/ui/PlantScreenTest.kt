@@ -4,8 +4,10 @@ package com.kostavukicevic.plants.ui
 import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -35,6 +37,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.TimeZone
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -57,6 +60,7 @@ class PlantScreenTest {
     private lateinit var g: Graph
     private lateinit var db: GardenDb
     private var plantId = 0L
+    private var backed = false
 
     @Before
     fun setUp() {
@@ -73,7 +77,7 @@ class PlantScreenTest {
 
     /** Shows the screen and waits for the strip, which comes from its own query and moves everything below it. */
     private fun start() {
-        compose.setContent { OvergrownTheme { PlantScreen(plantId, onBack = {}, onEdit = {}) } }
+        compose.setContent { OvergrownTheme { PlantScreen(plantId, onBack = { backed = true }, onEdit = {}) } }
         compose.waitUntil(15_000) {
             compose.onAllNodes(hasContentDescription(s(R.string.plant_next_days), substring = true)).fetchSemanticsNodes().isNotEmpty()
         }
@@ -161,15 +165,41 @@ class PlantScreenTest {
     fun aDateBeforeThePlantWasAcquiredIsRefused() {
         log("2026-11-01", "FED")
         start()
-        val edit = s(R.string.edit_named, "01 Nov: fed")
+        val edit = s(R.string.edit_named, "1 Nov: fed")
         waitFor(edit, description = true)
 
         compose.onNodeWithContentDescription(edit).performScrollTo().performClick()
         compose.onNodeWithText(s(R.string.plant_day_before)).performClick()
         compose.onNodeWithText(s(R.string.save)).performClick()
 
-        waitFor(s(R.string.plant_entry_before_acquired, "01 Nov"))
+        waitFor(s(R.string.plant_entry_before_acquired, "1 Nov"))
         assertEquals("2026-11-01", stored().single().date)
+    }
+
+    @Test
+    fun historyDatesHaveNoLeadingZero() {
+        log("2026-11-04", "FED")
+        start()
+        waitFor(s(R.string.edit_named, "4 Nov: fed"), description = true)
+        compose.onNodeWithText("04 Nov: fed").assertDoesNotExist()
+    }
+
+    @Test
+    fun deletingThePlantAsksFirst() {
+        start()
+        waitFor(s(R.string.plant_history_empty))
+        val question = s(R.string.plant_delete_question, "Fern")
+        compose.onNodeWithText(s(R.string.delete)).performScrollTo().performClick()
+        compose.onNodeWithText(question).assertExists()
+        compose.onNodeWithText(s(R.string.cancel)).performClick()
+        compose.onNodeWithText(question).assertDoesNotExist()
+        compose.waitForIdle()
+        assertNotNull(runBlocking { g.garden.plant(plantId) })
+
+        compose.onNodeWithText(s(R.string.delete)).performScrollTo().performClick()
+        compose.onNode(hasText(s(R.string.delete)) and hasAnyAncestor(isDialog())).performClick()
+        compose.waitUntil(15_000) { runBlocking { g.garden.plant(plantId) == null } }
+        assertTrue(backed)
     }
 
     @Test

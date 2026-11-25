@@ -8,6 +8,7 @@
     <string name="wizard_next_pot">Next: the pot</string>
     <string name="wizard_next_exposure">Next: sun and rain</string>
     <string name="wizard_fix_above">Check the answers above.</string>
+    <string name="wizard_save_failed">Could not save the plant. Try again.</string>
 
     <string name="wizard_plant_title">What plant is it?</string>
     <string name="wizard_name">Name, if you know it</string>

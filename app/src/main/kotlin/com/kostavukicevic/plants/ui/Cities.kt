@@ -75,10 +75,10 @@ internal fun hasCoarseLocation(context: Context) =
 internal suspend fun currentLocation(context: Context): Location? {
     val lm = context.getSystemService(LocationManager::class.java) ?: return null
     val enabled = lm.getProviders(true)
+    // No GPS: approximate permission does not cover it, and asking it throws.
     val preferred = listOfNotNull(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) LocationManager.FUSED_PROVIDER else null,
         LocationManager.NETWORK_PROVIDER,
-        LocationManager.GPS_PROVIDER,
     )
     val provider = preferred.firstOrNull { it in enabled } ?: return null
     return try {
