@@ -100,6 +100,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             message = try {
                 val input = withContext(Dispatchers.IO) { c.contentResolver.openInputStream(source) } ?: throw java.io.IOException("unreadable file")
                 val missing = input.use { g.garden.import(it) }
+                g.scheduler.forgetPrompts()
                 g.scheduler.reschedule(); g.changed()
                 if (missing == 0) res.getString(R.string.import_done) else res.getQuantityString(R.plurals.import_done_missing_photos, missing, missing)
             } catch (e: java.io.IOException) {
