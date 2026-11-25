@@ -325,3 +325,24 @@ Small fixes found in review of #21, #25, #29, #31 and #33. Each has a test or a 
 - **Learning dots.** Empty dots use the `outline` token in both themes. `ground` nearly matched the dark surface, so the empty dots disappeared; in light the empty dots are now a little darker than the mockup's.
 - **Choice chips.** At 1.3x font scale a long chip label wraps to two lines inside a taller chip, and chip rows keep a gap, instead of clipping the second line.
 - **Places.** A test now holds the plants query back and shows that no Delete is offered until the plants are known, so a delete cannot skip the in-use check (#33).
+
+## D44. Screen transitions, three variants to choose from
+
+Screens no longer swap at once. Three variants are built so the owner can compare them on the phone. They are chosen under Settings > Developer options > Transitions (Shared, Slide, Fade). The choice is stored in `Settings.transition`, and the default is Shared. The choice stays a developer option until the owner picks one; the other two then go.
+
+- **Shared.** Opening a plant from a Today card, a resting tile or a Plants row grows the card into the plant screen's moss name block. The plant's name and glyph move into place, and the two screens crossfade around them (`SharedTransitionLayout`, `sharedBounds` keyed `card/plant:<id>`, `name/…`, `glyph/…`). Back reverses it. Every other push and pop uses Slide.
+- **Slide.** The pushed screen slides in from the right over the old one, which moves 20% of its width to the left. A pop is the same in reverse, with the leaving screen kept on top.
+- **Fade.** Material fade through: the old screen fades out over the first 35%, then the new one fades in while it grows from 92% scale.
+- **Tabs.** Today and Plants always crossfade, whatever the variant. The new tab fades in over the old one, which stays opaque until the end; fading both at once let the background show through and dimmed the tab bar halfway. No shared elements run during a tab switch: Today and Plants show the same plant under the same keys, and Shared would otherwise morph a Today card into its Plants row.
+- **Timing.** Pushes and pops take 300 ms (Material `medium2`); the tab crossfade takes 200 ms (`short4`). Moves use emphasized easing, `CubicBezier(0.2, 0, 0, 1)`. Fade through uses emphasized decelerate `(0.05, 0.7, 0.1, 1)` coming in and emphasized accelerate `(0.3, 0, 0.8, 0.15)` going out. The values live in `Motion` in `Theme.kt`.
+- **Predictive back.** The shown screen follows the top of the back stack through a `SeekableTransitionState`. The system back gesture (`PredictiveBackHandler`) drags the pop with the finger. Letting go completes it. A cancelled gesture plays the pop backwards from where the finger was, then rests on whatever is on top of the stack by then.
+- **Remove animations.** When the system animator duration scale is 0, the screen is drawn without the animated container and changes on the next frame. The scale is read again each time the app resumes, so changing it in system settings takes effect on return.
+- **The tabs moved into the two tab screens.** They were the Scaffold's bottom bar, so a pushed screen could not slide over them. The snackbar is offset by their height and its shadow is clipped at their edge, so it sits and draws where it did before; the goldens are unchanged.
+- **A second tap pushes once.** A screen's buttons act only while that screen is the top of the stack, so a second tap on a card that is already leaving does nothing. Its back buttons work the same way. A leaving screen also turns off its own back handlers (the wizard's, through `LocalScreenIsTop`), so a back press during a pop goes to the screen below instead of being swallowed by the screen on its way out.
+- **The choice is read in the background.** Until the stored value arrives (a few milliseconds after start), Shared is used.
+- **Edges.**
+  - Back during a push ends on the screen under it.
+  - Rotation in the middle of a transition restores the saved stack and shows its top without animation.
+  - A plant opened from a notification starts with the plant on top, so it has no enter animation.
+  - Deleting a plant from its own page pops like Back. The leaving page may lose its body as the plant goes.
+  - Shared with a card that is partly scrolled off screen still grows from where the card is, including the part off screen; it looks right. A card scrolled fully out of the list is not composed, so there is nothing to grow from; the plant screen then crossfades in alone.

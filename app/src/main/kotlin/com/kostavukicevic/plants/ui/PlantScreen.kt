@@ -144,6 +144,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
             if (s == null || log == null) return@Column
             val today = g.garden.today()
             NameBlock(
+                plantId = plantId,
                 name = s.plant.name,
                 typeAndPlace = plantType(s)?.let { stringResource(R.string.plant_type_and_place, it, s.place.name) } ?: s.place.name,
                 glyph = glyphFor(s.plant.archetypeId),

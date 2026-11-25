@@ -382,7 +382,7 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
     fun back() {
         if (st.step > 1) { st.step--; st.showErrors = false } else onDone()
     }
-    BackHandler(enabled = st.step > 1) { back() }
+    BackHandler(enabled = st.step > 1 && LocalScreenIsTop.current) { back() }
 
     fun save() {
         // A second tap can land before the disabled button is drawn.
@@ -510,7 +510,7 @@ private suspend fun savePlantAndPlace(g: Graph, st: WizardState, plantId: Long?,
 @Composable
 private fun MissingPlant(onDone: () -> Unit) {
     val c = Overgrown.colors
-    BackHandler(onBack = onDone)
+    BackHandler(enabled = LocalScreenIsTop.current, onBack = onDone)
     Column(
         Modifier.fillMaxSize().background(c.ground).statusBarsPadding().navigationBarsPadding().padding(Spacing.screen),
         verticalArrangement = Arrangement.spacedBy(Spacing.grid * 4),
