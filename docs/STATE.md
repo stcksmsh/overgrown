@@ -24,7 +24,7 @@ Handover for the next coordinator. Read this, then run `nonslop status`. The own
 
 ## Next, in order
 
-1. Small polish left: #36 "Could not save the plant" stays after going back a step; #36 a WizardTest fakes the location fix inside its wait loop; #35 a late reminder job is named for the wrong day (harmless), and the night rule has no test for feed/repot reminders; #21 recheck place emptiness inside the delete transaction (data/**); #25 frost days listed by name, not as ranges. Owner to judge on the phone: a solid brick Delete on every history row (DESIGN 5) may look heavy.
+1. Small polish left: #31 no test for "no fix" (provider on, no location returned); #36 "Could not save the plant" stays after going back a step; #36 a WizardTest fakes the location fix inside its wait loop; #35 a late reminder job is named for the wrong day (harmless), and the night rule has no test for feed/repot reminders; #21 recheck place emptiness inside the delete transaction (data/**); #25 frost days listed by name, not as ranges. Owner to judge on the phone: a solid brick Delete on every history row (DESIGN 5) may look heavy.
 2. Data: ~12 archetypes, then ~300 common names mapped to them (agent decides, source-checked).
 
 ## Waiting on the owner
