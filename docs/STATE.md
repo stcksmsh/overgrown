@@ -5,7 +5,7 @@ Handover for the next coordinator. Read this, then run `nonslop status`. The own
 ## Repositories and process
 
 - `stcksmsh/overgrown` (public, GPL-3.0-only): app, engine, weather, storage. Local `/secondary/Programming/Github/Overgrown`. Submodule `overgrown-data` pinned at `7756c25`.
-- `stcksmsh/overgrown-data` (private, AGPL-3.0-only): care database. Reviewed archetypes: hardy-potted-conifer and the four indoor ones (data D9). Species entries are drafts.
+- `stcksmsh/overgrown-data` (private, AGPL-3.0-only): care database. Launch set of 12 archetypes fixed in data D10. Reviewed: hardy-potted-conifer, the four indoor ones (D9), outdoor-mediterranean-shrub, outdoor-tender-perennial, outdoor-fruiting-vegetable (D11, data main ec9efde). Species entries are drafts. The nonslop merge hook cannot merge data PRs (it checks app PR numbers): the owner types `! gh pr merge <n> -R stcksmsh/overgrown-data --merge` with `!` as the very first character (a leading space sends it as chat).
 - CI is OFF until close to V1 (D37): the `CI` workflow is disabled in GitHub (`gh workflow disable CI`; the file `.github/workflows/ci.yml` is unchanged, `gh workflow enable CI` restores it) and `.nonslop.toml [merge] allow_no_ci = true`. The local test command is the gate; every brief must require it. Re-enable both before the first beta.
 - Merging: the owner said "merge each time" and "You're always allowed to merge". Merge app PRs yourself once `nonslop slice verify` passes at the head, a fresh review (clean or minor) is recorded at that head (record it BEFORE calling merge), and the branch contains current main. If the permission check refuses, ask the owner once for a standing "merge each time". Data-repo PRs: the owner runs `! gh pr merge <n> -R stcksmsh/overgrown-data --merge`.
 - Care data: the agent decides (owner is not a botanist; never ask him to approve plant data). Fresh-context source check, then mark reviewed.
@@ -18,15 +18,19 @@ Handover for the next coordinator. Read this, then run `nonslop status`. The own
 
 #17 quick Dry answer, #18 design foundation (Theme.kt, Bricolage, Roborazzi exact goldens), #20 glyphs, #21 navigation, #22 alert events data, #23 Today cards + forecast loading, #24 data pin (indoor archetypes), #25 plant screen (DayStrip, LearningDots, history by week, edit/delete), #27 alert cards (Done/Dismiss) + notifications (Wet/OK/Dry, one alert per event). #29 add-plant wizard (4 steps, edit opens the same steps, D38). #31 "Use my location" (D40), #32 Settings (D39), #33 Today matches the mockup (D41; PR #26 closed as superseded) plus fixes for three test flakes. #35 notification minors (D42), #36 UI minors (D43; plant delete now confirms, history dates without leading zero). #38 screen transitions (D44); the owner kept Shared, the switch and the other two variants went (D45). #39 small leftovers (wizard save error clears on change, frost days as ranges, a test for "Use my location" with no fix). #41 TalkBack: Choice chips and entry-dialog answers announce radio role and state, with a guard test (D46). Last APK sent: release build of dad93d4 (debug builds are janky; test APKs now from :app:assembleFossBeta).
 
-## In flight (check `nonslop status`)
+## In flight (check `nonslop status` in BOTH repos)
 
-- Nothing. The main checkout is a detached, stale HEAD left by builders; do not build from it. Build APKs in a worktree from origin/main.
+- overgrown-data `claude/archetypes-outdoor-2`: round 2, the last four archetypes (annual bedding, leafy herb, hardy flowering shrub, tender evergreen; bedding may merge into fruiting vegetable), D12. Brief: overgrown-data `.claude/tmp/568dacfb/archetypes-outdoor-2.md`. The builder may have stopped mid-slice: check its worktree for unpushed work before re-dispatching. Then a fresh-context source check (every value against its snapshot; cold limits are damage limits; pots left out in winter need the engine block), CI, owner merges, then mark reviewed (as data PR #9).
+- App `claude/data-pin-outdoor-1`: registered, NOT dispatched. Brief: `.claude/tmp/568dacfb/briefs/data-pin-outdoor-1.md` (bump the pin 7756c25 -> ec9efde, CareDataPinTest to eight ids, D47). Dispatch it, merge, then send a beta APK.
+- The main checkout is a detached, stale HEAD left by builders; do not build from it. Build APKs in a worktree from origin/main.
 
 ## Next, in order
 
-1. Small polish left: #36 a WizardTest fakes the location fix inside its wait loop; #35 a late reminder job is named for the wrong day (harmless), and the night rule has no test for feed/repot reminders; #21 recheck place emptiness inside the delete transaction (data/**). Owner to judge on the phone: a solid brick Delete on every history row (DESIGN 5) may look heavy.
-2. Data round 2: outdoor archetypes 4-7 after overgrown-data #8; mark the round-1 archetypes reviewed and bump the app's data pin; then the ~300 common-name table (agent decides, source-checked).
-3. The overgrown-data tools test does not declare the data files as inputs, so a data-only change can report UP-TO-DATE.
+1. Data pin (above), beta APK to the owner.
+2. Round 2 data (above), mark reviewed, pin again.
+3. Glyphs and "pick by look" tiles for the outdoor archetypes (they use the leafy fallback glyph; new art is taste: captures to the owner).
+4. The ~300 common-name table mapped to the 12 archetypes (agent decides, source-checked).
+5. Small polish: #36 a WizardTest fakes the location fix inside its wait loop; #35 a late reminder job is named for the wrong day (harmless) and the night rule has no feed/repot test; #21 recheck place emptiness inside the delete transaction (data/**); overgrown-data tools test does not declare data files as inputs (use `--rerun`). NotificationsTest's `Thread.sleep(20)` is a poll interval in a bounded loop: judged fine, keep it.
 
 ## Waiting on the owner
 
