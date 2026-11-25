@@ -196,7 +196,7 @@ sealed interface Screen {
  * One back stack. Today is always at the bottom and the Plants tab is Plants right above it, so system back
  * from Plants lands on Today and back from Today leaves the app.
  *
- * Screens change with the transition chosen in Settings (D44). The shown screen follows the top of the stack
+ * Screens change with the Shared transition, the only one (D44, D45). The shown screen follows the top of the stack
  * through a seekable transition, so the predictive back gesture can drag the pop with the finger.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
