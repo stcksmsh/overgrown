@@ -63,10 +63,16 @@ class NotificationsTest {
         if (granted) shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         else shadowOf(app).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
-    /** Taps [action] as the system would: its saved intent goes to the manifest's receiver. */
+    /**
+     * Taps [action] as the system would: its saved intent goes to the manifest's receiver. Returns once the
+     * receiver's work, which ends with a reschedule, is done: left running, that reschedule would cancel or replace
+     * jobs in the next test, since WorkManager is shared across tests.
+     */
     private fun tap(action: Notification.Action) {
+        val before = g.changes.value
         app.sendBroadcast(shadowOf(action.actionIntent).savedIntent)
         shadowOf(Looper.getMainLooper()).idle()
+        waitUntil("the receiver to finish") { g.changes.value > before }
     }
 
     private fun waitUntil(what: String, condition: () -> Boolean) {
@@ -266,12 +272,14 @@ class NotificationsTest {
     @Test
     fun promptsComeAtTheChosenReminderTime() {
         val fern = plant(g, "Fern", place(g, "Hall"))
+        // Hours away from now, so neither the one-minute minimum delay nor a time just passing moves the job.
+        val time = LocalTime((Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).hour + 3) % 24, 30)
         runBlocking {
-            g.settings.setReminderTime(LocalTime(7, 30))
+            g.settings.setReminderTime(time)
             g.scheduler.reschedule()
         }
         val at = promptJobAt(fern)!!
-        assertEquals(LocalTime(7, 30), LocalTime(at.hour, at.minute))
+        assertEquals(time, LocalTime(at.hour, at.minute))
     }
 
     @Test

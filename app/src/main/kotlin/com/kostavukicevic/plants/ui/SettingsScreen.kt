@@ -182,7 +182,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     importJson.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/json", "text/plain", "application/octet-stream"))
                 }) { Text(stringResource(R.string.import_confirm), style = Type.label, color = block.text) }
             },
-            dismissButton = { SecondaryButton(stringResource(R.string.cancel), onClick = { confirmImport = false }) },
+            dismissButton = { OnBlockButton(stringResource(R.string.cancel), onClick = { confirmImport = false }) },
         )
     }
 

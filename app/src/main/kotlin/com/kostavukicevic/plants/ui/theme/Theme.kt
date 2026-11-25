@@ -88,6 +88,15 @@ enum class StateBlock(val fill: Color, val text: Color) {
     Moss(MossGreen, White),
 }
 
+/**
+ * A secondary button on any state block: white with dark ink in both themes, as in the Today mockup. DESIGN.md
+ * section 5 says surface fill, which is dark in the dark theme; the owner chose the mockup (D41).
+ */
+object BlockButton {
+    val fill = White
+    val text = InkLight
+}
+
 /** Chip tints on surface, the same in both themes. */
 object Tints {
     val moss = Color(0xFFDDE8D8)

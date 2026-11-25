@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.ui
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,22 +18,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
 import com.kostavukicevic.plants.data.AlertEvent
+import com.kostavukicevic.plants.data.AlertKind
 import com.kostavukicevic.plants.data.Garden
 import com.kostavukicevic.plants.data.PlantEntity
 import com.kostavukicevic.plants.data.PlantStatus
@@ -48,7 +45,6 @@ import com.kostavukicevic.plants.ui.theme.PotGaugeSize
 import com.kostavukicevic.plants.ui.theme.Radius
 import com.kostavukicevic.plants.ui.theme.Spacing
 import com.kostavukicevic.plants.ui.theme.StateBlock
-import com.kostavukicevic.plants.ui.theme.Tints
 import com.kostavukicevic.plants.ui.theme.Type
 import com.kostavukicevic.plants.ui.theme.waterLeftPercent
 import kotlinx.datetime.LocalDate
@@ -146,17 +142,12 @@ internal fun AlertCard(e: AlertEvent, today: LocalDate, onDone: () -> Unit, onDi
         verticalArrangement = Arrangement.spacedBy(Spacing.grid * 3),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 3)) {
-            WarningMark(block.text)
-            Text(Texts.eventCard(c, e, today), Modifier.weight(1f), style = Type.body, color = block.text)
+            // Decorative: the sentence says what the alert is.
+            Icon(painterResource(e.kind.icon), contentDescription = null, Modifier.padding(top = Spacing.grid / 2).size(Spacing.grid * 7), tint = block.text)
+            Text(Texts.eventCard(c, e, today), Modifier.weight(1f), style = Type.label, color = block.text)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
-            // Secondary on a state block: surface fill (DESIGN.md section 5, Buttons).
-            Button(
-                onClick = onDone,
-                modifier = Modifier.heightIn(min = Spacing.buttonHeight),
-                shape = RoundedCornerShape(Radius.button),
-                colors = ButtonDefaults.buttonColors(containerColor = Overgrown.colors.surface, contentColor = Overgrown.colors.ink),
-            ) { Text(stringResource(R.string.alert_done), style = Type.label) }
+            OnBlockButton(stringResource(R.string.alert_done), onDone)
             TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = Spacing.minTouchTarget)) {
                 Text(stringResource(R.string.alert_dismiss), style = Type.label, color = block.text)
             }
@@ -164,23 +155,12 @@ internal fun AlertCard(e: AlertEvent, today: LocalDate, onDone: () -> Unit, onDi
     }
 }
 
-/** A warning triangle in the block's ink. Decorative: the card's text says what the alert is. */
-@Composable
-private fun WarningMark(color: Color) {
-    Canvas(Modifier.size(Spacing.grid * 6)) {
-        val stroke = (Spacing.grid / 2).toPx()
-        val w = size.width
-        val h = size.height
-        val triangle = Path().apply {
-            moveTo(w / 2, stroke)
-            lineTo(w - stroke, h - stroke)
-            lineTo(stroke, h - stroke)
-            close()
-        }
-        drawPath(triangle, color, style = Stroke(width = stroke, join = StrokeJoin.Round))
-        drawLine(color, Offset(w / 2, h * 0.38f), Offset(w / 2, h * 0.64f), strokeWidth = stroke)
-        drawCircle(color, radius = stroke * 0.7f, center = Offset(w / 2, h * 0.78f))
-    }
+/** The icon for an alert card, one per kind of weather. */
+private val AlertKind.icon get() = when (this) {
+    AlertKind.COLD -> R.drawable.ic_alert_cold
+    AlertKind.HEAT -> R.drawable.ic_alert_heat
+    AlertKind.HEAVY_RAIN, AlertKind.WATERLOGGING -> R.drawable.ic_alert_rain
+    AlertKind.WIND -> R.drawable.ic_alert_wind
 }
 
 /** A "Do now" card: sky when the plant needs water, marigold when the app has a question. */
@@ -224,12 +204,7 @@ internal fun ActionCard(s: PlantStatus, onOpen: () -> Unit, onWatered: () -> Uni
                 ) { Text(stringResource(R.string.plant_watered), style = Type.label) }
             }
             is Action.CheckSoil -> Row(horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
-                for ((label, moisture) in answers) Button(
-                    onClick = { onAnswer(moisture) },
-                    modifier = Modifier.weight(1f).heightIn(min = Spacing.buttonHeight),
-                    shape = RoundedCornerShape(Radius.button),
-                    colors = ButtonDefaults.buttonColors(containerColor = Overgrown.colors.surface, contentColor = Overgrown.colors.ink),
-                ) { Text(stringResource(label), style = Type.label) }
+                for ((label, moisture) in answers) OnBlockButton(stringResource(label), { onAnswer(moisture) }, Modifier.weight(1f))
             }
             else -> Unit
         }
@@ -251,8 +226,9 @@ internal fun RestingTile(s: PlantStatus, today: LocalDate, modifier: Modifier = 
         verticalArrangement = Arrangement.spacedBy(Spacing.grid * 2),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(Spacing.grid * 12).background(Tints.moss, RoundedCornerShape(Radius.glyphChip)), contentAlignment = Alignment.Center) {
-                Glyph(glyphFor(s.plant.archetypeId), StateBlock.Moss.fill, contentDescription = null, size = Spacing.grid * 8)
+            // A solid moss chip with a white glyph (DESIGN.md section 9.8), the same in both themes.
+            Box(Modifier.size(Spacing.grid * 12).background(StateBlock.Moss.fill, RoundedCornerShape(Radius.glyphChip)), contentAlignment = Alignment.Center) {
+                Glyph(glyphFor(s.plant.archetypeId), StateBlock.Moss.text, contentDescription = null, size = Spacing.grid * 8)
             }
             PotGauge(s.waterLeft.toFloat(), PotGaugeSize.Small)
         }
