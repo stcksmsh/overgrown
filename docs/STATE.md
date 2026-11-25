@@ -20,7 +20,7 @@ Handover for the next coordinator. Read this, then run `nonslop status`. The own
 
 ## In flight (check `nonslop status`)
 
-- Nothing. The main checkout is still on the dead branch `claude/today-look` (PR #26 closed); build APKs in a worktree from origin/main.
+- Nothing. The main checkout is a detached, stale HEAD left by builders; do not build from it. Build APKs in a worktree from origin/main.
 
 ## Next, in order
 
