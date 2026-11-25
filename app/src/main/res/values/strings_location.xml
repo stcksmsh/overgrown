@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- "Use my location" in the add-plant wizard. -->
+<resources>
+    <string name="wizard_use_location">Use my location</string>
+    <string name="wizard_location_finding">Finding location…</string>
+    <string name="wizard_location_denied">Location permission not given. Search for a city instead.</string>
+    <string name="wizard_location_unavailable">Couldn\'t get a location. Check that location is on, or search for a city.</string>
+</resources>
