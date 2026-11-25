@@ -16,7 +16,7 @@ Handover for the next coordinator. Read this, then run `nonslop status`. The own
 
 ## Done (this round)
 
-#17 quick Dry answer, #18 design foundation (Theme.kt, Bricolage, Roborazzi exact goldens), #20 glyphs, #21 navigation, #22 alert events data, #23 Today cards + forecast loading, #24 data pin (indoor archetypes), #25 plant screen (DayStrip, LearningDots, history by week, edit/delete), #27 alert cards (Done/Dismiss) + notifications (Wet/OK/Dry, one alert per event). #29 add-plant wizard (4 steps, edit opens the same steps, D38). #31 "Use my location" (D40), #32 Settings (D39), #33 Today matches the mockup (D41; PR #26 closed as superseded) plus fixes for three test flakes. #35 notification minors (D42), #36 UI minors (D43; plant delete now confirms, history dates without leading zero). #38 screen transitions (D44); the owner kept Shared, the switch and the other two variants went (D45). #39 small leftovers (wizard save error clears on change, frost days as ranges, a test for "Use my location" with no fix). Last APK sent: release build of dad93d4 (debug builds are janky; test APKs now from :app:assembleFossBeta).
+#17 quick Dry answer, #18 design foundation (Theme.kt, Bricolage, Roborazzi exact goldens), #20 glyphs, #21 navigation, #22 alert events data, #23 Today cards + forecast loading, #24 data pin (indoor archetypes), #25 plant screen (DayStrip, LearningDots, history by week, edit/delete), #27 alert cards (Done/Dismiss) + notifications (Wet/OK/Dry, one alert per event). #29 add-plant wizard (4 steps, edit opens the same steps, D38). #31 "Use my location" (D40), #32 Settings (D39), #33 Today matches the mockup (D41; PR #26 closed as superseded) plus fixes for three test flakes. #35 notification minors (D42), #36 UI minors (D43; plant delete now confirms, history dates without leading zero). #38 screen transitions (D44); the owner kept Shared, the switch and the other two variants went (D45). #39 small leftovers (wizard save error clears on change, frost days as ranges, a test for "Use my location" with no fix). #41 TalkBack: Choice chips and entry-dialog answers announce radio role and state, with a guard test (D46). Last APK sent: release build of dad93d4 (debug builds are janky; test APKs now from :app:assembleFossBeta).
 
 ## In flight (check `nonslop status`)
 
@@ -24,8 +24,9 @@ Handover for the next coordinator. Read this, then run `nonslop status`. The own
 
 ## Next, in order
 
-1. Small polish left: #36 a WizardTest fakes the location fix inside its wait loop; #35 a late reminder job is named for the wrong day (harmless), and the night rule has no test for feed/repot reminders; #21 recheck place emptiness inside the delete transaction (data/**); NotificationsTest.kt:91 waits with Thread.sleep inside its waitUntil loop (the rule is bounded waits, no sleeps). Owner to judge on the phone: a solid brick Delete on every history row (DESIGN 5) may look heavy.
-2. Data: ~12 archetypes, then ~300 common names mapped to them (agent decides, source-checked).
+1. Small polish left: #36 a WizardTest fakes the location fix inside its wait loop; #35 a late reminder job is named for the wrong day (harmless), and the night rule has no test for feed/repot reminders; #21 recheck place emptiness inside the delete transaction (data/**). Owner to judge on the phone: a solid brick Delete on every history row (DESIGN 5) may look heavy.
+2. Data round 2: outdoor archetypes 4-7 after overgrown-data #8; mark the round-1 archetypes reviewed and bump the app's data pin; then the ~300 common-name table (agent decides, source-checked).
+3. The overgrown-data tools test does not declare the data files as inputs, so a data-only change can report UP-TO-DATE.
 
 ## Waiting on the owner
 
