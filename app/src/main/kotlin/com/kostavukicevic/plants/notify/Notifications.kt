@@ -35,6 +35,7 @@ import com.kostavukicevic.plants.data.alreadyPosted
 import com.kostavukicevic.plants.data.decodeAckList
 import com.kostavukicevic.plants.data.encodeAckList
 import com.kostavukicevic.plants.data.legacyPosted
+import com.kostavukicevic.plants.data.PlantEntity
 import com.kostavukicevic.plants.data.PlantStatus
 import com.kostavukicevic.plants.data.Reminder
 import com.kostavukicevic.plants.data.isPrompt
@@ -61,6 +62,7 @@ import kotlin.random.Random
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import kotlin.time.toJavaDuration
@@ -242,8 +244,10 @@ class ActionReceiver : BroadcastReceiver() {
                 } else if (posted != null) {
                     // Matched by overlap, so a tap on a later day still finds the event. One already gone (Done on
                     // Today) or now worse than the notification said has nothing to store: the person did not see it.
-                    val e = g.garden.alertEvents().find { alreadyPosted(listOf(posted), it) }
-                    if (e != null) if (action == ACTION_DONE) g.garden.done(e) else g.garden.dismiss(e)
+                    // A refresh can split the posted range at a milder day; the answer covers every part (D42).
+                    for (e in g.garden.alertEvents().filter { alreadyPosted(listOf(posted), it) }) {
+                        if (action == ACTION_DONE) g.garden.done(e) else g.garden.dismiss(e)
+                    }
                     Notifier.cancelAlert(context, posted)
                 }
                 g.scheduler.reschedule()
@@ -279,6 +283,11 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 // Recomputed now: a feed or repot logged since scheduling clears the reminder.
                 val status = g.garden.status(plantId) ?: return Result.success()
                 val key = Scheduler.remindersKey(plantId, g.garden.today())
+                // Held up into the night: not posted now, but at the chosen time (D42).
+                if (g.scheduler.lateAtNight()) {
+                    g.scheduler.scheduleReminder(status, g.garden.today(), includeToday = true)
+                    return Result.success()
+                }
                 // Reminders only, once a day. With a watering prompt due today, the prompt's own job carries them.
                 if (!status.today.isPrompt() && status.reminders.isNotEmpty() && !g.scheduler.alertPosted(key) &&
                     Notifier.postPrompt(c, plantId, status.plant.name, Action.None, status.reminders)
@@ -357,15 +366,24 @@ class Scheduler(private val context: Context, private val graph: Graph) {
 
     /**
      * The prompt job: posts the day's watering prompt, with the day's reminders, once, then arms the next day's,
-     * so a prompt left unanswered comes back each morning without waiting for a refresh. Nothing is re-armed
-     * when posting fails (notifications off); the daily refresh reschedules.
+     * so a prompt left unanswered comes back each morning without waiting for a refresh. When posting fails
+     * (notifications off) tomorrow's is armed all the same, once, so nothing loops and nothing waits for a refresh.
+     * A job held up into the night does not post; it is armed again for the chosen time (D42).
      */
     suspend fun runPrompt(plantId: Long) {
         val status = graph.garden.status(plantId) ?: return
         val today = graph.garden.today()
         if (!status.today.isPrompt()) return
         if (!promptPosted(plantId, today)) {
-            if (!Notifier.postPrompt(context, plantId, status.plant.name, status.today, status.reminders)) return
+            if (lateAtNight()) {
+                val now = Clock.System.now()
+                armPrompt(plantId, nextAt(today, graph.settings.reminderTime.first(), TimeZone.currentSystemDefault(), now), now)
+                return
+            }
+            if (!Notifier.postPrompt(context, plantId, status.plant.name, status.today, status.reminders)) {
+                schedulePrompt(plantId, today.plus(DatePeriod(days = 1)), today)
+                return
+            }
             markPromptPosted(plantId, today)
             if (status.reminders.isNotEmpty()) markAlertPosted(remindersKey(plantId, today))
         }
@@ -389,16 +407,48 @@ class Scheduler(private val context: Context, private val graph: Graph) {
             shown == today.minus(DatePeriod(days = 1)).toString() -> maxOf(today.atTime(time).toInstant(zone), now)
             else -> nextAt(today, time, zone, now)
         }
-        enqueue("prompt-$plantId-${at.toLocalDateTime(zone).date}", at - now, workDataOf(NotifyWorker.KIND to NotifyWorker.KIND_PROMPT, NotifyWorker.PLANT to plantId))
+        armPrompt(plantId, at, now)
+    }
+
+    private fun armPrompt(plantId: Long, at: Instant, now: Instant) {
+        val day = at.toLocalDateTime(TimeZone.currentSystemDefault()).date
+        enqueue("prompt-$plantId-$day", at - now, workDataOf(NotifyWorker.KIND to NotifyWorker.KIND_PROMPT, NotifyWorker.PLANT to plantId))
     }
 
     /**
-     * Drops the shown-prompt record of every plant not in [keep]: deleted ones, or all of them on import, which
-     * replaces the plants. A reused id then starts clean instead of looking already prompted today.
+     * Whether a prompt or reminder job running now was held up into the night (Doze, a phone switched off): the
+     * local time is from [NIGHT_START] to [NIGHT_END] and more than [LATE] has passed since the chosen time last
+     * came round. Such a job does not post at night (D42).
+     */
+    suspend fun lateAtNight(): Boolean {
+        val zone = TimeZone.currentSystemDefault()
+        val now = Clock.System.now()
+        val local = now.toLocalDateTime(zone)
+        if (local.time >= NIGHT_END && local.time < NIGHT_START) return false
+        val time = graph.settings.reminderTime.first()
+        val todays = local.date.atTime(time).toInstant(zone)
+        val last = if (todays <= now) todays else local.date.minus(DatePeriod(days = 1)).atTime(time).toInstant(zone)
+        return now - last > LATE
+    }
+
+    /**
+     * Drops the shown-prompt record of every plant not in [keep]: deleted ones, or those an import replaced.
+     * A reused id then starts clean instead of looking already prompted today.
      */
     fun forgetPrompts(keep: Set<Long> = emptySet()) {
         val stale = prefs.all.keys.filter { it.startsWith(PROMPT_PREFIX) && it.removePrefix(PROMPT_PREFIX).toLongOrNull() !in keep }
         if (stale.isNotEmpty()) prefs.edit { stale.forEach(::remove) }
+    }
+
+    /**
+     * After an import, which keeps the file's plant ids: a plant with the same id, name and acquired date as one
+     * of [before] is taken as the same plant and keeps its shown-prompt record, so today's prompt is not posted
+     * again; any other id starts clean (D42). Then everything is rescheduled.
+     */
+    suspend fun imported(before: List<PlantEntity>) {
+        val same = before.associate { it.id to (it.name to it.acquiredOn) }
+        forgetPrompts(keep = graph.garden.plants.first().filter { same[it.id] == (it.name to it.acquiredOn) }.map { it.id }.toSet())
+        reschedule()
     }
 
     /**
@@ -421,20 +471,23 @@ class Scheduler(private val context: Context, private val graph: Graph) {
     suspend fun postEvent(scheduled: AlertAck): Boolean {
         val today = graph.garden.today()
         val e = graph.garden.alertEvents().find { scheduled.overlaps(it) } ?: return false
-        if (eventPosted(e, today)) return false
-        // A milder notification of the same event is replaced, not left beside the new one.
-        val earlier = postedEvents(today).filter { it.overlaps(e) }
-        for (a in earlier) Notifier.cancelAlert(context, a)
-        if (!Notifier.postAlert(context, e, today)) return false
-        savePosted(postedEvents(today) + AlertAck.of(e))
-        return true
+        // Checked, posted and recorded as one step: two workers at once would otherwise both post it.
+        synchronized(POSTED_LOCK) {
+            if (eventPosted(e, today)) return false
+            // A milder notification of the same event is replaced, not left beside the new one.
+            val earlier = postedEvents(today).filter { it.overlaps(e) }
+            for (a in earlier) Notifier.cancelAlert(context, a)
+            if (!Notifier.postAlert(context, e, today)) return false
+            savePosted(postedEvents(today) + AlertAck.of(e))
+            return true
+        }
     }
 
     /**
      * Whether [e] was already posted, matched by overlap ([alreadyPosted]) so it is posted once over its whole
      * range. A posted event that a refresh extended keeps its record to the new end.
      */
-    fun eventPosted(e: AlertEvent, today: LocalDate): Boolean {
+    fun eventPosted(e: AlertEvent, today: LocalDate): Boolean = synchronized(POSTED_LOCK) {
         val posted = postedEvents(today)
         if (!alreadyPosted(posted, e)) return false
         val extended = posted.map { if (it.overlaps(e) && LocalDate.parse(it.end) < e.end) it.copy(end = e.end.toString()) else it }
@@ -444,7 +497,8 @@ class Scheduler(private val context: Context, private val graph: Graph) {
 
     /** Takes down the notifications posted for [e], after Done or Dismiss on Today. */
     fun cancelEvent(e: AlertEvent) {
-        for (a in postedEvents(graph.garden.today()).filter { it.overlaps(e) }) Notifier.cancelAlert(context, a)
+        val posted = synchronized(POSTED_LOCK) { postedEvents(graph.garden.today()) }
+        for (a in posted.filter { it.overlaps(e) }) Notifier.cancelAlert(context, a)
     }
 
     /**
@@ -499,5 +553,11 @@ class Scheduler(private val context: Context, private val graph: Graph) {
         private const val PROMPT_PREFIX = "prompt-"
         private fun promptKey(plantId: Long) = "$PROMPT_PREFIX$plantId"
         private const val POSTED_EVENTS = "events"
+
+        /** Guards every read-modify-write of [POSTED_EVENTS]; one per process, as the preferences file is. */
+        private val POSTED_LOCK = Any()
+        val NIGHT_START = LocalTime(22, 0)
+        val NIGHT_END = LocalTime(7, 0)
+        val LATE = 3.hours
     }
 }
