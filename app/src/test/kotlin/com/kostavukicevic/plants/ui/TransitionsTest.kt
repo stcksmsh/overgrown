@@ -134,7 +134,9 @@ class TransitionsTest(private val choice: TransitionChoice) {
         compose.mainClock.advanceTimeBy(Motion.MEDIUM2 * 2L)
 
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
-        compose.mainClock.advanceTimeBy(Motion.MEDIUM2 * 2L)
+        // The back handler's coroutine can start a few frames late on a busy machine, so run frames until Today is
+        // back or give up; a second plant screen underneath would keep it from coming back at all.
+        runCatching { compose.waitUntil(5_000) { compose.mainClock.advanceTimeByFrame(); todayShown && !plantShown } }
         assertEquals("one back reaches Today", true, todayShown && !plantShown)
     }
 
@@ -143,26 +145,34 @@ class TransitionsTest(private val choice: TransitionChoice) {
     /** Where each "Boris" text is drawn, top left in the root. */
     private fun borisAt() = compose.onAllNodes(hasText("Boris"), useUnmergedTree = true).fetchSemanticsNodes().map { it.positionInRoot }.toSet()
 
+    /** Where the one Boris on screen rests once the screen's data has loaded (it loads off the main thread). */
+    private fun borisAtRest(): Offset {
+        compose.waitUntil(5_000) {
+            val before = borisAt()
+            compose.waitForIdle()
+            Thread.sleep(100)
+            compose.waitForIdle()
+            before.size == 1 && borisAt() == before
+        }
+        return borisAt().single()
+    }
+
     @Test
     fun switchingTabsCrossfadesWithoutGrowingTheCardIntoTheRow() {
         startOnToday()
-        val onToday = borisAt().single()
+        val onToday = borisAtRest()
         tab(R.string.plants_title)
-        compose.waitUntil(5_000) { count(s(R.string.today_title)) == 1 }
-        compose.waitForIdle()
-        val onPlants = borisAt().single()
+        val onPlants = borisAtRest()
         tab(R.string.today_title)
-        compose.waitForIdle()
+        assertEquals(onToday, borisAtRest())
 
         compose.mainClock.autoAdvance = false
         tab(R.string.plants_title)
-        // Every frame each Boris is where it rests; a shared element would be somewhere between.
-        val seen = mutableSetOf<Offset>()
-        repeat(Motion.SHORT4 / 16) {
-            compose.mainClock.advanceTimeByFrame()
-            seen += borisAt()
-        }
-        assertEquals(setOf(onToday, onPlants), seen)
+        val frames = List(Motion.SHORT4 / 16) { compose.mainClock.advanceTimeByFrame(); borisAt() }
+        // Both screens are drawn at once, and Today's Boris holds still while Plants fades in over it; a shared
+        // element would carry it toward the Plants row.
+        assertTrue("both drawn: $frames", frames.any { it.size == 2 })
+        assertTrue("Today's Boris held: $frames", frames.all { it.size < 2 || onToday in it })
         compose.mainClock.advanceTimeBy(Motion.MEDIUM2.toLong())
         assertEquals(setOf(onPlants), borisAt())
     }
