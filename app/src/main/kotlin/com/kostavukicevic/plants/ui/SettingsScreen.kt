@@ -39,6 +39,7 @@ import com.kostavukicevic.plants.ui.theme.Type
 import com.kostavukicevic.plants.weather.MetNorway
 import com.kostavukicevic.plants.weather.OpenMeteo
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalTime
@@ -99,9 +100,9 @@ fun SettingsScreen(onBack: () -> Unit) {
         scope.launch {
             message = try {
                 val input = withContext(Dispatchers.IO) { c.contentResolver.openInputStream(source) } ?: throw java.io.IOException("unreadable file")
+                val before = g.garden.plants.first()
                 val missing = input.use { g.garden.import(it) }
-                g.scheduler.forgetPrompts()
-                g.scheduler.reschedule(); g.changed()
+                g.scheduler.imported(before); g.changed()
                 if (missing == 0) res.getString(R.string.import_done) else res.getQuantityString(R.plurals.import_done_missing_photos, missing, missing)
             } catch (e: java.io.IOException) {
                 res.getString(R.string.import_failed, e.message)
