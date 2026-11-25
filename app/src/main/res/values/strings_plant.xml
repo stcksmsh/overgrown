@@ -32,4 +32,5 @@
     <string name="plant_entry_future">That day has not come yet.</string>
     <string name="plant_entry_before_acquired">That is before you got the plant (%1$s).</string>
     <string name="plant_entry_failed">Could not save the change.</string>
+    <string name="plant_delete_question">Delete %1$s? Its history and photos go too.</string>
 </resources>

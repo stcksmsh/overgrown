@@ -106,11 +106,6 @@
     <string name="plant_fed">Fed</string>
     <string name="reminder_feed">Time to feed.</string>
     <string name="reminder_repot">Time to repot.</string>
-    <string name="plant_state">Soil water used: %1$d %%</string>
-    <string name="plant_confidence_high">The app knows this plant well.</string>
-    <string name="plant_confidence_medium">The app is still learning this plant.</string>
-    <string name="plant_confidence_low">The app is still learning this plant: it will ask you to check the soil before saying \"water now\".</string>
-    <string name="plant_learned">Uses water at %1$d %% of the first estimate.</string>
     <string name="plant_history">History</string>
     <string name="plant_care_source_species">Care data: %1$s</string>
     <string name="plant_care_source_archetype">Care data: profile \"%1$s\"</string>
@@ -118,7 +113,6 @@
     <string name="plant_report_wrong_data">Report wrong data</string>
     <string name="history_watered">%1$s: watered</string>
     <string name="history_watered_ran_out">%1$s: watered, ran out of the bottom</string>
-    <string name="history_check_in">%1$s: soil %2$s</string>
     <string name="history_moved">%1$s: moved</string>
     <string name="history_repotted">%1$s: repotted</string>
     <string name="history_fed">%1$s: fed</string>
@@ -151,17 +145,9 @@
     <string name="calibration_entry">%1$s: %2$s g %3$s</string>
     <string name="calibration_invalid">Enter a mass in grams.</string>
 
-    <!-- Edit plant -->
-    <string name="edit_plant_title">Plant</string>
+    <!-- Plant fields -->
     <string name="field_name">Name</string>
-    <string name="field_species">Species or profile</string>
-    <string name="field_species_generic">General defaults (no care data)</string>
-    <string name="field_place">Place</string>
-    <string name="field_place_new">New place…</string>
-    <string name="field_canopy">Width of the plant, cm</string>
     <string name="field_pot_volume">Soil volume, litres</string>
-    <string name="field_pot_height">Pot height, cm (optional)</string>
-    <string name="field_pot_shape">Pot shape</string>
     <string name="shape_shallow">Shallow</string>
     <string name="shape_standard">Standard</string>
     <string name="shape_tall">Tall</string>
@@ -171,10 +157,7 @@
     <string name="material_terracotta">Unglazed terracotta</string>
     <string name="field_drainage">Drainage holes</string>
     <string name="field_nursery_pot">Still in its nursery pot</string>
-    <string name="field_root_bound">Root-bound</string>
-    <string name="size_hint">Not sure? Small pot ≈ 1 l, medium ≈ 3 l, large ≈ 10 l, tub ≈ 30 l.</string>
     <string name="invalid_number">Enter a number above zero.</string>
-    <string name="need_place">Add a place first.</string>
 
     <!-- Edit place -->
     <string name="edit_place_title">Place</string>
@@ -247,7 +230,6 @@
     <string name="notif_check_title">Check the soil of %1$s</string>
     <string name="notif_repot_title">%1$s needs a bigger pot</string>
     <string name="notif_reminder_title">%1$s needs care</string>
-    <string name="notif_alert_title">%1$s: weather alert</string>
     <string name="notif_stale_title">Open Overgrown to refresh the forecast</string>
     <string name="notif_stale_text">Reminders use a forecast that is several days old.</string>
     <string name="notif_action_watered">Watered</string>

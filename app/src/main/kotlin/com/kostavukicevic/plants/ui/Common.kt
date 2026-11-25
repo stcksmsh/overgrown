@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -59,6 +60,7 @@ import com.kostavukicevic.plants.ui.theme.BlockButton
 import com.kostavukicevic.plants.ui.theme.Overgrown
 import com.kostavukicevic.plants.ui.theme.Radius
 import com.kostavukicevic.plants.ui.theme.Spacing
+import com.kostavukicevic.plants.ui.theme.StateBlock
 import com.kostavukicevic.plants.ui.theme.Type
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -117,6 +119,16 @@ internal fun OnBlockButton(label: String, onClick: () -> Unit, modifier: Modifie
     colors = ButtonDefaults.buttonColors(containerColor = BlockButton.fill, contentColor = BlockButton.text),
 ) { Text(label, style = Type.label) }
 
+/** Destructive: brick fill (DESIGN section 5). Only where a confirmation or an Undo follows. */
+@Composable
+internal fun DeleteButton(onClick: () -> Unit, modifier: Modifier = Modifier, label: String = stringResource(R.string.delete)) = Button(
+    onClick = onClick,
+    modifier = modifier.heightIn(min = Spacing.buttonHeight),
+    shape = RoundedCornerShape(Radius.button),
+    colors = ButtonDefaults.buttonColors(containerColor = StateBlock.Brick.fill, contentColor = StateBlock.Brick.text),
+    contentPadding = PaddingValues(horizontal = Spacing.grid * 3, vertical = Spacing.grid * 2),
+) { Text(label, style = Type.label) }
+
 @Composable
 fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -128,11 +140,16 @@ fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
 
 @Composable
 fun <T> Choice(label: String, options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
-    Column {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.grid)) {
         Text(label, style = MaterialTheme.typography.labelLarge)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // A long label at a large font size takes two lines: the chip grows around it and the rows keep a gap.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
             for ((value, text) in options) {
-                FilterChip(selected = value == selected, onClick = { onSelect(value) }, label = { Text(text) })
+                FilterChip(
+                    selected = value == selected,
+                    onClick = { onSelect(value) },
+                    label = { Text(text, Modifier.padding(vertical = Spacing.grid * 2)) },
+                )
             }
         }
     }
@@ -213,9 +230,7 @@ private fun ListRow(item: ListItem) {
                 item.subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
             TextButton(onClick = item.onEdit, modifier = Modifier.semantics { contentDescription = editLabel }) { Text(stringResource(R.string.edit)) }
-            TextButton(onClick = item.onDelete, modifier = Modifier.semantics { contentDescription = deleteLabel }) {
-                Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
-            }
+            DeleteButton(item.onDelete, Modifier.semantics { contentDescription = deleteLabel })
         }
     }
 }

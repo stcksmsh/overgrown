@@ -91,6 +91,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
     val photos by g.garden.photos(plantId).collectAsState(emptyList())
     var askPhotoSource by remember { mutableStateOf(false) }
     var deletePhoto by remember { mutableStateOf<PhotoEntity?>(null) }
+    var askDelete by remember { mutableStateOf(false) }
     var photoMessage by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<EventEntity?>(null) }
     var editError by remember { mutableStateOf<String?>(null) }
@@ -225,8 +226,14 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
 
             if (weighing) SurfaceCard { Calibration(plantId) }
 
-            TextButton(onClick = { act { g.garden.deletePlant(plantId) }; onBack() }, modifier = Modifier.heightIn(min = Spacing.minTouchTarget)) {
-                Text(stringResource(R.string.delete), style = Type.label, color = colors.errorText)
+            DeleteButton(onClick = { askDelete = true })
+            if (askDelete) {
+                AlertDialog(
+                    onDismissRequest = { askDelete = false },
+                    title = { Text(stringResource(R.string.plant_delete_question, s.plant.name)) },
+                    confirmButton = { DeleteButton(onClick = { askDelete = false; act { g.garden.deletePlant(plantId) }; onBack() }) },
+                    dismissButton = { TextButton(onClick = { askDelete = false }) { Text(stringResource(R.string.cancel)) } },
+                )
             }
         }
     }
@@ -305,9 +312,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
             onDismissRequest = { deletePhoto = null },
             title = { Text(stringResource(R.string.photo_delete_question)) },
             confirmButton = {
-                TextButton(onClick = { deletePhoto = null; scope.launch { g.garden.deletePhoto(photo.id) } }) {
-                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
-                }
+                DeleteButton(onClick = { deletePhoto = null; scope.launch { g.garden.deletePhoto(photo.id) } })
             },
             dismissButton = { TextButton(onClick = { deletePhoto = null }) { Text(stringResource(R.string.cancel)) } },
         )
@@ -347,7 +352,7 @@ private fun TimelinePhoto(photo: PhotoEntity, onDelete: () -> Unit) {
         !t.present -> Text(stringResource(R.string.photo_missing), style = MaterialTheme.typography.bodySmall)
         else -> Text(stringResource(R.string.photo_unreadable), style = MaterialTheme.typography.bodySmall)
     }
-    TextButton(onClick = onDelete) { Text(stringResource(R.string.photo_delete)) }
+    DeleteButton(onDelete, label = stringResource(R.string.photo_delete))
 }
 
 private class Thumb(val bitmap: ImageBitmap?, val present: Boolean)
