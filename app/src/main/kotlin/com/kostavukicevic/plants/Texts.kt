@@ -129,7 +129,7 @@ object Texts {
     }
 
     /** Runs of consecutive days, so a gap day is never inside a range: Mon, Wed is two runs, not Mon-Wed. */
-    private fun dayRuns(dates: List<LocalDate>): List<Pair<LocalDate, LocalDate>> {
+    internal fun dayRuns(dates: List<LocalDate>): List<Pair<LocalDate, LocalDate>> {
         val runs = mutableListOf<Pair<LocalDate, LocalDate>>()
         for (d in dates.distinct().sorted()) {
             val last = runs.lastOrNull()

@@ -27,6 +27,7 @@ import com.kostavukicevic.plants.data.EventEntity
 import com.kostavukicevic.plants.data.Garden
 import com.kostavukicevic.plants.data.GardenDb
 import com.kostavukicevic.plants.data.PlaceEntity
+import com.kostavukicevic.plants.data.OutlookDay
 import com.kostavukicevic.plants.data.PlantEntity
 import com.kostavukicevic.plants.graph
 import com.kostavukicevic.plants.ui.theme.OvergrownTheme
@@ -35,7 +36,10 @@ import com.kostavukicevic.plants.weather.WeatherService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -71,6 +75,17 @@ class PlantScreenTest {
             val placeId = g.garden.savePlace(PlaceEntity(name = "Hall", outdoor = false, latitude = 44.8, longitude = 20.5))
             g.garden.savePlant(PlantEntity(name = "Fern", placeId = placeId, canopyWidthCm = 20.0, potVolumeL = 2.0, acquiredOn = "2026-11-01"))
         }
+    }
+
+    @Test
+    fun theStripHeaderGroupsFrostDaysIntoRuns() {
+        // Fri 27 to Sun 29 Nov, then Tue 1 Dec.
+        val days = (24..33).map { i ->
+            val date = LocalDate(2026, 11, 24).plus(DatePeriod(days = i - 24))
+            OutlookDay(date, 0.5, frost = i in 27..29 || i == 31, rain = false, heat = false)
+        }
+        compose.setContent { OvergrownTheme { DayStrip(days, next = null) } }
+        compose.onNodeWithText(s(R.string.plant_frost_days, "Fri-Sun, Tue"), useUnmergedTree = true).assertExists()
     }
 
     private fun s(id: Int, vararg args: Any) = compose.activity.getString(id, *args)

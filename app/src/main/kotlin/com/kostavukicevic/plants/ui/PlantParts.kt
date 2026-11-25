@@ -212,9 +212,12 @@ fun DayStrip(days: List<OutlookDay>, next: LocalDate?) {
             Row(Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.plant_next_days), style = Type.label, color = colors.ink, modifier = Modifier.weight(1f))
                 if (frost.isNotEmpty()) {
-                    // Every frost day by name: a range would cover the gap days between frosts ("Fri, Mon", not "Fri–Mon").
+                    // Runs of consecutive days, as in the alert texts: "Fri-Sun, Tue"; a gap day never sits inside a range.
+                    val runs = Texts.dayRuns(frost.map { it.date }).map { (first, last) ->
+                        if (first == last) dayName(first) else res.getString(R.string.today_day_range, dayName(first), dayName(last))
+                    }.reduce { acc, run -> res.getString(R.string.today_day_list, acc, run) }
                     Text(
-                        stringResource(R.string.plant_frost_days, frost.joinToString(", ") { dayName(it.date) }),
+                        stringResource(R.string.plant_frost_days, runs),
                         style = Type.label,
                         color = colors.errorText,
                     )
