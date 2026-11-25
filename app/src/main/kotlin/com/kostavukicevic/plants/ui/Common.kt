@@ -2,6 +2,10 @@
 package com.kostavukicevic.plants.ui
 
 import android.util.Log
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +44,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -57,6 +62,7 @@ import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.graph
 import com.kostavukicevic.plants.ui.theme.BlockButton
+import com.kostavukicevic.plants.ui.theme.Motion
 import com.kostavukicevic.plants.ui.theme.Overgrown
 import com.kostavukicevic.plants.ui.theme.Radius
 import com.kostavukicevic.plants.ui.theme.Spacing
@@ -67,6 +73,27 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/** The shared-element scope while the "Shared" transition is chosen (D44); null otherwise, and outside App. */
+@OptIn(ExperimentalSharedTransitionApi::class)
+internal val LocalSharedTransition = compositionLocalOf<SharedTransitionScope?> { null }
+
+/** The enter and exit of the screen this is drawn in; null outside App. */
+internal val LocalScreenTransition = compositionLocalOf<AnimatedVisibilityScope?> { null }
+
+/**
+ * Marks [part] ("card", "name" or "glyph") of the plant or list item [key] as the same thing on Today, on Plants
+ * and on the plant screen, so with the "Shared" transition it grows from one into the other. Does nothing otherwise.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun Modifier.sharedPlant(part: String, key: String): Modifier {
+    val shared = LocalSharedTransition.current ?: return this
+    val screen = LocalScreenTransition.current ?: return this
+    return with(shared) {
+        this@sharedPlant.sharedBounds(rememberSharedContentState("$part/$key"), screen, boundsTransform = { _, _ -> tween(Motion.MEDIUM2, easing = Motion.Emphasized) })
+    }
+}
 
 @Composable
 fun rememberGraph(): Graph = LocalContext.current.graph
@@ -220,13 +247,13 @@ fun ListPage(
 private fun ListRow(item: ListItem) {
     val editLabel = stringResource(R.string.edit_named, item.title)
     val deleteLabel = stringResource(R.string.delete_named, item.title)
-    Card(Modifier.fillMaxWidth().then(if (item.onOpen != null) Modifier.clickable(onClick = item.onOpen) else Modifier)) {
+    Card(Modifier.fillMaxWidth().sharedPlant("card", item.key).then(if (item.onOpen != null) Modifier.clickable(onClick = item.onOpen) else Modifier)) {
         Row(
             Modifier.heightIn(min = Spacing.minTouchTarget).padding(start = Spacing.cardPadding, top = Spacing.cardPadding, bottom = Spacing.cardPadding, end = Spacing.grid),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(item.title, style = MaterialTheme.typography.titleMedium)
+                Text(item.title, Modifier.sharedPlant("name", item.key), style = MaterialTheme.typography.titleMedium)
                 item.subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
             TextButton(onClick = item.onEdit, modifier = Modifier.semantics { contentDescription = editLabel }) { Text(stringResource(R.string.edit)) }

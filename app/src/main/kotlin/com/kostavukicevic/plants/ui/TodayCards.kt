@@ -170,12 +170,13 @@ internal fun ActionCard(s: PlantStatus, onOpen: () -> Unit, onWatered: () -> Uni
     val action = s.today
     val block = if (action is Action.WaterNow) StateBlock.Sky else StateBlock.Marigold
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(block.fill).clickable(onClick = onOpen).padding(Spacing.cardPaddingLarge),
+        Modifier.fillMaxWidth().sharedPlant("card", "plant:${s.plant.id}").clip(RoundedCornerShape(Radius.card)).background(block.fill)
+            .clickable(onClick = onOpen).padding(Spacing.cardPaddingLarge),
         verticalArrangement = Arrangement.spacedBy(Spacing.grid * 3),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 3)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.grid / 2)) {
-                Text(s.plant.name, style = Type.title, color = block.text)
+                Text(s.plant.name, Modifier.sharedPlant("name", "plant:${s.plant.id}"), style = Type.title, color = block.text)
                 val body = when (action) {
                     is Action.WaterNow -> stringResource(R.string.today_water_dose, Texts.roundDose(action.doseMl))
                     is Action.CheckSoil -> stringResource(R.string.today_soil_question)
@@ -184,7 +185,7 @@ internal fun ActionCard(s: PlantStatus, onOpen: () -> Unit, onWatered: () -> Uni
                 Text(body, style = Type.body, color = block.text)
                 for (r in s.reminders) Text(Texts.reminder(c, r), style = Type.secondary, color = block.text)
             }
-            Glyph(glyphFor(s.plant.archetypeId), block.text, contentDescription = null, size = Spacing.grid * 16)
+            Glyph(glyphFor(s.plant.archetypeId), block.text, contentDescription = null, Modifier.sharedPlant("glyph", "plant:${s.plant.id}"), size = Spacing.grid * 16)
         }
         when (action) {
             is Action.WaterNow -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 3)) {
@@ -222,18 +223,19 @@ internal fun RestingTile(s: PlantStatus, today: LocalDate, modifier: Modifier = 
         else -> s.nextPrompt?.let { stringResource(R.string.tile_fine_check, Texts.day(it.first, today)) } ?: stringResource(R.string.tile_fine)
     }
     Column(
-        modifier.clip(RoundedCornerShape(Radius.card)).background(colors.surface).clickable(onClick = onOpen).padding(Spacing.cardPadding),
+        modifier.sharedPlant("card", "plant:${s.plant.id}").clip(RoundedCornerShape(Radius.card)).background(colors.surface)
+            .clickable(onClick = onOpen).padding(Spacing.cardPadding),
         verticalArrangement = Arrangement.spacedBy(Spacing.grid * 2),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             // A solid moss chip with a white glyph (DESIGN.md section 9.8), the same in both themes.
             Box(Modifier.size(Spacing.grid * 12).background(StateBlock.Moss.fill, RoundedCornerShape(Radius.glyphChip)), contentAlignment = Alignment.Center) {
-                Glyph(glyphFor(s.plant.archetypeId), StateBlock.Moss.text, contentDescription = null, size = Spacing.grid * 8)
+                Glyph(glyphFor(s.plant.archetypeId), StateBlock.Moss.text, contentDescription = null, Modifier.sharedPlant("glyph", "plant:${s.plant.id}"), size = Spacing.grid * 8)
             }
             PotGauge(s.waterLeft.toFloat(), PotGaugeSize.Small)
         }
         // No line limit: a long name wraps and the tile grows, so it is never cut.
-        Text(s.plant.name, style = Type.cardTitle, color = colors.ink)
+        Text(s.plant.name, Modifier.sharedPlant("name", "plant:${s.plant.id}"), style = Type.cardTitle, color = colors.ink)
         Text(line, style = Type.secondary, color = colors.ink)
     }
 }

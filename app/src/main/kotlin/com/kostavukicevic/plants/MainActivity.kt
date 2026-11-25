@@ -4,23 +4,43 @@ package com.kostavukicevic.plants
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.rememberTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -31,35 +51,47 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.lifecycleScope
 import com.kostavukicevic.plants.data.ThemeChoice
-import com.kostavukicevic.plants.ui.EditPlaceScreen
+import com.kostavukicevic.plants.data.TransitionChoice
 import com.kostavukicevic.plants.ui.AddPlantWizard
+import com.kostavukicevic.plants.ui.EditPlaceScreen
+import com.kostavukicevic.plants.ui.LocalScreenTransition
+import com.kostavukicevic.plants.ui.LocalSharedTransition
 import com.kostavukicevic.plants.ui.PlacesScreen
 import com.kostavukicevic.plants.ui.PlantScreen
 import com.kostavukicevic.plants.ui.PlantsScreen
 import com.kostavukicevic.plants.ui.SettingsScreen
 import com.kostavukicevic.plants.ui.TodayScreen
 import com.kostavukicevic.plants.ui.UndoDelete
+import com.kostavukicevic.plants.ui.theme.Motion
 import com.kostavukicevic.plants.ui.theme.Overgrown
 import com.kostavukicevic.plants.ui.theme.OvergrownTheme
 import com.kostavukicevic.plants.ui.theme.Radius
 import com.kostavukicevic.plants.ui.theme.Spacing
 import com.kostavukicevic.plants.ui.theme.Type
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -159,7 +191,11 @@ sealed interface Screen {
 /**
  * One back stack. Today is always at the bottom and the Plants tab is Plants right above it, so system back
  * from Plants lands on Today and back from Today leaves the app.
+ *
+ * Screens change with the transition chosen in Settings (D44). The shown screen follows the top of the stack
+ * through a seekable transition, so the predictive back gesture can drag the pop with the finger.
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun App(openPlant: Long?) {
     val stack = rememberSaveable(
@@ -168,60 +204,161 @@ internal fun App(openPlant: Long?) {
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val undo = remember { UndoDelete(snackbar, scope) }
-
-    fun go(s: Screen) { stack += s }
-    fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
-    BackHandler(enabled = stack.size > 1) { back() }
-
+    val context = LocalContext.current
+    // With "Remove animations" on, the animator duration scale is 0 and screens change at once.
+    val instant = remember { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
     val top = stack.last()
+    val shown = remember { SeekableTransitionState(top) }
+    val choice by context.graph.settings.transition.collectAsState(TransitionChoice.SHARED)
+
+    // A screen's own buttons act only while it is the top: a second tap on a card that is already leaving does nothing.
+    fun go(from: Screen, to: Screen) { if (stack.last() == from) stack += to }
+    fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
+    fun back(from: Screen) { if (stack.last() == from) back() }
+
+    LaunchedEffect(top) { if (instant) shown.snapTo(top) else shown.animateTo(top) }
+    PredictiveBackHandler(enabled = stack.size > 1) { progress ->
+        val from = stack.last()
+        val to = stack[stack.lastIndex - 1]
+        try {
+            progress.collect { if (!instant) shown.seekTo(it.progress, to) }
+            back()
+        } catch (e: CancellationException) {
+            // The gesture was cancelled: play the pop back to where the finger started, then rest on the same screen.
+            scope.launch {
+                val from0 = shown.fraction
+                animate(from0, 0f, animationSpec = tween((from0 * Motion.MEDIUM2).toInt(), easing = LinearEasing)) { f, _ ->
+                    scope.launch { shown.seekTo(f) }
+                }
+                shown.snapTo(from)
+            }
+            throw e
+        }
+    }
+
+    var tabsHeight by remember { mutableIntStateOf(0) }
+    // The tabs belong to the two tab screens and move with them; a pushed screen covers them.
+    val screenContent: @Composable (Screen) -> Unit = { screen ->
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f).then(if (screen.isTab) Modifier.consumeWindowInsets(WindowInsets.navigationBars) else Modifier)) {
+                when (screen) {
+                    Screen.Today -> TodayScreen(
+                        onPlant = { go(screen, Screen.Plant(it)) },
+                        onAdd = { go(screen, Screen.EditPlant(null)) },
+                        onPlaces = { go(screen, Screen.Places) },
+                        onSettings = { go(screen, Screen.Settings) },
+                    )
+                    Screen.Plants -> PlantsScreen(
+                        undo,
+                        onPlant = { go(screen, Screen.Plant(it)) },
+                        onEdit = { go(screen, Screen.EditPlant(it)) },
+                        onAdd = { go(screen, Screen.EditPlant(null)) },
+                        onPlaces = { go(screen, Screen.Places) },
+                        onSettings = { go(screen, Screen.Settings) },
+                    )
+                    Screen.Places -> PlacesScreen(
+                        undo,
+                        onBack = { back(screen) },
+                        onEdit = { go(screen, Screen.EditPlace(it)) },
+                        onAdd = { go(screen, Screen.EditPlace(null)) },
+                    )
+                    is Screen.Plant -> PlantScreen(screen.id, onBack = { back(screen) }, onEdit = { go(screen, Screen.EditPlant(screen.id)) })
+                    is Screen.EditPlant -> AddPlantWizard(screen.id, onDone = { back(screen) })
+                    is Screen.EditPlace -> EditPlaceScreen(screen.id, onDone = { back(screen) })
+                    Screen.Settings -> SettingsScreen(onBack = { back(screen) })
+                }
+            }
+            if (screen.isTab) {
+                Tabs(
+                    plants = screen == Screen.Plants,
+                    onToday = { if (stack.last() == screen) stack.removeRange(1, stack.size) },
+                    onPlants = { if (screen != Screen.Plants) go(screen, Screen.Plants) },
+                    modifier = Modifier.onSizeChanged { tabsHeight = it.height },
+                )
+            }
+        }
+    }
+
     Scaffold(
         // The screens inside draw their own top bar and status-bar inset.
         contentWindowInsets = WindowInsets(0),
         snackbarHost = {
-            SnackbarHost(snackbar) {
+            // Above the tabs, where the Scaffold put it when the tabs were its bottom bar, and as then its shadow
+            // stops at their edge.
+            val aboveTabs = if (top.isTab) Modifier.offset { IntOffset(0, -tabsHeight) }.drawWithContent {
+                clipRect(left = -size.width, top = -size.height, right = size.width * 2, bottom = size.height) { this@drawWithContent.drawContent() }
+            } else Modifier
+            SnackbarHost(snackbar, aboveTabs) {
                 Snackbar(it, containerColor = Overgrown.colors.ink, contentColor = Overgrown.colors.onInk, actionColor = Overgrown.colors.onInk)
             }
         },
-        bottomBar = {
-            if (top == Screen.Today || top == Screen.Plants) {
-                Tabs(
-                    plants = top == Screen.Plants,
-                    onToday = { stack.removeRange(1, stack.size) },
-                    onPlants = { if (top != Screen.Plants) go(Screen.Plants) },
-                )
-            }
-        },
     ) { padding ->
-        Box(Modifier.padding(padding).consumeWindowInsets(padding)) {
-            when (top) {
-                Screen.Today -> TodayScreen(
-                    onPlant = { go(Screen.Plant(it)) },
-                    onAdd = { go(Screen.EditPlant(null)) },
-                    onPlaces = { go(Screen.Places) },
-                    onSettings = { go(Screen.Settings) },
-                )
-                Screen.Plants -> PlantsScreen(
-                    undo,
-                    onPlant = { go(Screen.Plant(it)) },
-                    onEdit = { go(Screen.EditPlant(it)) },
-                    onAdd = { go(Screen.EditPlant(null)) },
-                    onPlaces = { go(Screen.Places) },
-                    onSettings = { go(Screen.Settings) },
-                )
-                Screen.Places -> PlacesScreen(undo, onBack = ::back, onEdit = { go(Screen.EditPlace(it)) }, onAdd = { go(Screen.EditPlace(null)) })
-                is Screen.Plant -> PlantScreen(top.id, onBack = ::back, onEdit = { go(Screen.EditPlant(top.id)) })
-                is Screen.EditPlant -> AddPlantWizard(top.id, onDone = ::back)
-                is Screen.EditPlace -> EditPlaceScreen(top.id, onDone = ::back)
-                Screen.Settings -> SettingsScreen(onBack = ::back)
+        if (instant) {
+            Box(Modifier.padding(padding).consumeWindowInsets(padding)) { screenContent(top) }
+        } else {
+            SharedTransitionLayout(Modifier.padding(padding).consumeWindowInsets(padding)) {
+                rememberTransition(shown, label = "screens").AnimatedContent(
+                    transitionSpec = {
+                        val i = stack.indexOf(initialState)
+                        val t = stack.indexOf(targetState)
+                        screenTransition(choice, initialState, targetState, pop = i == -1 || (t != -1 && t < i))
+                    },
+                    contentKey = { it.key() },
+                ) { screen ->
+                    CompositionLocalProvider(
+                        LocalSharedTransition provides this@SharedTransitionLayout.takeIf { choice == TransitionChoice.SHARED },
+                        LocalScreenTransition provides this,
+                    ) { screenContent(screen) }
+                }
             }
         }
     }
 }
 
+private val Screen.isTab get() = this == Screen.Today || this == Screen.Plants
+
+/**
+ * The motion from [from] to [to] (D44). Switching tabs is always a short crossfade. Otherwise a push, or a [pop]
+ * with the screens' roles reversed: Shared fades the two screens while the plant's card, name and glyph grow into
+ * the plant screen (other screens slide as in Slide); Slide moves the new screen in from the right over the old,
+ * which shifts a little left; Fade fades the old screen out, then the new one in from slightly smaller.
+ */
+private fun screenTransition(choice: TransitionChoice, from: Screen, to: Screen, pop: Boolean): ContentTransform {
+    if (from.isTab && to.isTab) {
+        return fadeIn(tween(Motion.SHORT4, easing = Motion.Emphasized)) togetherWith fadeOut(tween(Motion.SHORT4, easing = Motion.Emphasized))
+    }
+    val plantFromList = (from is Screen.Plant && to.isTab) || (to is Screen.Plant && from.isTab)
+    val t = when {
+        choice == TransitionChoice.SHARED && plantFromList ->
+            fadeIn(tween(Motion.MEDIUM2, easing = Motion.Emphasized)) togetherWith fadeOut(tween(Motion.MEDIUM2, easing = Motion.Emphasized))
+        choice == TransitionChoice.FADE -> {
+            val out = Motion.MEDIUM2 * 35 / 100
+            val inSpec = tween<Float>(Motion.MEDIUM2 - out, delayMillis = out, easing = Motion.EmphasizedDecelerate)
+            (fadeIn(inSpec) + scaleIn(inSpec, initialScale = FADE_THROUGH_SCALE)) togetherWith fadeOut(tween(out, easing = Motion.EmphasizedAccelerate))
+        }
+        else -> {
+            val spec = tween<IntOffset>(Motion.MEDIUM2, easing = Motion.Emphasized)
+            if (pop) {
+                slideInHorizontally(spec) { -(it * SLIDE_UNDER).toInt() } togetherWith slideOutHorizontally(spec) { it }
+            } else {
+                slideInHorizontally(spec) { it } togetherWith slideOutHorizontally(spec) { -(it * SLIDE_UNDER).toInt() }
+            }
+        }
+    }
+    // The leaving screen of a pop stays on top as it goes.
+    return if (pop) t.apply { targetContentZIndex = -1f } else t
+}
+
+/** How far the screen underneath a slide shifts left, as a share of its width. */
+private const val SLIDE_UNDER = 0.2f
+
+/** Material fade through: the incoming screen grows from this scale. */
+private const val FADE_THROUGH_SCALE = 0.92f
+
 @Composable
-private fun Tabs(plants: Boolean, onToday: () -> Unit, onPlants: () -> Unit) {
+private fun Tabs(plants: Boolean, onToday: () -> Unit, onPlants: () -> Unit, modifier: Modifier = Modifier) {
     Row(
-        Modifier.fillMaxWidth().background(Overgrown.colors.ground).navigationBarsPadding()
+        modifier.fillMaxWidth().background(Overgrown.colors.ground).navigationBarsPadding()
             .padding(Spacing.grid * 2).selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2),
     ) {

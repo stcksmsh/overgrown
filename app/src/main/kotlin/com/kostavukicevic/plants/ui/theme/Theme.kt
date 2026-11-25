@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.ui.theme
 
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -206,6 +207,19 @@ private fun materialScheme(c: OvergrownColors, dark: Boolean) = (if (dark) darkC
     errorContainer = StateBlock.Brick.fill,
     onErrorContainer = StateBlock.Brick.text,
 )
+
+/** Screen transitions: Material 3 motion duration and easing tokens (docs/DECISIONS.md D44). */
+object Motion {
+    /** Push, pop and the shared element. */
+    const val MEDIUM2 = 300
+
+    /** The crossfade between the two tabs. */
+    const val SHORT4 = 200
+    /** Also the Standard token's curve: Compose's Material tokens give both the same cubic. */
+    val Emphasized = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+    val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+    val EmphasizedAccelerate = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
+}
 
 /** The app theme. No dynamic (wallpaper) colour. */
 @Composable

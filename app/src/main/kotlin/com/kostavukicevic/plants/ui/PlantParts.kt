@@ -150,10 +150,11 @@ fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
 
 /** The full moss card at the top: back and edit, name, type and place, glyph, and the 84 dp gauge. */
 @Composable
-fun NameBlock(name: String, typeAndPlace: String, glyph: GlyphKind, waterLeft: Float, onBack: () -> Unit, onEdit: () -> Unit) {
+fun NameBlock(plantId: Long, name: String, typeAndPlace: String, glyph: GlyphKind, waterLeft: Float, onBack: () -> Unit, onEdit: () -> Unit) {
     val block = StateBlock.Moss
+    val key = "plant:$plantId"
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(block.fill)
+        Modifier.fillMaxWidth().sharedPlant("card", key).clip(RoundedCornerShape(Radius.card)).background(block.fill)
             .padding(start = Spacing.grid * 2, end = Spacing.grid * 2, top = Spacing.grid, bottom = Spacing.cardPaddingLarge),
         verticalArrangement = Arrangement.spacedBy(Spacing.grid * 2),
     ) {
@@ -167,10 +168,10 @@ fun NameBlock(name: String, typeAndPlace: String, glyph: GlyphKind, waterLeft: F
         }
         Row(Modifier.padding(horizontal = Spacing.grid * 3), verticalAlignment = Alignment.Bottom) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.grid)) {
-                Text(name, style = Type.display, color = block.text, modifier = Modifier.semantics { heading() })
+                Text(name, style = Type.display, color = block.text, modifier = Modifier.sharedPlant("name", key).semantics { heading() })
                 Text(typeAndPlace, style = Type.label, color = block.text)
             }
-            Glyph(glyph, block.text, contentDescription = null, size = 72.dp)
+            Glyph(glyph, block.text, contentDescription = null, Modifier.sharedPlant("glyph", key), size = 72.dp)
         }
         Row(
             Modifier.padding(horizontal = Spacing.grid * 3),
