@@ -9,13 +9,13 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.Lifecycle
 import com.kostavukicevic.plants.App
 import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
-import com.kostavukicevic.plants.data.TransitionChoice
 import com.kostavukicevic.plants.ui.theme.Motion
 import com.kostavukicevic.plants.ui.theme.OvergrownTheme
 import kotlinx.coroutines.runBlocking
@@ -26,11 +26,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
-import org.robolectric.ParameterizedRobolectricTestRunner
+import org.robolectric.RobolectricTestRunner
 
-/** Screen transitions (D44), once per variant: push and pop move, back can be dragged, and nothing pushes twice. */
-@RunWith(ParameterizedRobolectricTestRunner::class)
-class TransitionsTest(private val choice: TransitionChoice) {
+/** Screen transitions (D44, D45): push and pop move, back can be dragged, and nothing pushes twice. */
+@RunWith(RobolectricTestRunner::class)
+class TransitionsTest {
 
     private val compose = createAndroidComposeRule<ComponentActivity>()
 
@@ -44,7 +44,6 @@ class TransitionsTest(private val choice: TransitionChoice) {
     fun setUp() {
         g = useTestDatabase()
         boris = plant(g, "Boris", place(g, "Hall"))
-        runBlocking { g.settings.setTransition(choice) }
     }
 
     private fun s(id: Int) = compose.activity.getString(id)
@@ -145,16 +144,21 @@ class TransitionsTest(private val choice: TransitionChoice) {
     /** Where each "Boris" text is drawn, top left in the root. */
     private fun borisAt() = compose.onAllNodes(hasText("Boris"), useUnmergedTree = true).fetchSemanticsNodes().map { it.positionInRoot }.toSet()
 
-    /** Where the one Boris on screen rests once the screen's data has loaded (it loads off the main thread). */
+    /**
+     * Where the one Boris on screen rests once the screen's data has loaded (it loads off the main thread): the same
+     * place over [STILL_POLLS] polls in a row, each after the UI went idle.
+     */
     private fun borisAtRest(): Offset {
+        var last = emptySet<Offset>()
+        var still = 0
         compose.waitUntil(5_000) {
-            val before = borisAt()
             compose.waitForIdle()
-            Thread.sleep(100)
-            compose.waitForIdle()
-            before.size == 1 && borisAt() == before
+            val now = borisAt()
+            still = if (now.size == 1 && now == last) still + 1 else 0
+            last = now
+            still >= STILL_POLLS
         }
-        return borisAt().single()
+        return last.single()
     }
 
     @Test
@@ -212,9 +216,22 @@ class TransitionsTest(private val choice: TransitionChoice) {
         assertTrue("Today is still drawn", !todayShown)
     }
 
-    companion object {
-        @JvmStatic
-        @ParameterizedRobolectricTestRunner.Parameters(name = "{0}")
-        fun params() = TransitionChoice.entries.map { arrayOf<Any>(it) }
+    @Test
+    fun turningAnimationsOffOrOnWhileAwayKeepsTheTopScreensState() {
+        startOnToday()
+        // The menu's open state is a plain remember: it survives only if the screen stays in the same tree.
+        compose.onNodeWithContentDescription(s(R.string.top_menu)).performClick()
+        compose.waitUntil(5_000) { count(s(R.string.settings)) > 0 }
+        for (scale in listOf(0f, 1f)) {
+            compose.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+            Settings.Global.putFloat(compose.activity.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, scale)
+            compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+            compose.waitForIdle()
+            assertTrue("the menu is still open with the scale at $scale", count(s(R.string.settings)) > 0)
+        }
+    }
+
+    private companion object {
+        const val STILL_POLLS = 5
     }
 }

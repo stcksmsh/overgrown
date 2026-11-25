@@ -27,7 +27,6 @@ class SettingsTest {
         assertEquals(LocalTime(8, 0), settings.reminderTime.first())
         assertEquals(ThemeChoice.SYSTEM, settings.theme.first())
         assertFalse(settings.weighing.first())
-        assertEquals(TransitionChoice.SHARED, settings.transition.first())
     }
 
     @Test
@@ -35,11 +34,9 @@ class SettingsTest {
         settings.setReminderTime(LocalTime(7, 30))
         settings.setTheme(ThemeChoice.DARK)
         settings.setWeighing(true)
-        settings.setTransition(TransitionChoice.FADE)
         assertEquals(LocalTime(7, 30), settings.reminderTime.first())
         assertEquals(ThemeChoice.DARK, settings.theme.first())
         assertTrue(settings.weighing.first())
-        assertEquals(TransitionChoice.FADE, settings.transition.first())
     }
 
     @Test
@@ -55,10 +52,18 @@ class SettingsTest {
         store.edit {
             it[intPreferencesKey("reminder_minute")] = 24 * 60
             it[stringPreferencesKey("theme")] = "PURPLE"
-            it[stringPreferencesKey("transition")] = "SPIN"
         }
         assertEquals(LocalTime(8, 0), settings.reminderTime.first())
         assertEquals(ThemeChoice.SYSTEM, settings.theme.first())
-        assertEquals(TransitionChoice.SHARED, settings.transition.first())
+    }
+
+    /** A phone that chose a transition under D44 keeps the key; the other settings read past it (D45). */
+    @Test
+    fun aTransitionStoredBeforeD45IsIgnored() = runTest {
+        store.edit { it[stringPreferencesKey("transition")] = "FADE" }
+        settings.setTheme(ThemeChoice.DARK)
+        assertEquals(LocalTime(8, 0), settings.reminderTime.first())
+        assertEquals(ThemeChoice.DARK, settings.theme.first())
+        assertFalse(settings.weighing.first())
     }
 }

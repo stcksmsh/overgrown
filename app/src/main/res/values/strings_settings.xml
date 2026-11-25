@@ -24,9 +24,4 @@
     <string name="settings_weighing">Weighing</string>
     <string name="settings_weighing_hint">Log pot weights on each plant\'s page. The app does not use them yet.</string>
     <string name="developer_mode">Developer options</string>
-    <!-- The screen transition, a developer option while the owner chooses one. -->
-    <string name="settings_transitions">Transitions</string>
-    <string name="settings_transitions_shared">Shared</string>
-    <string name="settings_transitions_slide">Slide</string>
-    <string name="settings_transitions_fade">Fade</string>
 </resources>

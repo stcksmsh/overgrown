@@ -42,6 +42,13 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        // Test builds for the owner's phone: optimised like release (debug builds are janky), but signed with the
+        // debug key so they install over the debug builds already there (D45).
+        create("beta") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+        }
     }
 
     // Reproducible builds: no Google-encrypted dependency blob in the APK or bundle.
