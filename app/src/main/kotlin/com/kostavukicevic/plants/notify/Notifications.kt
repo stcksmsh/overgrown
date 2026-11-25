@@ -45,14 +45,15 @@ import com.kostavukicevic.plants.weather.RefreshSchedule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
-import kotlinx.datetime.Month
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atTime
 import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
@@ -274,11 +275,15 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             KIND_PROMPT -> {
                 val plantId = inputData.getLong(PLANT, -1)
                 val status = g.garden.status(plantId) ?: return Result.success()
-                val key = Scheduler.remindersKey(plantId, g.garden.today())
-                // A watering prompt carries the day's reminders, so the plant gets one notification.
-                if (status.today.isPrompt() &&
-                    Notifier.postPrompt(c, plantId, status.plant.name, status.today, status.reminders) && status.reminders.isNotEmpty()
-                ) g.scheduler.markAlertPosted(key)
+                val today = g.garden.today()
+                val key = Scheduler.remindersKey(plantId, today)
+                // A watering prompt carries the day's reminders, so the plant gets one notification, once a day.
+                if (status.today.isPrompt() && !g.scheduler.promptPosted(plantId, today) &&
+                    Notifier.postPrompt(c, plantId, status.plant.name, status.today, status.reminders)
+                ) {
+                    g.scheduler.markPromptPosted(plantId, today)
+                    if (status.reminders.isNotEmpty()) g.scheduler.markAlertPosted(key)
+                }
             }
             KIND_REMINDER -> {
                 val plantId = inputData.getLong(PLANT, -1)
@@ -336,12 +341,14 @@ class Scheduler(private val context: Context, private val graph: Graph) {
     suspend fun reschedule() {
         val now = Clock.System.now()
         val zone = TimeZone.currentSystemDefault()
+        val time = graph.settings.reminderTime.first()
         work.cancelAllWorkByTag(TAG)
         val statuses = graph.garden.statuses()
         val today = graph.garden.today()
         for (s in statuses) {
-            s.nextPrompt?.let { (date, action) ->
-                val at = date.atTime(promptTime(date, action)).toInstant(zone)
+            s.nextPrompt?.let { (date, _) ->
+                if (date == today && promptPosted(s.plant.id, today)) return@let
+                val at = nextAt(date, time, zone, now)
                 enqueue("prompt-${s.plant.id}", at - now, workDataOf(NotifyWorker.KIND to NotifyWorker.KIND_PROMPT, NotifyWorker.PLANT to s.plant.id))
             }
             scheduleReminder(s, today, includeToday = true)
@@ -364,14 +371,14 @@ class Scheduler(private val context: Context, private val graph: Graph) {
     }
 
     /**
-     * Reminders are scheduled ahead, like prompts, at 09:00: today's while they are due and not yet
-     * shown (at once if 09:00 has passed), else on the next day one is due. The job is named by day
+     * Reminders are scheduled ahead, like prompts, at the reminder time: today's while they are due and not yet
+     * shown (tomorrow if the time has passed), else on the next day one is due. The job is named by day
      * so the worker can queue the next one while it runs.
      */
-    fun scheduleReminder(s: PlantStatus, today: LocalDate, includeToday: Boolean) {
+    suspend fun scheduleReminder(s: PlantStatus, today: LocalDate, includeToday: Boolean) {
         val shownToday = prefs.contains(remindersKey(s.plant.id, today))
         val day = if (includeToday && s.reminders.isNotEmpty() && !shownToday) today else s.nextReminder ?: return
-        val at = day.atTime(REMINDER_TIME).toInstant(TimeZone.currentSystemDefault())
+        val at = nextAt(day, graph.settings.reminderTime.first(), TimeZone.currentSystemDefault(), Clock.System.now())
         enqueue("reminder-${s.plant.id}-$day", at - Clock.System.now(), workDataOf(NotifyWorker.KIND to NotifyWorker.KIND_REMINDER, NotifyWorker.PLANT to s.plant.id))
     }
 
@@ -431,9 +438,19 @@ class Scheduler(private val context: Context, private val graph: Graph) {
 
     fun markAlertPosted(key: String) = prefs.edit { putBoolean(key, true) }
 
-    /** Winter soil checks around midday (the winter watering window); other prompts in the morning. */
-    private fun promptTime(date: LocalDate, action: Action): LocalTime =
-        if (action is Action.CheckSoil && date.month in WINTER_MONTHS) LocalTime(12, 0) else LocalTime(9, 0)
+    /** A watering prompt is posted once a day; the stored value is the last day it was shown. */
+    fun promptPosted(plantId: Long, today: LocalDate): Boolean = prefs.getString(promptKey(plantId), null) == today.toString()
+
+    fun markPromptPosted(plantId: Long, today: LocalDate) = prefs.edit { putString(promptKey(plantId), today.toString()) }
+
+    /**
+     * [day] at the reminder [time], or the day after when that has passed: a time moved earlier than now waits
+     * for its next occurrence instead of posting at once.
+     */
+    private fun nextAt(day: LocalDate, time: LocalTime, zone: TimeZone, now: Instant): Instant {
+        val at = day.atTime(time).toInstant(zone)
+        return if (at >= now) at else day.plus(DatePeriod(days = 1)).atTime(time).toInstant(zone)
+    }
 
     private fun enqueue(name: String, delay: Duration, data: androidx.work.Data) {
         val request = OneTimeWorkRequestBuilder<NotifyWorker>()
@@ -447,9 +464,8 @@ class Scheduler(private val context: Context, private val graph: Graph) {
     companion object {
         private const val TAG = "notify"
         val STALE_AFTER = 3.days
-        private val REMINDER_TIME = LocalTime(9, 0)
         fun remindersKey(plantId: Long, date: LocalDate) = "reminders-$plantId-$date"
+        private fun promptKey(plantId: Long) = "prompt-$plantId"
         private const val POSTED_EVENTS = "events"
-        private val WINTER_MONTHS = setOf(Month.NOVEMBER, Month.DECEMBER, Month.JANUARY, Month.FEBRUARY, Month.MARCH)
     }
 }

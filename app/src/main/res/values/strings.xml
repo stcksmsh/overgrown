@@ -212,7 +212,6 @@
 
     <!-- Settings and about -->
     <string name="export_json">Export all data and photos (zip)</string>
-    <string name="import_json">Import data (replaces everything)</string>
     <string name="import_done">Imported.</string>
     <plurals name="import_done_missing_photos">
         <item quantity="one">Imported. %1$d photo was not in the file and was left out.</item>
@@ -221,7 +220,6 @@
     <string name="import_failed">Import failed: %1$s</string>
     <string name="export_done">Exported.</string>
     <string name="export_calibration">Export calibration (CSV)</string>
-    <string name="developer_mode">Developer options (calibration)</string>
     <string name="notifications_reason">Overgrown tells you when a plant needs water or protection from weather. Allow notifications for those reminders.</string>
     <string name="notifications_allow">Allow notifications</string>
     <string name="about_title">About</string>

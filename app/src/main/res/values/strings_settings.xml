@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- The Settings screen. About and the export messages are still in strings.xml. -->
+<resources>
+    <string name="settings_reminders">Reminders</string>
+    <string name="settings_reminder_time">Reminder time</string>
+    <string name="settings_reminder_time_hint">Watering, feeding and repotting reminders come at this time each day. Weather alerts come the evening before.</string>
+    <!-- Content description of the time button: "Reminder time 08:00. Change". -->
+    <string name="settings_reminder_time_change">Reminder time %1$s. Change</string>
+    <string name="settings_time_set">Set</string>
+
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">Follow system</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_units">Units: metric</string>
+
+    <string name="settings_data">Your data</string>
+    <string name="import_json">Import data</string>
+    <string name="import_confirm_title">Replace your plants?</string>
+    <string name="import_confirm_text">Importing replaces all plants, places and history on this phone with the ones in the file.</string>
+    <string name="import_confirm">Import</string>
+
+    <string name="settings_weighing">Weighing</string>
+    <string name="settings_weighing_hint">Log pot weights on each plant\'s page. The app does not use them yet.</string>
+    <string name="developer_mode">Developer options</string>
+</resources>

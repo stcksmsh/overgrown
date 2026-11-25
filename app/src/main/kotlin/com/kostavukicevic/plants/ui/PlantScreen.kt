@@ -81,7 +81,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
     val status by produceState<PlantStatus?>(null, tick) { value = g.garden.status(plantId) }
     val outlook by produceState(emptyList<OutlookDay>(), status) { value = status?.let { g.garden.outlook(it) } ?: emptyList() }
     val events by g.garden.events(plantId).collectAsState(null)
-    val developer by g.settings.developerMode.collectAsState(false)
+    val weighing by g.settings.weighing.collectAsState(false)
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     // Its own snackbar: deleting a history entry offers Undo on this screen.
@@ -223,7 +223,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
 
             SurfaceCard { CareInfo(s, onReport = { uri.openUri(reportUrl(s)) }) }
 
-            if (developer) SurfaceCard { Calibration(plantId) }
+            if (weighing) SurfaceCard { Calibration(plantId) }
 
             TextButton(onClick = { act { g.garden.deletePlant(plantId) }; onBack() }, modifier = Modifier.heightIn(min = Spacing.minTouchTarget)) {
                 Text(stringResource(R.string.delete), style = Type.label, color = colors.errorText)

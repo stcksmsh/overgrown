@@ -2,12 +2,16 @@
 package com.kostavukicevic.plants
 
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -27,6 +31,9 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -35,9 +42,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.lifecycle.lifecycleScope
+import com.kostavukicevic.plants.data.ThemeChoice
 import com.kostavukicevic.plants.ui.EditPlaceScreen
 import com.kostavukicevic.plants.ui.AddPlantWizard
 import com.kostavukicevic.plants.ui.PlacesScreen
@@ -59,7 +68,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val openPlant = intent.getLongExtra(EXTRA_PLANT, -1L).takeIf { it > 0 }
-        setContent { OvergrownTheme { App(openPlant) } }
+        setContent { ChosenTheme { App(openPlant) } }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -83,6 +92,34 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_PLANT = "plant"
     }
 }
+
+/**
+ * The theme chosen in Settings, applied as soon as it changes. Nothing is drawn until the choice is read, so a
+ * chosen theme does not flash the system's one first.
+ */
+@Composable
+internal fun ChosenTheme(content: @Composable () -> Unit) {
+    val choice by LocalContext.current.graph.settings.theme.collectAsState(null)
+    val system = isSystemInDarkTheme()
+    val dark = when (choice ?: return) {
+        ThemeChoice.SYSTEM -> system
+        ThemeChoice.LIGHT -> false
+        ThemeChoice.DARK -> true
+    }
+    // The system bar icons follow the app's theme, not the system's, so they stay readable on a chosen theme.
+    val activity = LocalActivity.current as? ComponentActivity
+    LaunchedEffect(activity, dark) {
+        activity?.enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
+            navigationBarStyle = SystemBarStyle.auto(LIGHT_SCRIM, DARK_SCRIM) { dark },
+        )
+    }
+    OvergrownTheme(dark = dark, content = content)
+}
+
+// The scrims enableEdgeToEdge uses by default behind three-button navigation.
+private val LIGHT_SCRIM = Color.argb(0xe6, 0xFF, 0xFF, 0xFF)
+private val DARK_SCRIM = Color.argb(0x80, 0x1b, 0x1b, 0x1b)
 
 sealed interface Screen {
     data object Today : Screen
