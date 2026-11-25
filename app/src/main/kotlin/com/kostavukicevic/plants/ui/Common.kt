@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -55,7 +56,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.kostavukicevic.plants.Graph
@@ -173,12 +176,14 @@ fun <T> Choice(label: String, options: List<Pair<T, String>>, selected: T, onSel
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.grid)) {
         Text(label, style = MaterialTheme.typography.labelLarge)
         // A long label at a large font size takes two lines: the chip grows around it and the rows keep a gap.
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
+        // One answer of several: TalkBack says "radio button, 1 of 3" and "selected", not "checkbox".
+        FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
             for ((value, text) in options) {
                 FilterChip(
                     selected = value == selected,
                     onClick = { onSelect(value) },
                     label = { Text(text, Modifier.padding(vertical = Spacing.grid * 2)) },
+                    modifier = Modifier.semantics { role = Role.RadioButton },
                 )
             }
         }

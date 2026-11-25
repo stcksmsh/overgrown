@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -41,9 +42,11 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -362,18 +365,20 @@ fun EditEntryDialog(event: EventEntity, error: String?, onDismiss: () -> Unit, o
                     OutlineButton(stringResource(R.string.plant_day_after)) { date = date.plus(DatePeriod(days = 1)) }
                 }
                 when (event.type) {
-                    "CHECK_IN" -> FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2), verticalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
+                    // One answer of four: each says it is a radio button and whether it is the chosen one.
+                    "CHECK_IN" -> FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2), verticalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
                         for (m in PLANT_ANSWERS) {
                             val label = answerLabel(c, m)
+                            val chosen = Modifier.semantics { role = Role.RadioButton; selected = moisture == m.name }
                             if (moisture == m.name) {
                                 Button(
                                     onClick = {},
-                                    modifier = Modifier.heightIn(min = Spacing.buttonHeight).semantics { selected = true },
+                                    modifier = chosen.heightIn(min = Spacing.buttonHeight),
                                     shape = RoundedCornerShape(Radius.button),
                                     colors = ButtonDefaults.buttonColors(containerColor = StateBlock.Moss.fill, contentColor = StateBlock.Moss.text),
                                 ) { Text(label, style = Type.label) }
                             } else {
-                                OutlineButton(label) { moisture = m.name }
+                                OutlineButton(label, chosen) { moisture = m.name }
                             }
                         }
                     }
@@ -393,11 +398,11 @@ fun EditEntryDialog(event: EventEntity, error: String?, onDismiss: () -> Unit, o
 
 /** Secondary button on surface: surface fill with an outline. */
 @Composable
-private fun OutlineButton(text: String, onClick: () -> Unit) {
+private fun OutlineButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val colors = Overgrown.colors
     OutlinedButton(
         onClick = onClick,
-        modifier = Modifier.heightIn(min = Spacing.buttonHeight),
+        modifier = modifier.heightIn(min = Spacing.buttonHeight),
         shape = RoundedCornerShape(Radius.button),
         border = BorderStroke(1.dp, colors.outline),
         colors = ButtonDefaults.outlinedButtonColors(containerColor = colors.surface, contentColor = colors.ink),
