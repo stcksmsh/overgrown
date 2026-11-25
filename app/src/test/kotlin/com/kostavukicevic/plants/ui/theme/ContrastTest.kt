@@ -31,6 +31,7 @@ class ContrastTest {
             add(Check("error text on ground", c.errorText, c.ground, TEXT))
             add(Check("error text on surface", c.errorText, c.surface, TEXT))
             for (b in StateBlock.entries) add(Check("text on ${b.name}", b.text, b.fill, TEXT))
+            add(Check("block button text on its fill", BlockButton.text, BlockButton.fill, TEXT))
         }
         val graphics = buildList {
             add(Check("gauge outline (ink) on surface", c.ink, c.surface, GRAPHIC))

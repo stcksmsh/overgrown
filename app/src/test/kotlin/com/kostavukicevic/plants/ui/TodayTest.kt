@@ -1,15 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.ui
 
+import android.graphics.Color
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -56,6 +62,8 @@ import kotlin.time.Instant
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import com.kostavukicevic.plants.data.WeatherDayEntity
+import com.kostavukicevic.plants.data.alertEvents
+import org.robolectric.annotation.GraphicsMode
 import com.kostavukicevic.plants.weather.HttpResponse
 import com.kostavukicevic.plants.weather.HttpTransport
 import com.kostavukicevic.plants.weather.InMemoryResponseStore
@@ -109,6 +117,32 @@ class TodayTest {
 
     private fun allText(): List<String> = compose.onAllNodes(SemanticsMatcher("any") { true }, useUnmergedTree = true).fetchSemanticsNodes().flatMap { n ->
         n.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text } + n.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty()
+    }
+
+    /** Secondary buttons on a state block are white in both themes (D41), read from the rendered pixels. */
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun buttonsOnAStateBlockAreWhiteInBothThemes() {
+        var dark by mutableStateOf(false)
+        val soil = fixture("Snake plant", Action.CheckSoil(PromptReason.UNCERTAIN))
+        val cold = fixture("Boris", alerts = listOf(Alert(AlertType.ROOT_FREEZE_CAUTION, LocalDate(2026, 11, 25))))
+        compose.setContent {
+            OvergrownTheme(dark = dark) {
+                Column {
+                    ActionCard(soil, onOpen = {}, onWatered = {}, onAnswer = {})
+                    AlertCard(alertEvents(listOf(cold), TODAY).single(), TODAY, onDone = {}, onDismiss = {})
+                }
+            }
+        }
+        for (d in listOf(false, true)) {
+            dark = d
+            compose.waitForIdle()
+            for (label in listOf(R.string.answer_wet, R.string.answer_ok, R.string.answer_dry, R.string.alert_done)) {
+                val image = compose.onNodeWithText(s(label)).captureToImage().asAndroidBitmap()
+                // Just inside the top edge, clear of the label and the rounded corners.
+                assertEquals("${s(label)}, dark=$d", Color.WHITE, image.getPixel(image.width / 2, 3))
+            }
+        }
     }
 
     @Test

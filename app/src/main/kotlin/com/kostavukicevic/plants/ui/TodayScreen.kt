@@ -76,6 +76,7 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
 
     Page(
         title = stringResource(R.string.today_title),
+        large = true,
         actions = {
             TextButton(onClick = onAdd) { Text(stringResource(R.string.add_plant)) }
             TopMenu(onPlaces, onSettings)

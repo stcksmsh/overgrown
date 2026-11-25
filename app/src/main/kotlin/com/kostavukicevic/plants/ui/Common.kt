@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -34,6 +36,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -52,7 +55,11 @@ import androidx.compose.ui.unit.dp
 import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.graph
+import com.kostavukicevic.plants.ui.theme.BlockButton
+import com.kostavukicevic.plants.ui.theme.Overgrown
+import com.kostavukicevic.plants.ui.theme.Radius
 import com.kostavukicevic.plants.ui.theme.Spacing
+import com.kostavukicevic.plants.ui.theme.Type
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
@@ -74,25 +81,41 @@ fun changeTick(): Int {
 fun Page(
     title: String,
     onBack: (() -> Unit)? = null,
+    /** The display-size title of a tab's root screen. */
+    large: Boolean = false,
     actions: @Composable () -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val ground = Overgrown.colors.ground
     Scaffold(
+        containerColor = ground,
         topBar = {
             TopAppBar(
-                title = { Text(title) },
+                title = { Text(title, style = if (large) Type.display else Type.cardTitle) },
                 navigationIcon = { if (onBack != null) TextButton(onClick = onBack) { Text(stringResource(R.string.back)) } },
                 actions = { actions() },
+                // The bar is the screen's own ground, not a band of another colour.
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ground, scrolledContainerColor = ground),
+                expandedHeight = if (large) Spacing.grid * 20 else TopAppBarDefaults.TopAppBarExpandedHeight,
             )
         },
     ) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = Spacing.screen, vertical = Spacing.grid * 2),
+            verticalArrangement = Arrangement.spacedBy(Spacing.cardGap),
             content = content,
         )
     }
 }
+
+/** A secondary button on a state block: white with dark ink in both themes, as in the Today mockup (D41). */
+@Composable
+internal fun OnBlockButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) = Button(
+    onClick = onClick,
+    modifier = modifier.heightIn(min = Spacing.buttonHeight),
+    shape = RoundedCornerShape(Radius.button),
+    colors = ButtonDefaults.buttonColors(containerColor = BlockButton.fill, contentColor = BlockButton.text),
+) { Text(label, style = Type.label) }
 
 @Composable
 fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
