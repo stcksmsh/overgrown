@@ -39,6 +39,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
@@ -554,6 +555,9 @@ class Settings(private val store: DataStore<Preferences>) : FallbackState {
     private val installSeedKey = longPreferencesKey("install_seed")
     private val developerKey = booleanPreferencesKey("developer_mode")
     private val alertAcksKey = stringPreferencesKey("alert_acks")
+    private val reminderMinuteKey = intPreferencesKey("reminder_minute")
+    private val themeKey = stringPreferencesKey("theme")
+    private val weighingKey = booleanPreferencesKey("weighing")
     private val acksSerializer = ListSerializer(AlertAck.serializer())
 
     override suspend fun useFallback() = store.data.first()[fallbackKey] ?: false
@@ -572,6 +576,19 @@ class Settings(private val store: DataStore<Preferences>) : FallbackState {
     val developerMode: Flow<Boolean> get() = store.data.map { it[developerKey] ?: false }
     suspend fun setDeveloperMode(on: Boolean) { store.edit { it[developerKey] = on } }
 
+    /** The one daily time for watering prompts and reminders. Stored as minutes after midnight; a bad value reads as the default. */
+    val reminderTime: Flow<LocalTime> get() = store.data.map { p ->
+        p[reminderMinuteKey]?.takeIf { it in 0 until MINUTES_PER_DAY }?.let { LocalTime(it / 60, it % 60) } ?: DEFAULT_REMINDER_TIME
+    }
+    suspend fun setReminderTime(t: LocalTime) { store.edit { it[reminderMinuteKey] = t.hour * 60 + t.minute } }
+
+    val theme: Flow<ThemeChoice> get() = store.data.map { p -> ThemeChoice.entries.find { it.name == p[themeKey] } ?: ThemeChoice.SYSTEM }
+    suspend fun setTheme(t: ThemeChoice) { store.edit { it[themeKey] = t.name } }
+
+    /** Pot weighing on the plant screen. Until it is set, it follows developer mode, which showed weighing before. */
+    val weighing: Flow<Boolean> get() = store.data.map { it[weighingKey] ?: it[developerKey] ?: false }
+    suspend fun setWeighing(on: Boolean) { store.edit { it[weighingKey] = on } }
+
     /** Done and Dismiss on alert events, as JSON. An unreadable value is treated as none, so alerts show again. */
     suspend fun alertAcks(): List<AlertAck> = decodeAcks(store.data.first()[alertAcksKey])
 
@@ -587,4 +604,13 @@ class Settings(private val store: DataStore<Preferences>) : FallbackState {
 
     private fun decodeAcks(text: String?): List<AlertAck> =
         text?.let { runCatching { Json.decodeFromString(acksSerializer, it) }.getOrNull() } ?: emptyList()
+
+    companion object {
+        /** The owner's default (docs/DECISIONS.md D39). */
+        val DEFAULT_REMINDER_TIME = LocalTime(8, 0)
+        private const val MINUTES_PER_DAY = 24 * 60
+    }
 }
+
+/** The app theme: the system's light or dark, or one of them always. */
+enum class ThemeChoice { SYSTEM, LIGHT, DARK }

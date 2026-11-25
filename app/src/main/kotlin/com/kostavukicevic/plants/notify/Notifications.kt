@@ -45,15 +45,17 @@ import com.kostavukicevic.plants.weather.RefreshSchedule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
-import kotlinx.datetime.Month
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atTime
 import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 import kotlin.time.Clock
@@ -271,15 +273,7 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val c = applicationContext
         val g = c.graph
         when (inputData.getString(KIND)) {
-            KIND_PROMPT -> {
-                val plantId = inputData.getLong(PLANT, -1)
-                val status = g.garden.status(plantId) ?: return Result.success()
-                val key = Scheduler.remindersKey(plantId, g.garden.today())
-                // A watering prompt carries the day's reminders, so the plant gets one notification.
-                if (status.today.isPrompt() &&
-                    Notifier.postPrompt(c, plantId, status.plant.name, status.today, status.reminders) && status.reminders.isNotEmpty()
-                ) g.scheduler.markAlertPosted(key)
-            }
+            KIND_PROMPT -> g.scheduler.runPrompt(inputData.getLong(PLANT, -1))
             KIND_REMINDER -> {
                 val plantId = inputData.getLong(PLANT, -1)
                 // Recomputed now: a feed or repot logged since scheduling clears the reminder.
@@ -340,12 +334,10 @@ class Scheduler(private val context: Context, private val graph: Graph) {
         val statuses = graph.garden.statuses()
         val today = graph.garden.today()
         for (s in statuses) {
-            s.nextPrompt?.let { (date, action) ->
-                val at = date.atTime(promptTime(date, action)).toInstant(zone)
-                enqueue("prompt-${s.plant.id}", at - now, workDataOf(NotifyWorker.KIND to NotifyWorker.KIND_PROMPT, NotifyWorker.PLANT to s.plant.id))
-            }
+            s.nextPrompt?.let { (date, _) -> schedulePrompt(s.plant.id, date, today) }
             scheduleReminder(s, today, includeToday = true)
         }
+        forgetPrompts(keep = statuses.map { it.plant.id }.toSet())
         // Events marked Done or dismissed today are not visible, so they are not scheduled.
         for (e in graph.garden.alertEvents(statuses)) {
             if (eventPosted(e, today)) continue
@@ -364,14 +356,60 @@ class Scheduler(private val context: Context, private val graph: Graph) {
     }
 
     /**
-     * Reminders are scheduled ahead, like prompts, at 09:00: today's while they are due and not yet
-     * shown (at once if 09:00 has passed), else on the next day one is due. The job is named by day
+     * The prompt job: posts the day's watering prompt, with the day's reminders, once, then arms the next day's,
+     * so a prompt left unanswered comes back each morning without waiting for a refresh. Nothing is re-armed
+     * when posting fails (notifications off); the daily refresh reschedules.
+     */
+    suspend fun runPrompt(plantId: Long) {
+        val status = graph.garden.status(plantId) ?: return
+        val today = graph.garden.today()
+        if (!status.today.isPrompt()) return
+        if (!promptPosted(plantId, today)) {
+            if (!Notifier.postPrompt(context, plantId, status.plant.name, status.today, status.reminders)) return
+            markPromptPosted(plantId, today)
+            if (status.reminders.isNotEmpty()) markAlertPosted(remindersKey(plantId, today))
+        }
+        schedulePrompt(plantId, today, today)
+    }
+
+    /**
+     * Arms [plantId]'s prompt for [date] at the reminder time. Once today's is shown, the next is tomorrow's. One
+     * shown yesterday and still unanswered keeps its daily slot: if that has passed today (the job ran late, or a
+     * reschedule replaced it), it is posted now. Any other prompt whose time has passed waits for tomorrow (D39).
+     * The job is named by day so [runPrompt] can arm the next one while it runs.
+     */
+    suspend fun schedulePrompt(plantId: Long, date: LocalDate, today: LocalDate) {
+        val now = Clock.System.now()
+        val zone = TimeZone.currentSystemDefault()
+        val time = graph.settings.reminderTime.first()
+        val shown = prefs.getString(promptKey(plantId), null)
+        val at = when {
+            date > today -> nextAt(date, time, zone, now)
+            shown == today.toString() -> today.plus(DatePeriod(days = 1)).atTime(time).toInstant(zone)
+            shown == today.minus(DatePeriod(days = 1)).toString() -> maxOf(today.atTime(time).toInstant(zone), now)
+            else -> nextAt(today, time, zone, now)
+        }
+        enqueue("prompt-$plantId-${at.toLocalDateTime(zone).date}", at - now, workDataOf(NotifyWorker.KIND to NotifyWorker.KIND_PROMPT, NotifyWorker.PLANT to plantId))
+    }
+
+    /**
+     * Drops the shown-prompt record of every plant not in [keep]: deleted ones, or all of them on import, which
+     * replaces the plants. A reused id then starts clean instead of looking already prompted today.
+     */
+    fun forgetPrompts(keep: Set<Long> = emptySet()) {
+        val stale = prefs.all.keys.filter { it.startsWith(PROMPT_PREFIX) && it.removePrefix(PROMPT_PREFIX).toLongOrNull() !in keep }
+        if (stale.isNotEmpty()) prefs.edit { stale.forEach(::remove) }
+    }
+
+    /**
+     * Reminders are scheduled ahead, like prompts, at the reminder time: today's while they are due and not yet
+     * shown (tomorrow if the time has passed), else on the next day one is due. The job is named by day
      * so the worker can queue the next one while it runs.
      */
-    fun scheduleReminder(s: PlantStatus, today: LocalDate, includeToday: Boolean) {
+    suspend fun scheduleReminder(s: PlantStatus, today: LocalDate, includeToday: Boolean) {
         val shownToday = prefs.contains(remindersKey(s.plant.id, today))
         val day = if (includeToday && s.reminders.isNotEmpty() && !shownToday) today else s.nextReminder ?: return
-        val at = day.atTime(REMINDER_TIME).toInstant(TimeZone.currentSystemDefault())
+        val at = nextAt(day, graph.settings.reminderTime.first(), TimeZone.currentSystemDefault(), Clock.System.now())
         enqueue("reminder-${s.plant.id}-$day", at - Clock.System.now(), workDataOf(NotifyWorker.KIND to NotifyWorker.KIND_REMINDER, NotifyWorker.PLANT to s.plant.id))
     }
 
@@ -431,9 +469,19 @@ class Scheduler(private val context: Context, private val graph: Graph) {
 
     fun markAlertPosted(key: String) = prefs.edit { putBoolean(key, true) }
 
-    /** Winter soil checks around midday (the winter watering window); other prompts in the morning. */
-    private fun promptTime(date: LocalDate, action: Action): LocalTime =
-        if (action is Action.CheckSoil && date.month in WINTER_MONTHS) LocalTime(12, 0) else LocalTime(9, 0)
+    /** A watering prompt is posted once a day; the stored value is the last day it was shown. */
+    fun promptPosted(plantId: Long, today: LocalDate): Boolean = prefs.getString(promptKey(plantId), null) == today.toString()
+
+    fun markPromptPosted(plantId: Long, today: LocalDate) = prefs.edit { putString(promptKey(plantId), today.toString()) }
+
+    /**
+     * [day] at the reminder [time], or the day after when that has passed: a time moved earlier than now waits
+     * for its next occurrence instead of posting at once.
+     */
+    private fun nextAt(day: LocalDate, time: LocalTime, zone: TimeZone, now: Instant): Instant {
+        val at = day.atTime(time).toInstant(zone)
+        return if (at >= now) at else day.plus(DatePeriod(days = 1)).atTime(time).toInstant(zone)
+    }
 
     private fun enqueue(name: String, delay: Duration, data: androidx.work.Data) {
         val request = OneTimeWorkRequestBuilder<NotifyWorker>()
@@ -447,9 +495,9 @@ class Scheduler(private val context: Context, private val graph: Graph) {
     companion object {
         private const val TAG = "notify"
         val STALE_AFTER = 3.days
-        private val REMINDER_TIME = LocalTime(9, 0)
         fun remindersKey(plantId: Long, date: LocalDate) = "reminders-$plantId-$date"
+        private const val PROMPT_PREFIX = "prompt-"
+        private fun promptKey(plantId: Long) = "$PROMPT_PREFIX$plantId"
         private const val POSTED_EVENTS = "events"
-        private val WINTER_MONTHS = setOf(Month.NOVEMBER, Month.DECEMBER, Month.JANUARY, Month.FEBRUARY, Month.MARCH)
     }
 }

@@ -7,6 +7,9 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import androidx.work.WorkQuery
 import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
@@ -20,6 +23,15 @@ import com.kostavukicevic.plants.ui.plant
 import com.kostavukicevic.plants.ui.useTestDatabase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atTime
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -233,5 +245,97 @@ class NotificationsTest {
         val id = Notifier.alertId(AlertAck.of(e))
         assertNull(nm.getNotification(id))
         assertTrue(nm.getNotification(Notifier.ALERT_TAG, id) != null)
+    }
+
+    /** The pending prompt job for [plantId] (named by day, today to the day after tomorrow), or null when none is. */
+    private fun promptJob(plantId: Long): WorkInfo? {
+        val today = runBlocking { g.garden.today() }
+        val names = (0..2).map { "prompt-$plantId-${today.plus(DatePeriod(days = it))}" }
+        return WorkManager.getInstance(app).getWorkInfos(WorkQuery.fromUniqueWorkNames(names)).get()
+            .filter { it.state == WorkInfo.State.ENQUEUED }.also { assertTrue("more than one prompt job", it.size <= 1) }.singleOrNull()
+    }
+
+    /** When the pending prompt job for [plantId] will run, in local time, or null when none is pending. */
+    private fun promptJobAt(plantId: Long): LocalDateTime? =
+        promptJob(plantId)?.let { Instant.fromEpochMilliseconds(it.nextScheduleTimeMillis).toLocalDateTime(TimeZone.currentSystemDefault()) }
+
+    private fun LocalDateTime.minuteOnly() = date.atTime(hour, minute)
+
+    private fun nextPromptDate(plantId: Long): LocalDate = runBlocking { g.garden.status(plantId) }!!.nextPrompt!!.first
+
+    @Test
+    fun promptsComeAtTheChosenReminderTime() {
+        val fern = plant(g, "Fern", place(g, "Hall"))
+        runBlocking {
+            g.settings.setReminderTime(LocalTime(7, 30))
+            g.scheduler.reschedule()
+        }
+        val at = promptJobAt(fern)!!
+        assertEquals(LocalTime(7, 30), LocalTime(at.hour, at.minute))
+    }
+
+    @Test
+    fun aTimeAlreadyPastTodayWaitsForTomorrowAndATodaysPostedPromptComesBackTomorrow() {
+        val fern = plant(g, "Fern", place(g, "Hall"))
+        val today = runBlocking { g.garden.today() }
+        assertEquals("a plant with no history is asked about today", today, nextPromptDate(fern))
+        // Midnight has always passed, so today's prompt is not posted at once but at the next midnight.
+        runBlocking {
+            g.settings.setReminderTime(LocalTime(0, 0))
+            g.scheduler.reschedule()
+        }
+        assertEquals(today.plus(DatePeriod(days = 1)).atTime(0, 0), promptJobAt(fern)!!.minuteOnly())
+
+        // Shown today: not again today, but tomorrow at the chosen time if still unanswered.
+        g.scheduler.markPromptPosted(fern, today)
+        runBlocking { g.settings.setReminderTime(LocalTime(23, 59)) }
+        runBlocking { g.scheduler.reschedule() }
+        assertEquals(today.plus(DatePeriod(days = 1)).atTime(23, 59), promptJobAt(fern)!!.minuteOnly())
+    }
+
+    @Test
+    fun aPromptShownYesterdayAndUnansweredIsPostedTodayEvenWhenItsTimeHasPassed() {
+        val fern = plant(g, "Fern", place(g, "Hall"))
+        val today = runBlocking { g.garden.today() }
+        assertEquals(today, nextPromptDate(fern))
+        // Yesterday's prompt was ignored and today's job was replaced by a reschedule after the chosen time.
+        g.scheduler.markPromptPosted(fern, today.minus(DatePeriod(days = 1)))
+        runBlocking {
+            g.settings.setReminderTime(LocalTime(0, 0))
+            g.scheduler.reschedule()
+        }
+        val wait = promptJob(fern)!!.nextScheduleTimeMillis - System.currentTimeMillis()
+        assertTrue("today's prompt waits $wait ms", wait <= 2 * 60_000)
+    }
+
+    @Test
+    fun thePromptJobPostsOnceAndArmsTomorrows() {
+        allow()
+        val fern = plant(g, "Fern", place(g, "Hall"))
+        val today = runBlocking { g.garden.today() }
+        runBlocking {
+            g.settings.setReminderTime(LocalTime(7, 30))
+            g.scheduler.runPrompt(fern)
+        }
+        assertTrue(g.scheduler.promptPosted(fern, today))
+        assertEquals(1, nm.allNotifications.size)
+        assertEquals(today.plus(DatePeriod(days = 1)).atTime(7, 30), promptJobAt(fern)!!.minuteOnly())
+        // A second run the same day (a late duplicate) posts nothing new.
+        app.getSystemService(NotificationManager::class.java).cancelAll()
+        runBlocking { g.scheduler.runPrompt(fern) }
+        assertEquals(0, nm.allNotifications.size)
+    }
+
+    @Test
+    fun anImportOrADeleteForgetsWhichPromptsWereShown() {
+        val fern = plant(g, "Fern", place(g, "Hall"))
+        val today = runBlocking { g.garden.today() }
+        g.scheduler.markPromptPosted(fern, today)
+        g.scheduler.markPromptPosted(fern + 1000, today)
+        runBlocking { g.scheduler.reschedule() }
+        assertTrue(g.scheduler.promptPosted(fern, today))
+        assertFalse("a plant that no longer exists", g.scheduler.promptPosted(fern + 1000, today))
+        g.scheduler.forgetPrompts()
+        assertFalse(g.scheduler.promptPosted(fern, today))
     }
 }

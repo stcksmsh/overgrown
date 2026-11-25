@@ -215,6 +215,17 @@ class PlantScreenTest {
         compose.onNodeWithContentDescription(delete).assertDoesNotExist()
     }
 
+    @Test
+    fun weighingShowsOnlyWhenSwitchedOnInSettings() {
+        start()
+        waitFor(s(R.string.plant_history_empty))
+        compose.onNodeWithText(s(R.string.calibration_title)).assertDoesNotExist()
+        runBlocking { g.settings.setWeighing(true) }
+        waitFor(s(R.string.calibration_title))
+        runBlocking { g.settings.setWeighing(false) }
+        compose.waitUntil(15_000) { compose.onAllNodes(hasText(s(R.string.calibration_title))).fetchSemanticsNodes().isEmpty() }
+    }
+
     companion object {
         const val SNACKBAR_GONE = 15_000L
     }
