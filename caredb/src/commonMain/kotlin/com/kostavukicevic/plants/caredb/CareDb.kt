@@ -220,7 +220,7 @@ fun CareGroups.toProfile(): CareProfile {
         droughtAsymmetry = asymmetry,
         waterloggingSensitive = water?.waterloggingSensitive ?: false,
         winterRules = engine?.winterRules ?: false,
-        rootFreezeAlerts = engine?.rootFreezeAlerts ?: false,
+        rootFreezeAlerts = engine?.rootFreezeAlerts,
         windSensitive = site?.windSensitive ?: false,
     )
 }
