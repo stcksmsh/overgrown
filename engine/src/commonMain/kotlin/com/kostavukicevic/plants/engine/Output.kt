@@ -28,7 +28,8 @@ sealed interface Action {
     data object RepotOrWaterDaily : Action
 }
 
-enum class AlertType { ROOT_FREEZE_CAUTION, ROOT_FREEZE_STRONG, HEAT, HEAVY_RAIN, WIND, WATERLOGGING }
+/** [COLD] (caution) and [FROST] (strong) are for plants below their minimum or frost-tender; root freeze is for the pot. */
+enum class AlertType { ROOT_FREEZE_CAUTION, ROOT_FREEZE_STRONG, HEAT, HEAVY_RAIN, WIND, WATERLOGGING, COLD, FROST }
 
 data class Alert(val type: AlertType, val date: LocalDate)
 
