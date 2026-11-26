@@ -429,3 +429,17 @@ The repo's milestone labels G1 to G6 (used in D15 to D30 and in the advisor repo
 - **G6 Hardening.** Exit: onboarding, accessibility, battery-saver guidance, privacy policy, disclaimers, store metadata; reproducible build verified. Status: partly (D31 to D46; `docs/PRIVACY.md` is a draft; the reproducible build is not verified).
 
 Earlier entries that say "G5's kitchen-scale data" (D15, D18, D25) mean the weighing log that closes G4 and feeds G5.
+
+## D55. Weather credit on the plant screen; Herb glyph for herbs (PR #58)
+
+- The plant screen shows the weather credit under the day strip, for outdoor places with a stored forecast only, with the same provider choice and link form as Today. Reason: CC BY 4.0 attribution where Open-Meteo data is shown; indoor plants and never-fetched outdoor places show nothing from Open-Meteo. The Plants list's water gauges are model state, not shown forecast data, so they carry no credit.
+- `outdoor-leafy-herb` uses the Herb glyph (supersedes D33's Leafy for herbs).
+
+## D56. The credit names the providers of the data shown
+
+D55 credited the provider of the newest stored weather row anywhere, but fallback to MET Norway is decided per place, so one place's fetch could set the credit on another place's screen. Each weather row stores its provider, so the credit now comes from the rows of the places shown.
+
+- **Plant screen.** Credits every provider with stored days at the plant's place. A place whose range fell back part way has days from both and credits both.
+- **Today.** Credits every provider with stored days at any outdoor place it shows, one credit line per provider, each linking to its own source, in the existing string style. No outdoor place or no fetch: no credit, as before. Lines are in provider-id order (MET Norway, then Open-Meteo), so they do not swap with each fetch.
+- **Accessibility.** The credit has the button role, as the links in Settings (`TextButton`) do, so TalkBack announces it as something to activate.
+- **Test hook.** The plant screen sets a semantics property (`WeatherProviders`) once its provider lookup has finished, empty for none. Accessibility services ignore it; it lets a test tell "no credit" from "not looked up yet" without sleeping.

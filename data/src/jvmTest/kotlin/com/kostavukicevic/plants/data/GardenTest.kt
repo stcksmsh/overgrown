@@ -215,6 +215,26 @@ class GardenTest {
     }
 
     @Test
+    fun eachPlaceCreditsItsOwnProviders() = runTest {
+        val g = garden("credit")
+        val a = g.savePlace(PlaceEntity(name = "A", outdoor = true, latitude = 44.8, longitude = 20.5))
+        val b = g.savePlace(PlaceEntity(name = "B", outdoor = true, latitude = 59.9, longitude = 10.7))
+        fun day(place: Long, offset: Int, provider: String, at: Long) =
+            WeatherDayEntity(place, today.plus(DatePeriod(days = offset)).toString(), 4.0, 11.0, 0.0, provider = provider, fetchedAtEpochMs = at)
+        val dao = dbs.last().dao()
+        dao.upsertWeather(listOf(day(a, 0, "OPEN_METEO", 1_000)))
+        // B fell back to MET Norway later: the newest row anywhere is not A's provider.
+        dao.upsertWeather(listOf(day(b, 0, "MET_NORWAY", 2_000)))
+
+        assertEquals(listOf("OPEN_METEO"), g.providers(listOf(a)))
+        assertEquals(listOf("MET_NORWAY", "OPEN_METEO"), g.providers(listOf(a, b)))
+        // A place whose range fell back part way has days from both.
+        dao.upsertWeather(listOf(day(a, 1, "MET_NORWAY", 3_000)))
+        assertEquals(listOf("MET_NORWAY", "OPEN_METEO"), g.providers(listOf(a)))
+        assertEquals(emptyList(), g.providers(listOf(g.savePlace(PlaceEntity(name = "C", outdoor = true, latitude = 0.0, longitude = 0.0)))))
+    }
+
+    @Test
     fun snoozeHidesTodaysPrompt() = runTest {
         val g = garden("e")
         val plantId = g.seed()

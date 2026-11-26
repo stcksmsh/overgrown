@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kostavukicevic.plants.R
@@ -80,9 +81,10 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
     val tick = changeTick()
     val status by produceState<PlantStatus?>(null, tick) { value = g.garden.status(plantId) }
     val outlook by produceState(emptyList<OutlookDay>(), status) { value = status?.let { g.garden.outlook(it) } ?: emptyList() }
-    // An outdoor place with a fetched forecast: its alerts and day strip marks come from the provider's data.
-    val fetched by produceState<Pair<Long, String?>?>(null, status) {
-        value = status?.place?.takeIf { it.outdoor }?.let { g.garden.lastFetchOnce(it.id) }?.let { it to g.garden.lastProvider() }
+    // An outdoor place with a fetched forecast: its alerts and day strip marks come from its providers' data, which
+    // may differ from another place's after a fallback. Null until looked up, empty for none.
+    val providers by produceState<List<String>?>(null, status) {
+        value = status?.place?.let { if (it.outdoor) g.garden.providers(listOf(it.id)) else emptyList() }
     }
     val events by g.garden.events(plantId).collectAsState(null)
     val weighing by g.settings.weighing.collectAsState(false)
@@ -142,7 +144,8 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
         val s = status
         val log = events
         Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = Spacing.screen, vertical = Spacing.grid * 2),
+            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = Spacing.screen, vertical = Spacing.grid * 2)
+                .semantics { providers?.let { weatherProviders = it } },
             verticalArrangement = Arrangement.spacedBy(Spacing.cardGap),
         ) {
             if (s == null || log == null) return@Column
@@ -174,7 +177,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
             }
 
             if (outlook.isNotEmpty()) DayStrip(outlook, next = s.nextPrompt?.first)
-            fetched?.let { WeatherCredit(it.second) }
+            providers?.forEach { WeatherCredit(it) }
 
             LearningDots(
                 name = s.plant.name,
