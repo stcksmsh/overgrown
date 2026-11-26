@@ -71,8 +71,12 @@ data class CareProfile(
     val waterloggingSensitive: Boolean = false,
     /** Outdoor evergreen container: the winter rule set runs on top of the water balance. */
     val winterRules: Boolean = false,
-    /** Root-freeze alerts apply (potted woody plants left outside). */
-    val rootFreezeAlerts: Boolean = false,
+    /**
+     * Root-freeze alerts apply (potted woody plants left outside). Null means the care data does not
+     * know; an outdoor pot then gets the alerts, since a spurious alert costs a tap and a missed one
+     * can kill the plant.
+     */
+    val rootFreezeAlerts: Boolean? = false,
     /** Needs shelter from wind: wind alerts come earlier. */
     val windSensitive: Boolean = false,
 )

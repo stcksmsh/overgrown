@@ -13,7 +13,7 @@ object Alerts {
         val shift = if (stricter) C.ROOT_FREEZE_STRICTER_BY_C else 0.0
         return upcoming.flatMap { day ->
             buildList {
-                if (plant.profile.rootFreezeAlerts) {
+                if (plant.profile.rootFreezeAlerts != false) {
                     when {
                         day.tMinC <= C.ROOT_FREEZE_STRONG_C + shift -> add(Alert(AlertType.ROOT_FREEZE_STRONG, day.date))
                         day.tMinC <= C.ROOT_FREEZE_CAUTION_C + shift -> add(Alert(AlertType.ROOT_FREEZE_CAUTION, day.date))
