@@ -43,7 +43,7 @@ Seen with `gh api repos/<repo>` and `git ls-remote`.
 | `stcksmsh/overgrown` | public | GPL-3.0-only | `main` | `87912cc55d84eb288a40d1b7cb55fc7321eb0239` (2026-11-26T10:55:43Z, merge of PR #48 "Move care-data pin to all twelve reviewed archetypes") |
 | `stcksmsh/overgrown-data` | private | AGPL-3.0-only | `main` | `764d9148d4114952b7bf1031c5fefb504dee79b0` (2026-11-26T10:46:09Z, merge of data PR #11) |
 
-The app pins the data repo as the git submodule `overgrown-data` at `764d914`, the head of its `main`. In progress, not merged: data PR #12 (`claude/data-queue-skills`, "Add the plant queue and the next-entry and data-review skills"); its CI passed on 2026-11-26T10:53:32Z.
+The app pins the data repo as the git submodule `overgrown-data` at `764d914`, the head of its `main`. In progress, not yet reviewed, not merged: data PR #12 (`claude/data-queue-skills`, "Add the plant queue and the next-entry and data-review skills"); its CI passed on 2026-11-26T10:53:32Z.
 
 ### Module tree
 
@@ -1223,7 +1223,7 @@ In `MetNorway.kt` unless stated; the rule list is in its header comment (lines 2
   - per plant, the next prompt (Water now or Check the soil) at the reminder time, default 08:00 (Settings, D39), plus feeding and repot reminders;
   - per weather event (frost, heat, rain, wind), an alert at 18:00 the evening before the event starts (line 339), skipped if it was already posted, marked Done or dismissed today;
   - when there are outdoor plants, a stale-forecast nudge 3 days after the last successful fetch (lines 345-348, `STALE_AFTER`), asking the person to open the app, where MET Norway may be used.
-- **Night rule** (`lateAtNight`, from line 429): a prompt or reminder job held up by Doze or a switched-off phone does not post between 22:00 and 07:00 if more than 3 hours have passed since the reminder time.
+- **Night rule** (`lateAtNight`, line 430): a prompt or reminder job held up by Doze or a switched-off phone does not post between 22:00 and 07:00 if more than 3 hours have passed since the reminder time.
 - **Channels:** prompts (default importance), alerts (high), status (low). Prompt notifications carry "Watered" and "Snooze" actions (D22).
 
 ## 5. Deviations and decisions
@@ -1645,7 +1645,7 @@ Assumptions made for this report: the gate names in DECISIONS are the brief's ga
 
 1. **Boris, this weekend.** Cold nights are forecast for 30 Nov to 2 Dec (`docs/STATE.md`): insulate the pot, lift it off the floor, put it against the wall; below -5 °C, move it into an unheated room. A 0.5 L nursery pot freezes through quickly.
 2. **Give the agents the brief.** `OVERGROWN_MASTER_PLAN.md` is in neither repository, so the gate exit conditions, section-5 coverage and the section-11 table cannot be checked; this report marks them UNVERIFIED for that reason. Committing it (or at least sections 5, 7, 10 and 11) to `docs/` would fix that.
-3. **Merge or close data PR #12** (plant queue and the data skills). Only the owner can merge data PRs: `! gh pr merge 12 -R stcksmsh/overgrown-data --merge`.
+3. **Data PR #12** (plant queue and the data skills) is pending the agent's data review; it has not been reviewed yet. Only after that review passes does the owner merge it (only the owner can merge data PRs): `! gh pr merge 12 -R stcksmsh/overgrown-data --merge`.
 4. **Buy a 1 g kitchen scale and start a weighing log for Boris.** This is G5. It settles the learning trade-off (D18), the 50 % or 40 % watering point (D25), and the real-world accuracy the harness cannot show.
 5. **Decide when CI comes back on** (D37). The reproducible double build has not run since 2026-11-24.
 6. **Before any public release:** trademark check of "Overgrown", lawyer review, a contact address (D9), a privacy policy.
@@ -1694,7 +1694,7 @@ Nothing here is built and no art was made. Boris: a false cypress (*Chamaecypari
 1. **Action first, joke second.** The first words say what to do. The dose, the plant's name, the time and any warning appear with the same numbers and words as in plain voice.
 2. **Titles never change.** A notification title is the plain string in both voices. Boris writes only the body line.
 3. **Short and dry.** One sentence, two at most. No exclamation marks, no emoji, no all-caps, no baby talk, no pet names.
-4. **He speaks for the app, never as the person's plant.** A user's plant never says anything, and Boris does not name himself in alerts.
+4. **He speaks for the app, never as the person's plant.** A user's plant never says anything, and Boris does not name himself in alerts. Where "Boris" appears in a plain title below (rows 8 and 9), it is the name of the owner's own plant in that example, not the mascot speaking.
 5. **"Not yet" is his stance, not his advice.** He is against overwatering but never talks anyone out of a watering the engine asked for.
 6. **No new care advice.** A Boris line may only say what the engine or the reviewed care data already says. Flavour, not facts.
 7. **Never Boris:** toxicity, safety, data loss, permissions, privacy, legal text.
@@ -1706,10 +1706,10 @@ Sample lines. The plain column is an existing title (from `strings.xml` or `docs
 |---|---|---|---|
 | 1 | Water now, with dose | "Pothos needs water, about 700 ml" | "About 700 ml, until it runs out the bottom. Then leave it alone." |
 | 2 | Water now, pot without holes | "Fern needs water, about 200 ml" | "200 ml and stop. That pot has no holes." |
-| 3 | Not yet (Today card) | "All fine. Check Thu." | "Not yet. Thursday, maybe." |
+| 3 | Not yet (Today card) | "All fine. Check Thu." | "Not yet. Thursday." |
 | 4 | Not yet, after a "too wet" answer | "Noted: still wet. Next check Sat." | "Still wet. I'll wait longer next time. Saturday." |
 | 5 | Not yet, in winter | "Resting for winter. Check 6 Dec." | "Winter. Nobody's drinking. Check 6 Dec." |
-| 6 | Check the soil | "Check the soil of Basil" | "Finger in, two knuckles deep. Tell me what you find." |
+| 6 | Check the soil | "Check the soil of Basil" | "Finger in the soil. Tell me what you find." |
 | 7 | Check the soil, engine unsure | "Check the soil of Rosemary" | "Not sure about this one. A soil check settles it." |
 | 8 | Frost | "Frost Tue night: -4 °C. Move Boris against a wall." | "Cold night. The pot feels it before the plant does." |
 | 9 | Hard frost | "Frost Wed night: -8 °C. Move Boris into an unheated room." | "Inside. Unheated room. Not next to the radiator." |
