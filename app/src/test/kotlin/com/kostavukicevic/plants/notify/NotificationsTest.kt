@@ -18,6 +18,8 @@ import com.kostavukicevic.plants.data.Garden
 import com.kostavukicevic.plants.data.GardenDb
 import com.kostavukicevic.plants.data.WeatherDayEntity
 import com.kostavukicevic.plants.engine.Action
+import com.kostavukicevic.plants.data.PlantEntity
+import com.kostavukicevic.plants.data.isPrompt
 import com.kostavukicevic.plants.engine.PromptReason
 import com.kostavukicevic.plants.ui.heatWave
 import com.kostavukicevic.plants.ui.place
@@ -466,6 +468,67 @@ class NotificationsTest {
             runBlocking {
                 g.settings.setReminderTime(hoursAgo(1))
                 g.scheduler.runPrompt(fern)
+            }
+            assertEquals(1, nm.allNotifications.size)
+        } finally {
+            java.util.TimeZone.setDefault(saved)
+        }
+    }
+
+    /** A plant with a repot reminder due today and no watering prompt. */
+    private fun remindedPlant(): Long {
+        // The test garden has no care data of its own; the shipped one holds the orchid archetype.
+        val shipped: () -> com.kostavukicevic.plants.caredb.CareDb? = { g.careDb }
+        Garden::class.java.getDeclaredField("careDb").apply { isAccessible = true }.set(g.garden, shipped)
+        // Acquired long ago, and the orchid archetype repots every 24 months.
+        val fern = runBlocking {
+            g.garden.savePlant(PlantEntity(name = "Orchid", placeId = place(g, "Hall"), archetypeId = "indoor-epiphytic-orchid", canopyWidthCm = 20.0, potVolumeL = 1.0, acquiredOn = "2020-01-01"))
+        }
+        // Watered today, so the watering prompt does not carry the reminders.
+        runBlocking { g.garden.watered(fern, ranOutOfBottom = false) }
+        val s = runBlocking { g.garden.status(fern) }!!
+        assertTrue(s.reminders.isNotEmpty())
+        assertFalse(s.today.isPrompt())
+        return fern
+    }
+
+    @Test
+    fun aReminderJobRunningLateStillBelongsToTheDayItWasArmedFor() {
+        allow()
+        val fern = remindedPlant()
+        val today = runBlocking { g.garden.today() }
+        val armedFor = today.minus(DatePeriod(days = 1))
+        runBlocking {
+            g.settings.setReminderTime(hoursAgo(1))
+            g.scheduler.runReminder(fern, armedFor)
+        }
+        assertEquals(1, nm.allNotifications.size)
+        assertTrue(g.scheduler.alertPosted(Scheduler.remindersKey(fern, armedFor)))
+        assertFalse(g.scheduler.alertPosted(Scheduler.remindersKey(fern, today)))
+    }
+
+    @Test
+    fun remindersAreHeldUpAtNightLikeWateringPrompts() {
+        allow()
+        val saved = java.util.TimeZone.getDefault()
+        try {
+            val utc = Clock.System.now().toLocalDateTime(TimeZone.UTC)
+            val offset = ((2 - utc.hour) % 24 + 24) % 24
+            val hours = if (offset > 14) offset - 24 else offset
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("GMT" + (if (hours < 0) "-" else "+") + "%02d:00".format(kotlin.math.abs(hours))))
+            assertEquals(2, Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).hour)
+            val fern = remindedPlant()
+            val today = runBlocking { g.garden.today() }
+            runBlocking {
+                g.settings.setReminderTime(LocalTime(20, 0))
+                g.scheduler.runReminder(fern, today.minus(DatePeriod(days = 1)))
+            }
+            assertTrue(nm.allNotifications.isEmpty())
+            assertFalse(g.scheduler.alertPosted(Scheduler.remindersKey(fern, today)))
+            // A chosen time an hour ago is not late, so the same job posts.
+            runBlocking {
+                g.settings.setReminderTime(hoursAgo(1))
+                g.scheduler.runReminder(fern, today)
             }
             assertEquals(1, nm.allNotifications.size)
         } finally {
