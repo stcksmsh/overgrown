@@ -54,6 +54,14 @@ class CareDataPinTest {
     }
 
     @Test
+    fun exactlyTheFourReviewedSpeciesShip() {
+        assertEquals(
+            setOf("buxus-sempervirens", "citrus-limon", "impatiens-walleriana", "ocimum-basilicum"),
+            ids("species", reviewed = true),
+        )
+    }
+
+    @Test
     fun draftSpeciesStayOutOfTheAsset() {
         assertTrue("dracaena-trifasciata" in ids("species", reviewed = false))
         assertTrue("dracaena-trifasciata" !in ids("species", reviewed = true))

@@ -70,6 +70,28 @@ class CareDbTest {
     }
 
     @Test
+    fun aContextBlockOverridesFieldByFieldAndItsExplicitNullStaysUnknown() {
+        val s = CareDb.parse(
+            """
+            {"schema_version":1,"data_version":1,"source_commit":"x","archetypes":{},"species":{"x-y":{
+              "archetype":"a","taxon":{"accepted_name":"X y","rank":"species"},"toxicity":{},
+              "temperature":{"frost_class":"frost_free","min_temp_c":5.0},
+              "indoor":{"temperature":{"min_temp_c":null}},
+              "outdoor_container":{"temperature":{"root_kill_temp_c":-2.0}}
+            }}}
+            """.trimIndent(),
+        ).species("x-y")!!
+        val indoor = s.groupsFor(Context.INDOOR).temperature!!
+        assertEquals("frost_free", indoor.frostClass)
+        assertNull(indoor.minTempC)
+        val pot = s.groupsFor(Context.OUTDOOR_CONTAINER).temperature!!
+        assertEquals("frost_free", pot.frostClass)
+        assertEquals(5.0, pot.minTempC)
+        assertEquals(-2.0, pot.rootKillTempC)
+        assertEquals(5.0, s.groupsFor(Context.IN_GROUND).temperature?.minTempC)
+    }
+
+    @Test
     fun archetypeAloneGivesAProfile() {
         val p = CareDb.parse(asset).archetypes.getValue("hardy-potted-conifer").defaults.toProfile()
         assertEquals(0.5, p.dryFraction)
