@@ -7,6 +7,8 @@ import com.kostavukicevic.plants.engine.WaterStrategy
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 /**
  * The compiled care database (assets/caredb.json), as written by overgrown-data's compiler.
@@ -28,11 +30,35 @@ data class CareDb(
         const val SUPPORTED_SCHEMA = 1
         private val json = Json { ignoreUnknownKeys = true }
 
+        private val CONTEXTS = listOf("in_ground", "outdoor_container", "indoor")
+
         fun parse(text: String): CareDb {
-            val db = json.decodeFromString(serializer(), text)
+            val db = json.decodeFromJsonElement(serializer(), withContextsFilled(json.parseToJsonElement(text)))
             require(db.schemaVersion == SUPPORTED_SCHEMA) { "care database schema ${db.schemaVersion} is not supported" }
             return db
         }
+
+        /**
+         * Fills each species' context blocks field by field from its top-level groups. A field a block leaves out
+         * holds in every context; one the block sets, even to an explicit null (unknown), holds only there
+         * (overgrown-data species schema). This has to happen before decoding, where missing and null look alike.
+         */
+        private fun withContextsFilled(root: JsonElement): JsonElement {
+            val species = (root as? JsonObject)?.get("species") as? JsonObject ?: return root
+            return JsonObject(root + ("species" to JsonObject(species.mapValues { (_, s) -> (s as? JsonObject)?.let(::fillContexts) ?: s })))
+        }
+
+        private fun fillContexts(s: JsonObject): JsonObject = JsonObject(
+            s + CONTEXTS.mapNotNull { ctx ->
+                val block = s[ctx] as? JsonObject ?: return@mapNotNull null
+                ctx to JsonObject(
+                    block.mapValues { (group, v) ->
+                        val top = s[group] as? JsonObject
+                        if (top != null && v is JsonObject) JsonObject(top + v) else v
+                    },
+                )
+            },
+        )
     }
 }
 
@@ -61,7 +87,10 @@ data class Species(
 ) {
     val groups: CareGroups get() = CareGroups(light, water, temperature, season, site, engine)
 
-    /** Care values for one growing context: the context's block over the values that hold everywhere. */
+    /**
+     * Care values for one growing context: the context's block over the values that hold everywhere. [CareDb.parse]
+     * has already filled each parsed block's groups field by field, so a block's group is complete.
+     */
     fun groupsFor(context: Context): CareGroups {
         val block = when (context) {
             Context.IN_GROUND -> inGround

@@ -32,11 +32,16 @@ import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.caredb.Archetype
 import com.kostavukicevic.plants.caredb.CareDb
 import com.kostavukicevic.plants.caredb.CommonName
+import com.kostavukicevic.plants.caredb.Context as CareContext
 import com.kostavukicevic.plants.caredb.Species
 import com.kostavukicevic.plants.caredb.Taxon
 import com.kostavukicevic.plants.caredb.Toxicity
+import com.kostavukicevic.plants.caredb.ToxicityLevel
+import com.kostavukicevic.plants.caredb.toProfile
+import com.kostavukicevic.plants.data.CareSource
 import com.kostavukicevic.plants.data.PlaceEntity
 import com.kostavukicevic.plants.data.PlantEntity
+import com.kostavukicevic.plants.data.Planner
 import com.kostavukicevic.plants.ui.theme.OvergrownTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -158,6 +163,58 @@ class WizardTest {
         tap("Outdoor leafy herb")
         compose.onNodeWithText(s(R.string.wizard_no_match)).assertDoesNotExist()
         compose.onNode(hasSetTextAction() and hasText("Outdoor leafy herb")).assertExists()
+    }
+
+    @Test
+    fun basilIsFoundByItsCommonNameAndThePlantTakesTheSpeciesValues() {
+        val balcony = runBlocking { g.garden.savePlace(PlaceEntity(name = "Balcony", outdoor = true, latitude = 44.8, longitude = 20.5)) }
+        compose.setContent { OvergrownTheme { AddPlantWizard(null, onDone = { done = true }, careDb = g.careDb) } }
+        field(R.string.wizard_name).performTextInput("basil")
+        // The species row names the accepted name under the common name that matched.
+        compose.onNodeWithText("Ocimum basilicum").assertExists()
+        tap("Basil")
+        compose.onNode(hasSetTextAction() and hasText("Basil")).assertExists()
+        press(R.string.wizard_next_where)
+        tap(R.string.place_outdoor)
+        tap("Balcony")
+        press(R.string.wizard_next_pot)
+        field(R.string.wizard_pot_width).performTextInput("20")
+        field(R.string.wizard_plant_width).performTextInput("20")
+        press(R.string.wizard_next_exposure)
+        compose.onAllNodesWithText(s(R.string.answer_unsure))[0].performScrollTo().performClick()
+        compose.onAllNodesWithText(s(R.string.answer_unsure))[1].performScrollTo().performClick()
+        saveAndWait()
+
+        val p = plants().single()
+        assertEquals("Basil", p.name)
+        assertEquals("ocimum-basilicum", p.speciesSlug)
+        assertEquals("outdoor-leafy-herb", p.archetypeId)
+        assertEquals(balcony, p.placeId)
+
+        val db = g.careDb!!
+        val place = places().single()
+        // The species' cold values, not the leafy-herb group's hardy class.
+        val temperature = db.species(p.speciesSlug!!)!!.groupsFor(CareContext.OUTDOOR_CONTAINER).temperature!!
+        assertEquals("tender", temperature.frostClass)
+        assertEquals(10.0, temperature.minTempC!!, 0.0)
+        assertEquals("hardy", db.archetypes.getValue("outdoor-leafy-herb").defaults.temperature?.frostClass)
+        val (profile, source) = Planner.profile(p, place, db)
+        assertEquals(CareSource.SPECIES, source)
+        assertTrue(profile.waterloggingSensitive)
+        // Basil's winter rules are an explicit null (unknown), so the group's true is not inherited.
+        assertFalse(profile.winterRules)
+        assertTrue(db.archetypes.getValue("outdoor-leafy-herb").defaults.toProfile().winterRules)
+    }
+
+    @Test
+    fun theShippedSpeciesAreFoundByTheirCommonNamesAndNoneIsShownAsSafe() {
+        val db = g.careDb!!
+        for ((query, slug) in listOf("basil" to "ocimum-basilicum", "boxwood" to "buxus-sempervirens", "lemon" to "citrus-limon", "impatiens" to "impatiens-walleriana")) {
+            assertEquals(slug, searchCare(db, query).first().slug)
+        }
+        for (s in db.species.values) {
+            for (level in listOf(s.toxicity.forCats, s.toxicity.forDogs, s.toxicity.forHorses, s.toxicity.forHumans)) assertEquals(ToxicityLevel.UNKNOWN, level)
+        }
     }
 
     @Test
