@@ -141,6 +141,16 @@ class WizardTest {
         assertEquals("HIGH", place.lightClass)
     }
 
+    // Archetype search matches the archetype's own name, not its description, so "tomato" finds nothing.
+    @Test
+    fun theShippedOutdoorFruitingVegetableArchetypeIsFoundByItsName() {
+        compose.setContent { OvergrownTheme { AddPlantWizard(null, onDone = { done = true }, careDb = g.careDb) } }
+        field(R.string.wizard_name).performTextInput("fruiting")
+        tap("Outdoor fruiting vegetable")
+        compose.onNodeWithText(s(R.string.wizard_no_match)).assertDoesNotExist()
+        compose.onNode(hasSetTextAction() and hasText("Outdoor fruiting vegetable")).assertExists()
+    }
+
     @Test
     fun pickingASearchResultSavesTheSpeciesAndTheExistingPlaceTakesTheRainAndWind() {
         val balcony = runBlocking { g.garden.savePlace(PlaceEntity(name = "Balcony", outdoor = true, latitude = 44.8, longitude = 20.5)) }

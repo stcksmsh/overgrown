@@ -32,7 +32,7 @@ class CareDataPinTest {
             .toSet()
 
     @Test
-    fun exactlyTheFiveReviewedArchetypesShip() {
+    fun exactlyTheEightReviewedArchetypesShip() {
         assertEquals(
             setOf(
                 "hardy-potted-conifer",
@@ -40,6 +40,9 @@ class CareDataPinTest {
                 "indoor-moisture-loving",
                 "indoor-succulent",
                 "indoor-tropical-foliage",
+                "outdoor-fruiting-vegetable",
+                "outdoor-mediterranean-shrub",
+                "outdoor-tender-perennial",
             ),
             ids("archetypes", reviewed = true),
         )
