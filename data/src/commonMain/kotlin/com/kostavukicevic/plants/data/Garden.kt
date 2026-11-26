@@ -561,6 +561,7 @@ class Settings(private val store: DataStore<Preferences>) : FallbackState {
     private val reminderMinuteKey = intPreferencesKey("reminder_minute")
     private val themeKey = stringPreferencesKey("theme")
     private val weighingKey = booleanPreferencesKey("weighing")
+    private val borisVoiceKey = booleanPreferencesKey("boris_voice")
     private val acksSerializer = ListSerializer(AlertAck.serializer())
 
     override suspend fun useFallback() = store.data.first()[fallbackKey] ?: false
@@ -591,6 +592,10 @@ class Settings(private val store: DataStore<Preferences>) : FallbackState {
     /** Pot weighing on the plant screen. Until it is set, it follows developer mode, which showed weighing before. */
     val weighing: Flow<Boolean> get() = store.data.map { it[weighingKey] ?: it[developerKey] ?: false }
     suspend fun setWeighing(on: Boolean) { store.edit { it[weighingKey] = on } }
+
+    /** Boris's voice for the lines that have one; off is plain everywhere. On until the person turns it off. */
+    val borisVoice: Flow<Boolean> get() = store.data.map { it[borisVoiceKey] ?: true }
+    suspend fun setBorisVoice(on: Boolean) { store.edit { it[borisVoiceKey] = on } }
 
     /** Done and Dismiss on alert events, as JSON. An unreadable value is treated as none, so alerts show again. */
     suspend fun alertAcks(): List<AlertAck> = decodeAcks(store.data.first()[alertAcksKey])

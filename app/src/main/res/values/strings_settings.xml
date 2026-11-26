@@ -14,6 +14,10 @@
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_units">Units: metric</string>
+    <!-- The app's wording: Boris, the mascot's dry voice, or plain everywhere. "Boris" is a name: keep it. -->
+    <string name="settings_voice">Voice</string>
+    <string name="settings_voice_mascot">Boris</string>
+    <string name="settings_voice_plain">Plain</string>
 
     <string name="settings_data">Your data</string>
     <string name="import_json">Import data</string>

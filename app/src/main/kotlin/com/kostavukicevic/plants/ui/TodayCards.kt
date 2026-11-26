@@ -30,6 +30,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
+import com.kostavukicevic.plants.voicedResource
 import com.kostavukicevic.plants.data.AlertEvent
 import com.kostavukicevic.plants.data.AlertKind
 import com.kostavukicevic.plants.data.Garden
@@ -98,8 +99,8 @@ internal fun TodayContent(
         for (e in events) AlertCard(e, today, onDone = { onDone(e) }, onDismiss = { onDismiss(e) })
         if (groups.doNow.isEmpty()) {
             Text(
-                if (events.isEmpty()) stringResource(R.string.today_all_fine)
-                else "${stringResource(R.string.today_nothing_to_water)} ${Texts.eventSummary(c, events, today)}",
+                if (events.isEmpty()) voicedResource(R.string.today_all_fine)
+                else "${voicedResource(R.string.today_nothing_to_water)} ${Texts.eventSummary(c, events, today)}",
                 style = Type.body,
                 color = Overgrown.colors.ink,
             )
@@ -119,7 +120,7 @@ internal fun TodayContent(
 @Composable
 internal fun EmptyToday(onAdd: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.grid * 4)) {
-        Text(stringResource(R.string.today_empty), style = Type.body, color = Overgrown.colors.ink)
+        Text(voicedResource(R.string.today_empty), style = Type.body, color = Overgrown.colors.ink)
         Button(
             onClick = onAdd,
             modifier = Modifier.fillMaxWidth().heightIn(min = Spacing.buttonHeight),
@@ -220,7 +221,7 @@ internal fun RestingTile(s: PlantStatus, today: LocalDate, modifier: Modifier = 
     val line = when {
         s.reminders.isNotEmpty() -> s.reminders.joinToString(" ") { Texts.reminder(c, it) }
         s.today is Action.Hold -> Texts.action(c, s.today)
-        else -> s.nextPrompt?.let { stringResource(R.string.tile_fine_check, Texts.day(it.first, today)) } ?: stringResource(R.string.tile_fine)
+        else -> s.nextPrompt?.let { voicedResource(R.string.tile_fine_check, Texts.day(it.first, today)) } ?: voicedResource(R.string.tile_fine)
     }
     Column(
         modifier.sharedPlant("card", "plant:${s.plant.id}").clip(RoundedCornerShape(Radius.card)).background(colors.surface)

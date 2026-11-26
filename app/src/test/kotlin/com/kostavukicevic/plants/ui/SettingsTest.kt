@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -24,6 +25,7 @@ import kotlinx.datetime.LocalTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -32,7 +34,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 
-/** The Settings screen: import asks first, weighing without developer mode, theme and reminder time. */
+/** The Settings screen: import asks first, weighing without developer mode, theme, voice, reminder time and About. */
 @RunWith(RobolectricTestRunner::class)
 class SettingsTest {
 
@@ -115,5 +117,20 @@ class SettingsTest {
         compose.onNodeWithText(s(R.string.cancel)).performClick()
         gone(s(R.string.settings_time_set))
         assertEquals(LocalTime(8, 0), stored { g.settings.reminderTime.first() })
+    }
+
+    @Test
+    fun theVoiceIsBorisUntilPlainIsChosenAndThePlainChoiceIsStored() {
+        assertTrue(stored { g.settings.borisVoice.first() })
+        compose.onNodeWithText(s(R.string.settings_voice)).performScrollTo().assertExists()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText(s(R.string.settings_voice_mascot)) and isSelected()).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(s(R.string.settings_voice_plain)).performScrollTo().performClick()
+        stored { g.settings.borisVoice.first { !it } }
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText(s(R.string.settings_voice_plain)) and isSelected()).fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    @Test
+    fun aboutIsBuiltForBoris() {
+        compose.onNodeWithText("Built for Boris, a false cypress on a balcony in Belgrade.").performScrollTo().assertExists()
     }
 }
