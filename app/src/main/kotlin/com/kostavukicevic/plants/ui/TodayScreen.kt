@@ -29,6 +29,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.kostavukicevic.plants.R
@@ -61,8 +64,10 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
     // Done and Dismiss hide the card at once, until the reload that follows them stores and shows the answer.
     var answered by remember(events) { mutableStateOf(emptySet<String>()) }
     // Keyed on the statuses too: a fetch that ends before they first load must still show.
-    val lastFetch by produceState<Pair<Long, String?>?>(null, tick, statuses) {
-        value = statuses?.filter { it.place.outdoor }?.map { it.place.id }?.distinct()?.mapNotNull { g.garden.lastFetchOnce(it) }?.maxOrNull()?.let { it to g.garden.lastProvider() }
+    // Credits every provider of the places shown: fallback is per place, so one place's fetch says nothing of another's.
+    val lastFetch by produceState<Pair<Long, List<String>>?>(null, tick, statuses) {
+        val ids = statuses?.filter { it.place.outdoor }?.map { it.place.id }?.distinct()
+        value = ids?.mapNotNull { g.garden.lastFetchOnce(it) }?.maxOrNull()?.let { it to g.garden.providers(ids) }
     }
     // Any fetch, also the one on opening the app, not only this screen's Refresh.
     val refreshing by g.fetching.collectAsState()
@@ -126,10 +131,10 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
 
 /**
  * Forecast age, refresh and the provider's credit, kept quiet below the cards. The credit stays next to the
- * weather it describes (Open-Meteo licence). [fetched] is the last fetch in epoch ms and its provider.
+ * weather it describes (Open-Meteo licence). [fetched] is the last fetch in epoch ms and the providers of the days shown.
  */
 @Composable
-internal fun WeatherStatus(fetched: Pair<Long, String?>?, now: Instant, refreshing: Boolean, failed: Boolean, onRefresh: () -> Unit) {
+internal fun WeatherStatus(fetched: Pair<Long, List<String>>?, now: Instant, refreshing: Boolean, failed: Boolean, onRefresh: () -> Unit) {
     val muted = Overgrown.colors.muted
     Column(Modifier.fillMaxWidth().padding(top = Spacing.grid * 2)) {
         when {
@@ -145,7 +150,7 @@ internal fun WeatherStatus(fetched: Pair<Long, String?>?, now: Instant, refreshi
                 val days = age.inWholeDays.toInt()
                 Text(voicedPlural(R.plurals.forecast_stale, days, days), style = Type.secondary, color = Overgrown.colors.errorText)
             }
-            WeatherCredit(fetched.second)
+            fetched.second.forEach { WeatherCredit(it) }
         }
         TextButton(enabled = !refreshing, onClick = onRefresh, modifier = Modifier.heightIn(min = Spacing.minTouchTarget), contentPadding = PaddingValues(0.dp)) {
             // Material's disabled alpha, so a Refresh that cannot be tapped looks it.
@@ -156,18 +161,25 @@ internal fun WeatherStatus(fetched: Pair<Long, String?>?, now: Instant, refreshi
 
 /**
  * The weather provider's credit as a link, under anything drawn from its data (Open-Meteo licence, CC BY 4.0).
- * [provider] is the provider of the last fetch.
+ * [provider] is a provider whose data the screen shows. A button to TalkBack, as the links in Settings are.
  */
 @Composable
-internal fun WeatherCredit(provider: String?) {
+internal fun WeatherCredit(provider: String) {
     val uri = LocalUriHandler.current
     val met = provider == "MET_NORWAY"
     Text(
         stringResource(if (met) R.string.weather_credit_met else R.string.weather_credit_open_meteo),
         modifier = Modifier.heightIn(min = Spacing.minTouchTarget).wrapContentHeight()
-            .clickable { uri.openUri(if (met) MetNorway.CREDIT_URL else OpenMeteo.CREDIT_URL) },
+            .clickable(role = Role.Button) { uri.openUri(if (met) MetNorway.CREDIT_URL else OpenMeteo.CREDIT_URL) },
         style = Type.secondary,
         color = Overgrown.colors.muted,
         textDecoration = TextDecoration.Underline,
     )
 }
+
+/**
+ * The providers a screen credits, set once its lookup has finished and empty for none, so a test can tell "no credit"
+ * from "not looked up yet". Not read by accessibility services.
+ */
+internal val WeatherProviders = SemanticsPropertyKey<List<String>>("WeatherProviders")
+internal var SemanticsPropertyReceiver.weatherProviders by WeatherProviders

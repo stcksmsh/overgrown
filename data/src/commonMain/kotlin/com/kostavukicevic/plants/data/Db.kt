@@ -162,7 +162,7 @@ interface GardenDao {
     @Query("SELECT * FROM weather_day WHERE placeId = :placeId ORDER BY date") suspend fun weather(placeId: Long): List<WeatherDayEntity>
     @Query("SELECT * FROM weather_day ORDER BY placeId, date") suspend fun allWeather(): List<WeatherDayEntity>
     @Query("SELECT MAX(fetchedAtEpochMs) FROM weather_day WHERE placeId = :placeId") fun lastFetchFlow(placeId: Long): Flow<Long?>
-    @Query("SELECT provider FROM weather_day ORDER BY fetchedAtEpochMs DESC LIMIT 1") suspend fun lastProvider(): String?
+    @Query("SELECT DISTINCT provider FROM weather_day WHERE placeId IN (:placeIds) ORDER BY provider") suspend fun providers(placeIds: List<Long>): List<String>
 
     @Upsert suspend fun upsertClimatology(months: List<ClimatologyEntity>)
     @Query("SELECT * FROM climatology WHERE placeId = :placeId") suspend fun climatology(placeId: Long): List<ClimatologyEntity>

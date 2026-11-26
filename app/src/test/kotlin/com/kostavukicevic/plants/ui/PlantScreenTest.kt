@@ -3,7 +3,11 @@ package com.kostavukicevic.plants.ui
 
 import android.app.Application
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasClickAction
@@ -103,6 +107,12 @@ class PlantScreenTest {
     private fun waitFor(text: String, description: Boolean = false) =
         compose.waitUntil(15_000) { compose.onAllNodes(if (description) hasContentDescription(text) else hasText(text)).fetchSemanticsNodes().isNotEmpty() }
 
+    /** Waits for the screen's provider lookup to finish and returns the providers it found. */
+    private fun waitForProviders(): List<String> {
+        compose.waitUntil(15_000) { compose.onAllNodes(SemanticsMatcher.keyIsDefined(WeatherProviders)).fetchSemanticsNodes().isNotEmpty() }
+        return compose.onNode(SemanticsMatcher.keyIsDefined(WeatherProviders)).fetchSemanticsNode().config[WeatherProviders]
+    }
+
     private fun log(date: String, type: String, moisture: String? = null) =
         runBlocking { db.dao().insertEvent(EventEntity(plantId = plantId, date = date, type = type, moisture = moisture)) }
 
@@ -127,6 +137,22 @@ class PlantScreenTest {
         start()
         waitFor(s(R.string.weather_credit_open_meteo))
         compose.onNode(hasText(s(R.string.weather_credit_open_meteo)) and hasClickAction()).assertExists()
+        // TalkBack announces it as something to activate, as the links in Settings.
+        compose.onNodeWithText(s(R.string.weather_credit_open_meteo)).assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+    }
+
+    @Test
+    fun anotherPlacesNewerFetchDoesNotChangeThisPlantsCredit() {
+        moveOutdoors("OPEN_METEO")
+        runBlocking {
+            val elsewhere = g.garden.savePlace(PlaceEntity(name = "Roof", outdoor = true, latitude = 59.9, longitude = 10.7))
+            val later = PLANT_TEST_NOW.toEpochMilliseconds() + 60_000
+            db.dao().upsertWeather(listOf(WeatherDayEntity(elsewhere, "2026-11-24", 1.0, 5.0, 0.0, provider = "MET_NORWAY", fetchedAtEpochMs = later)))
+        }
+        start()
+        waitFor(s(R.string.weather_credit_open_meteo))
+        waitForProviders()
+        compose.onNodeWithText(s(R.string.weather_credit_met)).assertDoesNotExist()
     }
 
     @Test
@@ -153,8 +179,10 @@ class PlantScreenTest {
         compose.setContent { OvergrownTheme { PlantScreen(plantId, onBack = {}, onEdit = {}) } }
         // The place line proves the screen has loaded this plant at its outdoor place.
         waitFor("Balcony")
-        compose.waitForIdle()
+        // The credit is looked up after the plant loads; only once that lookup is done does no credit mean none.
+        assertEquals(emptyList<String>(), waitForProviders())
         compose.onNodeWithText(s(R.string.weather_credit_open_meteo)).assertDoesNotExist()
+        compose.onNodeWithText(s(R.string.weather_credit_met)).assertDoesNotExist()
     }
 
     @Test
