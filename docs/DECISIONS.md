@@ -405,3 +405,27 @@ Open follow-up: `data/Planner` replays history with the current pot, so a pot ed
 
 *Known risk.* A user may name a plant "Boris". A plain line such as "Move Boris against a wall." or a tile titled "Boris" could then read as the mascot speaking or being spoken about. The voice never puts Boris's name into a line, so the name only appears where the user put it.
 
+
+## D53. Care-data pin moved to the first four reviewed species (PR #55)
+
+The `overgrown-data` submodule moves from `f708cbf` to `fd05404` (data PR #13), which marks `ocimum-basilicum`, `buxus-sempervirens`, `citrus-limon` and `impatiens-walleriana` `reviewed`. The compiled asset now holds the twelve archetypes and these four species; `dracaena-trifasciata` and `chamaecyparis-lawsoniana` stay draft and out. `CareDataPinTest` asserts the four species ids; flipping any of them to draft fails it.
+
+- **Fallback.** The data schema says a missing species field inherits from the archetype and an explicit null means unknown and does not inherit. The data compiler already applies this to a species' top-level groups, so the app takes those values as they are: basil's explicit-null `winter_rules` gives the engine default (off), not the leafy-herb group's true. Context blocks hold values that apply only in that context, so the app now fills each block field by field from the species' top-level values when it parses the asset; a field the block sets, even to null, wins in that context. The lemon's indoor ideal range (explicit null) therefore stays unknown indoors and its `frost_free` class still holds there and in a pot outdoors. Plants created from archetypes are unchanged.
+- **Search.** Name search stays as D38 built it: species by every common name in the asset (English, German, Serbian) and the accepted name, then archetypes by name, case-insensitive substring, at most eight rows. When a species and its archetype both match, both are shown, species first: the species row shows the common name that matched with the accepted name under it, the archetype row its own name. Picking the species stores the species and its archetype; picking the archetype stores only the archetype.
+- **Glyph.** A species plant uses its archetype's glyph through `glyphFor`. The outdoor archetypes, including `outdoor-leafy-herb`, still fall back to the leafy glyph (D33); mapping basil's group to the herb glyph is left to the owner (DESIGN.md: one glyph per archetype).
+- **Toxicity.** All four species ship toxicity `unknown`, and the app shows no toxicity anywhere yet, so nothing can show as safe; a test asserts every shipped species reads as `UNKNOWN`.
+- Running the wizard twice for the same species creates two plants: nothing in this change touches how the wizard saves.
+
+## D54. Gate mapping
+
+The repo's milestone labels G1 to G6 (used in D15 to D30 and in the advisor report) are mapped to `docs/BRIEF.md` section 10, which is now the reference. Each gate closes only when every exit condition holds.
+
+- **G0 Foundations.** Exit: CI with build, tests, licence check, iOS compile and the double build; the MET Norway acceptance file. Status: set up (D50, `docs/acceptance/met-norway-2026-11-23.md`). The double build is intermittently non-deterministic (STATE); that blocks G6, not G0's setup.
+- **G1 Engine.** Exit: section 11 fixtures and property tests pass; the harness reports both models. Status: met as far as checked (`:engine`, `:engine-sim`, the full test command passes, `docs/reports/sim-report.md`); coverage of BRIEF section 11 by `FixtureTest` and the property tests was not checked.
+- **G2 Care data.** Exit: validator in CI; asset built in Gradle from the pinned submodule; the owner has reviewed the Chamaecyparis entry. Status: not met. The asset builds from the pin (D36, D47, D49, D53), but `species/chamaecyparis-lawsoniana.yaml` is still `status: draft` in the data repo. Whether the data repo's CI runs the validator: unknown.
+- **G3 Personal use, outdoor.** Exit: the owner's cypress runs on the ADB-installed app with forecast, notifications with actions, frost, heat, rain and wind alerts, rain-exposure setting, export and calibration mode. Status: features merged; the owner's on-device confirmation of each item: unknown.
+- **G4 Indoor.** Exit: indoor plants run; each weighed pot has several complete dry-down cycles logged; export and import round-trip. Status: open. Indoor and export/import are merged. G4 stays open until the owner logs several complete dry-down cycles per weighed pot; he now has a 1 g scale and starts weighing Boris.
+- **G5 Proof.** Exit: baseline comparison and the archetype test, written up and published in the repository whatever they show. The baseline comparison is the section 10 metric list over both models, against the scale measurements; the archetype test runs every reviewed species with and without its entry. Status: not started (no scale data; the archetype run is not built). Four species are reviewed (D53).
+- **G6 Hardening.** Exit: onboarding, accessibility, battery-saver guidance, privacy policy, disclaimers, store metadata; reproducible build verified. Status: partly (D31 to D46; `docs/PRIVACY.md` is a draft; the reproducible build is not verified).
+
+Earlier entries that say "G5's kitchen-scale data" (D15, D18, D25) mean the weighing log that closes G4 and feeds G5.
