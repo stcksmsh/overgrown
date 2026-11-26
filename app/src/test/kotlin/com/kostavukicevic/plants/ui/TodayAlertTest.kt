@@ -244,6 +244,7 @@ class TenderColdAlertTest {
         assertEquals("Cold nights Tue-Wed. Bring Basil indoors or cover for the night.", Texts.eventCard(app, e, today))
         showsCard(g, e)
         assertEquals("Cold Tue-Wed: Basil" to "Bring Basil indoors or cover for the night.", notification(e, today, boris = false))
+        assertEquals("Cold Tue-Wed: Basil" to "Bring Basil indoors or cover for the night. Tender. Not built for this.", notification(e, today, boris = true))
     }
 
     @Test
@@ -254,6 +255,7 @@ class TenderColdAlertTest {
         assertEquals("Frost Tue-Wed. Bring Basil indoors or cover for the night.", Texts.eventCard(app, e, today))
         showsCard(g, e)
         assertEquals("Frost Tue-Wed: Basil" to "Bring Basil indoors or cover for the night.", notification(e, today, boris = false))
+        assertEquals("Frost Tue-Wed: Basil" to "Bring Basil indoors or cover for the night. Tender. Not built for this.", notification(e, today, boris = true))
     }
 }
 
