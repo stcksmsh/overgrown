@@ -374,3 +374,9 @@ The new archetypes are reached through the wizard's name search (D38), which mat
 - Reminder day (#35): a reminder job carries the day it was armed for, and its once-a-day record and its unique name use that day, not the day it happens to run. A job that runs after midnight still belongs to the day it was meant for.
 - Night rule (#35): a test now covers feed and repot reminders being held at night and posted when not late, as watering prompts already were. The reminder job's logic moved from `NotifyWorker` to `Scheduler.runReminder` so it can be tested without a work-testing dependency.
 - Wizard location test (#36): the fake location fix is set before the wait, so `waitUntil` observes the result and can fail.
+
+## D49. Care-data pin moved to all twelve reviewed archetypes
+
+The `overgrown-data` submodule moves from `ec9efde` to `764d914` (data PR #11), which marks `outdoor-annual-bedding`, `outdoor-hardy-flowering-shrub`, `outdoor-leafy-herb` and `outdoor-tender-evergreen` `reviewed`. The compiled asset now holds twelve archetypes and still no species; the species drafts `dracaena-trifasciata` and `chamaecyparis-lawsoniana` stay out. `CareDataPinTest` asserts the twelve ids; flipping any of the four new ones to draft fails it.
+
+As in D47, the new archetypes are found by name only (D38): "Outdoor leafy herb" by "herb". They use the leafy fallback glyph; this bump changes no production code.
