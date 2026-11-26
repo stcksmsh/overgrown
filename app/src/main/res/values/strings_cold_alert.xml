@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- Cold and frost alerts for plants below their minimum temperature or frost-tender. -->
+<resources>
+    <!-- What to do, naming every plant in the event. -->
+    <string name="event_do_tender">Bring %1$s indoors or cover for the night.</string>
+    <!-- Translators: Boris twin of event_do_tender, a weather alert body. Keep the plain instruction and the plant names (%1$s) first and whole; one dry line after it. -->
+    <string name="event_do_tender_boris">Bring %1$s indoors or cover for the night. Tender. Not built for this.</string>
+    <!-- The alert notification's title: the event's days, then the plants. -->
+    <string name="notif_event_cold">Cold %1$s: %2$s</string>
+    <!-- One alert on the plant screen: its date, then what to do. -->
+    <string name="alert_cold">%1$s: colder than this plant takes. Bring it indoors or cover it.</string>
+    <string name="alert_frost">%1$s: frost, and this plant is frost-tender. Bring it indoors or cover it.</string>
+</resources>

@@ -170,6 +170,7 @@ fun SettingsScreen(onBack: () -> Unit) {
         Text(stringResource(R.string.about_privacy))
         TextButton(onClick = { uri.openUri(PRIVACY_URL) }) { Text(stringResource(R.string.about_privacy_link)) }
         Text(stringResource(R.string.about_care_notice), style = MaterialTheme.typography.bodySmall)
+        Text(stringResource(R.string.about_care_no_guarantee), style = MaterialTheme.typography.bodySmall)
         TextButton(onClick = { uri.openUri(SOURCE_URL) }) { Text(stringResource(R.string.about_source)) }
         Text(stringResource(R.string.about_font))
         TextButton(onClick = { fontLicence = true }) { Text(stringResource(R.string.about_font_licence)) }

@@ -38,6 +38,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -51,7 +52,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
+import com.kostavukicevic.plants.caredb.CareDb
 import com.kostavukicevic.plants.caredb.Context as CareContext
+import com.kostavukicevic.plants.caredb.Toxicity
+import com.kostavukicevic.plants.caredb.ToxicityLevel
 import com.kostavukicevic.plants.data.CareSource
 import com.kostavukicevic.plants.data.EventDateBeforeAcquired
 import com.kostavukicevic.plants.data.EventDateFuture
@@ -74,7 +78,7 @@ import java.io.IOException
 import kotlin.time.Instant
 
 @Composable
-fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
+fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit, careDb: CareDb? = rememberGraph().careDb) {
     val g = rememberGraph()
     val c = LocalContext.current
     val res = LocalResources.current
@@ -153,7 +157,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
             NameBlock(
                 plantId = plantId,
                 name = s.plant.name,
-                typeAndPlace = plantType(s)?.let { stringResource(R.string.plant_type_and_place, it, s.place.name) } ?: s.place.name,
+                typeAndPlace = plantType(s, careDb)?.let { stringResource(R.string.plant_type_and_place, it, s.place.name) } ?: s.place.name,
                 glyph = glyphFor(s.plant.archetypeId),
                 waterLeft = (1 - s.state.depletion).toFloat(),
                 onBack = onBack,
@@ -231,7 +235,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
                 }
             }
 
-            SurfaceCard { CareInfo(s, onReport = { uri.openUri(reportUrl(s)) }) }
+            SurfaceCard { CareInfo(s, careDb, onReport = { uri.openUri(reportUrl(s)) }) }
 
             if (weighing) SurfaceCard { Calibration(plantId) }
 
@@ -329,12 +333,9 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
 }
 
 /** The species' accepted name or the archetype's name, when the care database has it. */
-@Composable
-private fun plantType(s: PlantStatus): String? {
-    val db = rememberGraph().careDb
-    return s.plant.speciesSlug?.let { db?.species(it)?.taxon?.acceptedName }
+private fun plantType(s: PlantStatus, db: CareDb?): String? =
+    s.plant.speciesSlug?.let { db?.species(it)?.taxon?.acceptedName }
         ?: s.plant.archetypeId?.let { db?.archetypes?.get(it)?.name }
-}
 
 @Composable
 private fun TimelinePhoto(photo: PhotoEntity, onDelete: () -> Unit) {
@@ -371,13 +372,12 @@ private const val MAX_TIMELINE_PHOTOS = 30
 private const val THUMBNAIL_DP = 240
 
 @Composable
-private fun CareInfo(s: PlantStatus, onReport: () -> Unit) {
-    val g = rememberGraph()
-    val species = s.plant.speciesSlug?.let { g.careDb?.species(it) }
+private fun CareInfo(s: PlantStatus, careDb: CareDb?, onReport: () -> Unit) {
+    val species = s.plant.speciesSlug?.let { careDb?.species(it) }
     Text(
         when (s.careSource) {
             CareSource.SPECIES -> stringResource(R.string.plant_care_source_species, species?.taxon?.acceptedName ?: s.plant.speciesSlug ?: "")
-            CareSource.ARCHETYPE -> stringResource(R.string.plant_care_source_archetype, g.careDb?.archetypes?.get(s.plant.archetypeId)?.name ?: "")
+            CareSource.ARCHETYPE -> stringResource(R.string.plant_care_source_archetype, careDb?.archetypes?.get(s.plant.archetypeId)?.name ?: "")
             CareSource.GENERIC -> stringResource(R.string.plant_care_source_generic)
         },
         style = MaterialTheme.typography.bodySmall,
@@ -386,7 +386,41 @@ private fun CareInfo(s: PlantStatus, onReport: () -> Unit) {
     species?.groupsFor(CareContext.IN_GROUND)?.temperature?.minTempC?.let {
         Text(stringResource(R.string.cold_in_ground, it.toString()), style = MaterialTheme.typography.bodySmall)
     }
+    // An archetype carries no toxicity: for a plant known only by its profile, every category is unknown.
+    when (s.careSource) {
+        CareSource.SPECIES -> species?.toxicity
+        CareSource.ARCHETYPE -> Toxicity()
+        CareSource.GENERIC -> null
+    }?.let { ToxicityInfo(it) }
     if (s.careSource != CareSource.GENERIC) TextButton(onClick = onReport) { Text(stringResource(R.string.plant_report_wrong_data)) }
+}
+
+/** Each category's toxicity, then the disclaimer every toxicity display carries. Never says "safe". */
+@Composable
+internal fun ToxicityInfo(t: Toxicity) {
+    Text(stringResource(R.string.toxicity_title), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+    val categories = listOf(
+        R.string.toxicity_cats to t.forCats,
+        R.string.toxicity_dogs to t.forDogs,
+        R.string.toxicity_horses to t.forHorses,
+        R.string.toxicity_humans to t.forHumans,
+    )
+    for ((category, level) in categories) {
+        val line = when (level) {
+            ToxicityLevel.TOXIC -> R.string.toxicity_toxic
+            ToxicityLevel.MILD_IRRITANT -> R.string.toxicity_mild_irritant
+            ToxicityLevel.NO_KNOWN_TOXICITY -> R.string.toxicity_no_known
+            ToxicityLevel.UNKNOWN -> R.string.toxicity_unknown
+        }
+        val caution = level == ToxicityLevel.TOXIC || level == ToxicityLevel.MILD_IRRITANT
+        Text(
+            stringResource(line, stringResource(category)),
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (caution) FontWeight.SemiBold else null,
+            color = if (level == ToxicityLevel.UNKNOWN) Overgrown.colors.muted else Color.Unspecified,
+        )
+    }
+    Text(stringResource(R.string.toxicity_disclaimer), style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable

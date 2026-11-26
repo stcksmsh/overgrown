@@ -3,6 +3,7 @@ package com.kostavukicevic.plants.ui
 
 import android.Manifest
 import android.app.Application
+import android.app.Notification
 import android.app.NotificationManager
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
@@ -30,6 +31,7 @@ import com.dropbox.differ.SimpleImageComparator
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.kostavukicevic.plants.Graph
+import com.kostavukicevic.plants.LocalBoris
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
 import com.kostavukicevic.plants.data.AlertAck
@@ -181,6 +183,82 @@ class TodayAlertTest {
     }
 }
 
+/**
+ * Basil from the bundled care data (frost-tender, 10 degC minimum) in a pot outside: a cold night below its minimum
+ * and a frost each give one cold card on Today and a notification, in both voices.
+ */
+@RunWith(RobolectricTestRunner::class)
+class TenderColdAlertTest {
+
+    private val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @get:Rule
+    val rules: RuleChain = RuleChain.outerRule(RegisterHostActivity()).around(compose)
+
+    private val app = ApplicationProvider.getApplicationContext<Application>()
+    private val nm get() = shadowOf(app.getSystemService(NotificationManager::class.java))
+
+    /** Basil outside with [tMin] forecast tonight and tomorrow night; returns its one event. */
+    private fun basilAt(tMin: Double): Pair<Graph, AlertEvent> {
+        val (g, db) = fixedClockGraph()
+        val placeId = runBlocking { g.garden.savePlace(BALCONY.copy(id = 0)) }
+        val today = g.garden.today()
+        val fetched = PLANT_TEST_NOW.toEpochMilliseconds()
+        val days = (0..1).map { n ->
+            WeatherDayEntity(placeId, LocalDate.fromEpochDays(today.toEpochDays() + n).toString(), tMin, tMin + 8, 0.0, provider = "OPEN_METEO", fetchedAtEpochMs = fetched)
+        }
+        runBlocking { db.dao().upsertWeather(days) }
+        runBlocking {
+            g.garden.savePlant(
+                PlantEntity(
+                    name = "Basil", placeId = placeId, speciesSlug = "ocimum-basilicum", archetypeId = "outdoor-leafy-herb",
+                    canopyWidthCm = 20.0, potVolumeL = 2.0, acquiredOn = "2026-01-01",
+                ),
+            )
+        }
+        return g to runBlocking { g.garden.alertEvents() }.single()
+    }
+
+    /** The notification's title and body for [e] in the plain voice and in Boris's. */
+    private fun notification(e: AlertEvent, today: LocalDate, boris: Boolean): Pair<String, String> {
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        Notifier.createChannels(app)
+        app.getSystemService(NotificationManager::class.java).cancelAll()
+        assertTrue(Notifier.postAlert(app, e, today, boris))
+        val n = nm.getNotification(Notifier.ALERT_TAG, Notifier.alertId(AlertAck.of(e)))
+        return n.extras.getCharSequence(Notification.EXTRA_TITLE).toString() to n.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+    }
+
+    private fun showsCard(g: Graph, e: AlertEvent) {
+        val text = Texts.eventCard(compose.activity, e, g.garden.today())
+        compose.setContent { OvergrownTheme { TodayScreen(onPlant = {}, onAdd = {}, onPlaces = {}, onSettings = {}) } }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    @Test
+    fun belowItsMinimumBasilGetsAColdCardAndNotification() {
+        val (g, e) = basilAt(8.0)
+        val today = g.garden.today()
+        assertEquals(AlertKind.COLD, e.kind)
+        assertEquals(AlertType.COLD, e.severity)
+        assertEquals("Cold nights Tue-Wed. Bring Basil indoors or cover for the night.", Texts.eventCard(app, e, today))
+        showsCard(g, e)
+        assertEquals("Cold Tue-Wed: Basil" to "Bring Basil indoors or cover for the night.", notification(e, today, boris = false))
+        assertEquals("Cold Tue-Wed: Basil" to "Bring Basil indoors or cover for the night. Tender. Not built for this.", notification(e, today, boris = true))
+    }
+
+    @Test
+    fun aFrostGivesBasilAFrostCardAndNotification() {
+        val (g, e) = basilAt(-1.0)
+        val today = g.garden.today()
+        assertEquals(AlertType.FROST, e.severity)
+        assertEquals("Frost Tue-Wed. Bring Basil indoors or cover for the night.", Texts.eventCard(app, e, today))
+        showsCard(g, e)
+        assertEquals("Frost Tue-Wed: Basil" to "Bring Basil indoors or cover for the night.", notification(e, today, boris = false))
+        assertEquals("Frost Tue-Wed: Basil" to "Bring Basil indoors or cover for the night. Tender. Not built for this.", notification(e, today, boris = true))
+    }
+}
+
 /** Card and notification words, from a made-up event. */
 @RunWith(RobolectricTestRunner::class)
 class AlertWordsTest {
@@ -230,6 +308,19 @@ class TodayAlertScreenshotTest(private val dark: Boolean, private val fontScale:
     @Test
     fun twoPlants() = capture("two_plants") {
         AlertCard(event(AlertKind.COLD, AlertType.ROOT_FREEZE_CAUTION, 25, 27, "Boris", "Fern"), TODAY, onDone = {}, onDismiss = {})
+    }
+
+    // The card's advice is plain in both voices (D52); the Boris capture shows it stays so.
+    @Test
+    fun tenderFrost() = capture("tender_frost") {
+        AlertCard(event(AlertKind.COLD, AlertType.FROST, 25, 26, "Basil"), TODAY, onDone = {}, onDismiss = {})
+    }
+
+    @Test
+    fun tenderFrostBoris() = capture("tender_frost_boris") {
+        CompositionLocalProvider(LocalBoris provides true) {
+            AlertCard(event(AlertKind.COLD, AlertType.FROST, 25, 26, "Basil"), TODAY, onDone = {}, onDismiss = {})
+        }
     }
 
     companion object {

@@ -184,6 +184,14 @@ object Coefficients {
     const val ROOT_FREEZE_CAUTION_C = -5.0
     const val ROOT_FREEZE_STRONG_C = -10.0
 
+    /**
+     * PRIOR: a frost alert for tender and frost-free plants at or below this forecast minimum. The forecast is
+     * air temperature at 2 m; on clear, still nights leaves and pots cool below the air, so frost can reach a
+     * plant while the forecast minimum is still a little above 0 degC. A missed frost kills a tender plant; a
+     * spurious alert costs a tap.
+     */
+    const val FROST_ALERT_C = 2.0
+
     /** PRIOR: small pots and exposed places get alerts this many degrees earlier. */
     const val ROOT_FREEZE_STRICTER_BY_C = 2.0
     const val SMALL_POT_LITRES = 10.0

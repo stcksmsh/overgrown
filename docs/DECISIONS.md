@@ -443,3 +443,37 @@ D55 credited the provider of the newest stored weather row anywhere, but fallbac
 - **Today.** Credits every provider with stored days at any outdoor place it shows, one credit line per provider, each linking to its own source, in the existing string style. No outdoor place or no fetch: no credit, as before. Lines are in provider-id order (MET Norway, then Open-Meteo), so they do not swap with each fetch.
 - **Accessibility.** The credit has the button role, as the links in Settings (`TextButton`) do, so TalkBack announces it as something to activate.
 - **Test hook.** The plant screen sets a semantics property (`WeatherProviders`) once its provider lookup has finished, empty for none. Accessibility services ignore it; it lets a test tell "no credit" from "not looked up yet" without sleeping.
+
+## D57. Unknown engine flags in an outdoor pot (PR #59)
+
+Decision (coordinator, final): an unknown `root_freeze_alerts` counts as ON for a plant in an outdoor container (a spurious alert costs a tap; a missed one can kill the plant). An unknown `winter_rules` keeps the engine default it has today unless the test shows it removes a cold or frost alert, in which case it is also ON for outdoor containers. Indoor and in-ground behaviour unchanged. Known values (true/false) are always used as given.
+
+- `winter_rules` changes the watering action only (winter holds and checks in `Engine.action`). It does not touch `forecastAlerts`, so an unknown value removes no cold or frost alert (`winterRulesDoNotChangeAlerts`). It therefore stays at its default, false. Watering is held on a frost night (`FROST_HOLD_MIN_C` 1 °C) with or without winter rules; that is an action, not an alert.
+- Archetypes: only 4 of 12 (hardy-potted-conifer, outdoor-hardy-flowering-shrub, outdoor-mediterranean-shrub, outdoor-leafy-herb) set these flags, all to true. The other 8 have no engine block, so the flags are null and root-freeze alerts are on when such a plant is placed outdoors.
+- In-ground: the engine has no in-ground place, so nothing changes.
+- At the time the engine read neither `min_temp_c` nor `frost_class`, so a tender plant got no alert between its minimum and the root-freeze threshold. D58 closes that gap.
+
+## D58. Cold and frost alerts for tender plants
+
+The engine now reads `min_temp_c` and `frost_class` for the plant's context (`Planner.profile`, D53). Outdoor plants only; indoor plants get no cold alerts, as before.
+
+- **COLD (caution):** forecast `tMinC` below the plant's `min_temp_c`. Unknown minimum: no cold alert.
+- **FROST (strong):** forecast `tMinC` at or below `FROST_ALERT_C` (2 °C, PRIOR) for frost class `tender` or `frost_free`. `light_frost`, `hardy` and `very_hardy` get none: root freeze covers their pots. Unknown class: no frost alert. 2 °C rather than 0 °C because the forecast is air temperature at 2 m, and on clear, still nights leaves and pots cool below the air, so frost can reach a plant while the forecast minimum is still above zero. A lemon (`frost_free`, minimum unknown) in a pot outside at 2 °C gets a frost alert.
+- **One cold alert per plant per day**, the strongest: frost, then root freeze strong, then cold, then root freeze caution. At the same level the plant's own limit wins over the pot's, because bringing a plant in or covering it also protects its roots, while root-freeze advice ("move the pot against a wall") leaves a tender plant's leaves in the frost. So a tender basil on a -12 °C night gets the frost alert, not root freeze strong. The same order picks an event's severity when several plants share one cold card (`AlertEvents.precedence`); acks and "notify again" still compare only the two levels, caution and strong, so cold turning to frost shows and notifies again.
+- **One kind.** Cold and frost are the cold kind (the asterisk icon), so a day never shows a second card for the same plant.
+- **Words.** Cold: card "Cold nights Tue-Wed. Bring Basil indoors or cover for the night.", notification title "Cold Tue-Wed: Basil". Frost: card "Frost Tue-Wed. ...", title "Frost Tue-Wed: Basil". The plant screen line says the plant is below its minimum or frost-tender. New strings are in `strings_cold_alert.xml`.
+- **Boris.** The notification body has a twin, `event_do_tender_boris`: "Bring Basil indoors or cover for the night. Tender. Not built for this." (the plain sentence first and whole, then flavour, D52 rules 1 and 6). It lives in `strings_cold_alert.xml` with the strings it twins and is registered in `Voice.strings`. Titles and the Today card stay plain in both voices.
+- **Storage.** Alert types are not in Room. Acks and posted records store the type's enum name as JSON in DataStore, so the new names need no migration.
+- **Sim report.** The simulated profiles set no minimum or frost class, so `docs/reports/sim-report.md` does not change.
+
+## D59. Toxicity on the plant screen; care notice in About
+
+BRIEF sections 6.5 and 9.
+
+- **Where.** The care data card on the plant screen, after the care source and hardiness lines and before "Report wrong data": a "Toxicity" heading, one line per category the data has (cats, dogs, horses, people), then the disclaimer. Plain text in `strings_toxicity.xml`, no Boris twins (D52 rule 7).
+- **Which plants.** A species with care data shows its own values. A plant known only by its profile (archetype) shows every category as unknown, because archetypes carry no toxicity and saying nothing would read as no warning. A plant with no care data (custom, no profile) shows no toxicity and no disclaimer.
+- **Words.** `unknown`: "Cats: unknown", in the muted colour; nothing more, because unknown covers unchecked, unreviewed and disagreeing references, and archetype-only plants. `no_known_toxicity`: "Cats: no known toxicity in the sources checked", in normal ink. `mild_irritant`: "Dogs: caution, can irritate"; `toxic`: "Cats: caution, toxic"; both semibold, never in the error colour, so a caution is not louder than the data. The word "safe" appears nowhere; a test scans every string resource that is in `strings_toxicity.xml` or mentions toxicity or poison.
+- **Disclaimer.** "General information, not veterinary or medical advice. This data is incomplete. The absence of a warning does not mean a plant is harmless. If a pet or person has eaten a plant, contact a vet or a poison centre." It follows the lines in the same card, so TalkBack reads the lines and then the disclaimer.
+- **Close relatives.** Not implemented. The data has no link from a species to its genus or family (`taxon` has `rank` and identifiers, nothing pointing at a relative), so there is nothing to read a relative's toxicity from, and the slice does not invent one.
+- **About.** The existing `about_care_notice` ("Care advice is general information. Plants, pots and places differ; watch your plant.") lacked "no guarantee". A second line follows it: "Check your own plant: there is no guarantee that this advice suits it." It lives in `strings_toxicity.xml` because `strings.xml` was outside this slice.
+- **Testing.** `PlantScreen` takes the care database as a parameter defaulting to the bundled one, as `AddPlantWizard` does, so tests and goldens can show fixture species with every toxicity value.

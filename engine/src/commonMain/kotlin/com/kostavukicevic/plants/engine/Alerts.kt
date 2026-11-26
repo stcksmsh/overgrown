@@ -13,18 +13,31 @@ object Alerts {
         val shift = if (stricter) C.ROOT_FREEZE_STRICTER_BY_C else 0.0
         return upcoming.flatMap { day ->
             buildList {
-                if (plant.profile.rootFreezeAlerts != false) {
-                    when {
-                        day.tMinC <= C.ROOT_FREEZE_STRONG_C + shift -> add(Alert(AlertType.ROOT_FREEZE_STRONG, day.date))
-                        day.tMinC <= C.ROOT_FREEZE_CAUTION_C + shift -> add(Alert(AlertType.ROOT_FREEZE_CAUTION, day.date))
-                    }
-                }
+                coldAlert(plant.profile, day.tMinC, shift)?.let { add(Alert(it, day.date)) }
                 if (day.tMaxC >= C.HEAT_ALERT_MAX_C) add(Alert(AlertType.HEAT, day.date))
                 if (day.precipitationMm >= C.HEAVY_RAIN_ALERT_MM) add(Alert(AlertType.HEAVY_RAIN, day.date))
                 val wind = day.meanWindMs
                 val windLimit = if (plant.profile.windSensitive) C.WIND_ALERT_SENSITIVE_MEAN_MS else C.WIND_ALERT_MEAN_MS
                 if (wind != null && wind >= windLimit) add(Alert(AlertType.WIND, day.date))
             }
+        }
+    }
+
+    /**
+     * At most one cold alert a day, the strongest: frost, then root freeze strong, then cold, then root freeze
+     * caution. At the same level the plant's own limit wins over the pot's, because bringing a plant in or covering
+     * it also protects its roots, while root-freeze advice protects only the pot.
+     */
+    private fun coldAlert(profile: CareProfile, tMinC: Double, shift: Double): AlertType? {
+        val tender = profile.frostClass == FrostClass.TENDER || profile.frostClass == FrostClass.FROST_FREE
+        val rootFreeze = profile.rootFreezeAlerts != false
+        val minTemp = profile.minTempC
+        return when {
+            tender && tMinC <= C.FROST_ALERT_C -> AlertType.FROST
+            rootFreeze && tMinC <= C.ROOT_FREEZE_STRONG_C + shift -> AlertType.ROOT_FREEZE_STRONG
+            minTemp != null && tMinC < minTemp -> AlertType.COLD
+            rootFreeze && tMinC <= C.ROOT_FREEZE_CAUTION_C + shift -> AlertType.ROOT_FREEZE_CAUTION
+            else -> null
         }
     }
 

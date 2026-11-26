@@ -58,14 +58,15 @@ object Texts {
 
     /** One short sentence per kind of weather alert, over the days it falls on: "Frost Mon-Tue, Thu." */
     fun alertSummary(c: Context, alerts: List<Alert>, today: LocalDate): String =
-        alerts.groupBy { if (it.type == AlertType.ROOT_FREEZE_STRONG) AlertType.ROOT_FREEZE_CAUTION else it.type }
+        alerts.groupBy { if (it.type == AlertType.ROOT_FREEZE_STRONG || it.type == AlertType.FROST) AlertType.ROOT_FREEZE_CAUTION else it.type }
             .entries.sortedBy { (_, a) -> a.minOf { it.date } }
             .joinToString(" ") { (type, a) ->
                 val days = dayRuns(a.map { it.date }).map { (first, last) ->
                     if (first == last) day(first, today) else c.getString(R.string.today_day_range, day(first, today), day(last, today))
                 }.reduce { acc, run -> c.getString(R.string.today_day_list, acc, run) }
                 when (type) {
-                    AlertType.ROOT_FREEZE_CAUTION, AlertType.ROOT_FREEZE_STRONG -> c.getString(R.string.today_alert_frost, days)
+                    AlertType.ROOT_FREEZE_CAUTION, AlertType.ROOT_FREEZE_STRONG, AlertType.FROST -> c.getString(R.string.today_alert_frost, days)
+                    AlertType.COLD -> c.getString(R.string.event_cold, days)
                     AlertType.HEAT -> c.getString(R.string.today_alert_heat, days)
                     AlertType.HEAVY_RAIN -> c.getString(R.string.today_alert_heavy_rain, days)
                     AlertType.WIND -> c.getString(R.string.today_alert_wind, days)
@@ -90,12 +91,19 @@ object Texts {
 
     private val AlertEvent.strong get() = severity == AlertType.ROOT_FREEZE_STRONG
 
+    /** Cold or frost for a plant's own limit, not its pot's: bring it in or cover it. */
+    private val AlertEvent.tender get() = severity == AlertType.COLD || severity == AlertType.FROST
+
     /** What to do about the event: "Move Boris and Fern against a wall." [boris] voices it, for the notification only. */
     fun eventAdvice(c: Context, e: AlertEvent, boris: Boolean = false): String = Voice.string(
         c.resources,
         boris,
         when (e.kind) {
-            AlertKind.COLD -> if (e.strong) R.string.event_do_cold_strong else R.string.event_do_cold
+            AlertKind.COLD -> when {
+                e.tender -> R.string.event_do_tender
+                e.strong -> R.string.event_do_cold_strong
+                else -> R.string.event_do_cold
+            }
             AlertKind.HEAT -> R.string.event_do_heat
             AlertKind.HEAVY_RAIN -> R.string.event_do_heavy_rain
             AlertKind.WIND -> R.string.event_do_wind
@@ -108,7 +116,14 @@ object Texts {
     fun eventCard(c: Context, e: AlertEvent, today: LocalDate): String {
         val days = eventDays(c, e, today)
         val what = when (e.kind) {
-            AlertKind.COLD -> c.getString(if (e.strong) R.string.event_cold_strong else R.string.event_cold, days)
+            AlertKind.COLD -> c.getString(
+                when (e.severity) {
+                    AlertType.FROST -> R.string.today_alert_frost
+                    AlertType.ROOT_FREEZE_STRONG -> R.string.event_cold_strong
+                    else -> R.string.event_cold
+                },
+                days,
+            )
             AlertKind.HEAT -> c.getString(R.string.today_alert_heat, days)
             AlertKind.HEAVY_RAIN -> c.getString(R.string.today_alert_heavy_rain, days)
             AlertKind.WIND -> c.getString(R.string.today_alert_wind, days)
@@ -122,7 +137,7 @@ object Texts {
         val days = eventDays(c, e, today)
         val plants = eventPlants(c, e)
         return when (e.kind) {
-            AlertKind.COLD -> c.getString(R.string.notif_event_frost, days, plants)
+            AlertKind.COLD -> c.getString(if (e.severity == AlertType.COLD) R.string.notif_event_cold else R.string.notif_event_frost, days, plants)
             AlertKind.HEAT -> c.getString(R.string.notif_event_heat, days, plants)
             AlertKind.HEAVY_RAIN -> c.getString(R.string.notif_event_heavy_rain, days, plants)
             AlertKind.WIND -> c.getString(R.string.notif_event_wind, days, plants)
@@ -185,6 +200,8 @@ object Texts {
             AlertType.HEAVY_RAIN -> c.getString(R.string.alert_heavy_rain, d)
             AlertType.WIND -> c.getString(R.string.alert_wind, d)
             AlertType.WATERLOGGING -> c.getString(R.string.alert_waterlogging)
+            AlertType.COLD -> c.getString(R.string.alert_cold, d)
+            AlertType.FROST -> c.getString(R.string.alert_frost, d)
         }
     }
 

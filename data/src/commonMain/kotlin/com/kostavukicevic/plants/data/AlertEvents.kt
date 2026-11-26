@@ -9,19 +9,26 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
-/** What an alert card is about. Root-freeze caution and strong are one kind; the event carries the severity. */
+/** What an alert card is about. Root freeze, cold and frost are one kind; the event carries the severity. */
 enum class AlertKind { COLD, HEAT, HEAVY_RAIN, WIND, WATERLOGGING }
 
 fun AlertType.kind(): AlertKind = when (this) {
-    AlertType.ROOT_FREEZE_CAUTION, AlertType.ROOT_FREEZE_STRONG -> AlertKind.COLD
+    AlertType.ROOT_FREEZE_CAUTION, AlertType.ROOT_FREEZE_STRONG, AlertType.COLD, AlertType.FROST -> AlertKind.COLD
     AlertType.HEAT -> AlertKind.HEAT
     AlertType.HEAVY_RAIN -> AlertKind.HEAVY_RAIN
     AlertType.WIND -> AlertKind.WIND
     AlertType.WATERLOGGING -> AlertKind.WATERLOGGING
 }
 
-/** Only cold has two levels. */
-private fun AlertType.rank() = if (this == AlertType.ROOT_FREEZE_STRONG) 1 else 0
+/** Only cold has two levels: caution (root freeze caution, cold) and strong (root freeze strong, frost). */
+private fun AlertType.rank() = if (this == AlertType.ROOT_FREEZE_STRONG || this == AlertType.FROST) 1 else 0
+
+/**
+ * Picks the event's severity among its plants' alerts. At the same level, cold and frost win over root freeze:
+ * their advice (bring the plant in or cover it) also protects a pot's roots, root-freeze advice does not protect a
+ * tender plant. Acks and notifications compare [rank] only.
+ */
+private fun AlertType.precedence() = rank() * 2 + if (this == AlertType.COLD || this == AlertType.FROST) 1 else 0
 
 /**
  * One weather event: one kind over a run of consecutive days, with every plant it affects.
@@ -52,7 +59,7 @@ fun alertEvents(statuses: List<PlantStatus>, today: LocalDate): List<AlertEvent>
     for (s in statuses) for (a in s.alerts) {
         if (a.date < today) continue
         val day = byKind.getOrPut(a.type.kind()) { HashMap() }.getOrPut(a.date) { Day(a.type, LinkedHashMap()) }
-        if (a.type.rank() > day.severity.rank()) day.severity = a.type
+        if (a.type.precedence() > day.severity.precedence()) day.severity = a.type
         day.plants[s.plant.id] = s.plant
     }
     val out = ArrayList<AlertEvent>()
@@ -61,7 +68,7 @@ fun alertEvents(statuses: List<PlantStatus>, today: LocalDate): List<AlertEvent>
         fun close() {
             if (run.isEmpty()) return
             val plants = run.flatMap { days.getValue(it).plants.values }.associateBy { it.id }.values.sortedWith(compareBy({ it.name }, { it.id }))
-            out += AlertEvent(kind, run.first(), run.last(), run.map { days.getValue(it).severity }.maxBy { it.rank() }, plants)
+            out += AlertEvent(kind, run.first(), run.last(), run.map { days.getValue(it).severity }.maxBy { it.precedence() }, plants)
             run = ArrayList()
         }
         for (date in days.keys.sorted()) {

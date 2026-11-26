@@ -35,6 +35,7 @@ object Voice {
         R.string.event_do_heavy_rain to R.string.event_do_heavy_rain_boris,
         R.string.event_do_wind to R.string.event_do_wind_boris,
         R.string.event_do_waterlogging to R.string.event_do_waterlogging_boris,
+        R.string.event_do_tender to R.string.event_do_tender_boris,
     )
     internal val plurals = mapOf(
         R.plurals.forecast_stale to R.plurals.forecast_stale_boris,

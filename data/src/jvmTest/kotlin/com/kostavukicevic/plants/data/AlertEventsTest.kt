@@ -6,6 +6,8 @@ import androidx.room.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.kostavukicevic.plants.engine.Alert
 import com.kostavukicevic.plants.engine.AlertType
+import com.kostavukicevic.plants.engine.AlertType.COLD
+import com.kostavukicevic.plants.engine.AlertType.FROST
 import com.kostavukicevic.plants.engine.AlertType.HEAT
 import com.kostavukicevic.plants.engine.AlertType.ROOT_FREEZE_CAUTION
 import com.kostavukicevic.plants.engine.AlertType.ROOT_FREEZE_STRONG
@@ -131,6 +133,26 @@ class AlertEventsTest {
     fun differentKindsAreSeparateEvents() {
         val events = alertEvents(listOf(boris(ROOT_FREEZE_CAUTION to mon, WIND to mon)), mon)
         assertEquals(listOf("COLD $mon..$mon ROOT_FREEZE_CAUTION [Boris]", "WIND $mon..$mon WIND [Boris]"), events.summary())
+    }
+
+    @Test
+    fun coldAndFrostShareTheColdCardWithRootFreezeAndWinAtTheSameLevel() {
+        // Basil (Fern here) is tender; Boris's pot gets root freeze. One card per day, and its advice is the tender one.
+        val strong = alertEvents(listOf(boris(ROOT_FREEZE_STRONG to mon), fern(FROST to mon)), mon)
+        assertEquals(listOf("COLD $mon..$mon FROST [Boris, Fern]"), strong.summary())
+        val caution = alertEvents(listOf(fern(ROOT_FREEZE_CAUTION to mon), boris(COLD to mon)), mon)
+        assertEquals(listOf("COLD $mon..$mon COLD [Boris, Fern]"), caution.summary())
+        // A stronger level still wins over the tender caution.
+        val mixed = alertEvents(listOf(boris(COLD to mon, ROOT_FREEZE_STRONG to tue)), mon)
+        assertEquals(listOf("COLD $mon..$tue ROOT_FREEZE_STRONG [Boris]"), mixed.summary())
+    }
+
+    @Test
+    fun doneOnColdComesBackWhenItTurnsToFrost() {
+        val event = cold(COLD to mon, COLD to tue)
+        val worse = cold(COLD to mon, FROST to tue)
+        assertEquals(listOf(worse), applyAcks(listOf(worse), acked(emptyList(), event, null), mon).first)
+        assertTrue(!alreadyPosted(listOf(AlertAck.of(event)), worse))
     }
 
     @Test

@@ -27,6 +27,7 @@ import androidx.work.WorkManager
 import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.UrlTransport
+import com.kostavukicevic.plants.caredb.CareDb
 import com.kostavukicevic.plants.data.DbResponseStore
 import com.kostavukicevic.plants.data.EventEntity
 import com.kostavukicevic.plants.data.Garden
@@ -358,9 +359,10 @@ internal val PLANT_TEST_NOW: Instant = Instant.parse("2026-11-24T10:00:00Z")
 
 /**
  * As useTestDatabase in NavigationTest, with a given clock (fixed by default), UTC, and the bundled care database so
- * plant types have names. Returns the database too, for logging past events and weather directly.
+ * plant types have names, or [careDb] in its place. Returns the database too, for logging past events and weather
+ * directly.
  */
-internal fun fixedClockGraph(now: () -> Instant = { PLANT_TEST_NOW }): Pair<Graph, GardenDb> {
+internal fun fixedClockGraph(now: () -> Instant = { PLANT_TEST_NOW }, careDb: CareDb? = null): Pair<Graph, GardenDb> {
     val app = ApplicationProvider.getApplicationContext<Application>()
     if (!WorkManager.isInitialized()) WorkManager.initialize(app, Configuration.Builder().build())
     val g = app.graph
@@ -370,7 +372,7 @@ internal fun fixedClockGraph(now: () -> Instant = { PLANT_TEST_NOW }): Pair<Grap
         .build()
     val metNorway = MetNorway(UrlTransport, DbResponseStore(db.dao()), now, g.versionName, TimeZone.UTC)
     val garden = Garden(
-        db, g.settings, WeatherService(g.openMeteo, metNorway, g.settings), g.openMeteo, { g.careDb }, now,
+        db, g.settings, WeatherService(g.openMeteo, metNorway, g.settings), g.openMeteo, { careDb ?: g.careDb }, now,
         { TimeZone.UTC }, File(app.filesDir, "photos"),
     )
     Graph::class.java.getDeclaredField("garden").apply { isAccessible = true }.set(g, garden)
