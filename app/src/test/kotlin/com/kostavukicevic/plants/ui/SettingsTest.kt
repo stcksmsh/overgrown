@@ -133,4 +133,11 @@ class SettingsTest {
     fun aboutIsBuiltForBoris() {
         compose.onNodeWithText("Built for Boris, a false cypress on a balcony in Belgrade.").performScrollTo().assertExists()
     }
+
+    /** The general care notice: general information, check your own plant, no guarantee. */
+    @Test
+    fun aboutShowsTheCareNotice() {
+        compose.onNodeWithText(s(R.string.about_care_notice)).performScrollTo().assertExists()
+        compose.onNodeWithText("Check your own plant: there is no guarantee that this advice suits it.").performScrollTo().assertExists()
+    }
 }

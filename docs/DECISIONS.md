@@ -465,3 +465,15 @@ The engine now reads `min_temp_c` and `frost_class` for the plant's context (`Pl
 - **Boris.** The notification body has a twin, `event_do_tender_boris`: "Bring Basil indoors or cover for the night. Tender. Not built for this." (the plain sentence first and whole, then flavour, D52 rules 1 and 6). It lives in `strings_cold_alert.xml` with the strings it twins and is registered in `Voice.strings`. Titles and the Today card stay plain in both voices.
 - **Storage.** Alert types are not in Room. Acks and posted records store the type's enum name as JSON in DataStore, so the new names need no migration.
 - **Sim report.** The simulated profiles set no minimum or frost class, so `docs/reports/sim-report.md` does not change.
+
+## D59. Toxicity on the plant screen; care notice in About
+
+BRIEF sections 6.5 and 9.
+
+- **Where.** The care data card on the plant screen, after the care source and hardiness lines and before "Report wrong data": a "Toxicity" heading, one line per category the data has (cats, dogs, horses, people), then the disclaimer. Plain text in `strings_toxicity.xml`, no Boris twins (D52 rule 7).
+- **Which plants.** A species with care data shows its own values. A plant known only by its profile (archetype) shows every category as unknown, because archetypes carry no toxicity and saying nothing would read as no warning. A plant with no care data (custom, no profile) shows no toxicity and no disclaimer.
+- **Words.** `unknown`: "Cats: unknown", in the muted colour; nothing more, because unknown covers unchecked, unreviewed and disagreeing references, and archetype-only plants. `no_known_toxicity`: "Cats: no known toxicity in the sources checked", in normal ink. `mild_irritant`: "Dogs: caution, can irritate"; `toxic`: "Cats: caution, toxic"; both semibold, never in the error colour, so a caution is not louder than the data. The word "safe" appears nowhere; a test scans every string resource that is in `strings_toxicity.xml` or mentions toxicity or poison.
+- **Disclaimer.** "General information, not veterinary or medical advice. This data is incomplete. The absence of a warning does not mean a plant is harmless. If a pet or person has eaten a plant, contact a vet or a poison centre." It follows the lines in the same card, so TalkBack reads the lines and then the disclaimer.
+- **Close relatives.** Not implemented. The data has no link from a species to its genus or family (`taxon` has `rank` and identifiers, nothing pointing at a relative), so there is nothing to read a relative's toxicity from, and the slice does not invent one.
+- **About.** The existing `about_care_notice` ("Care advice is general information. Plants, pots and places differ; watch your plant.") lacked "no guarantee". A second line follows it: "Check your own plant: there is no guarantee that this advice suits it." It lives in `strings_toxicity.xml` because `strings.xml` was outside this slice.
+- **Testing.** `PlantScreen` takes the care database as a parameter defaulting to the bundled one, as `AddPlantWizard` does, so tests and goldens can show fixture species with every toxicity value.
