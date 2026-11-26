@@ -380,3 +380,10 @@ The new archetypes are reached through the wizard's name search (D38), which mat
 The `overgrown-data` submodule moves from `ec9efde` to `764d914` (data PR #11), which marks `outdoor-annual-bedding`, `outdoor-hardy-flowering-shrub`, `outdoor-leafy-herb` and `outdoor-tender-evergreen` `reviewed`. The compiled asset now holds twelve archetypes and still no species; the species drafts `dracaena-trifasciata` and `chamaecyparis-lawsoniana` stay out. `CareDataPinTest` asserts the twelve ids; flipping any of the four new ones to draft fails it.
 
 As in D47, the new archetypes are found by name only (D38): "Outdoor leafy herb" by "herb". They use the leafy fallback glyph; this bump changes no production code.
+
+## D50. The brief is in the repository; CI back on main pushes only
+
+The owner committed the brief as `docs/BRIEF.md` (previously only outside the repository as `OVERGROWN_MASTER_PLAN.md`). Section 10 there defines the gates and their exit conditions.
+
+CI comes back in a cheaper form, on the advisor's answer to the status report (accepted by the owner): the `CI` workflow runs the full `check` job and the reproducible double build on pushes to `main`, on `v*` tags and on manual dispatch, no longer on every pull request. Merges stay fast, `main` is checked within minutes of each merge, and reproducibility is never more than one merge stale. The local full test command stays the pull-request gate, so `.nonslop.toml` keeps `allow_no_ci = true` (pull requests have no checks to wait for). This replaces D37's "off until close to V1".
+
