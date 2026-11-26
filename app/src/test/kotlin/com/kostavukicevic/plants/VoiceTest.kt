@@ -75,14 +75,20 @@ class VoiceTest {
         assertTrue("protected strings with a Boris twin: $offending", offending.isEmpty())
     }
 
+    /** Every protected-kind string the app has today is caught by the matcher; a new one belongs in this list. */
     @Test
-    fun theProtectedSetCoversTheKindsOfTextItNames() {
-        val protectedKeys = listOf(
-            "toxic_to_cats", "safety_note", "notifications_reason", "wizard_location_denied", "import_failed", "export_done",
-            "delete_failed", "photo_add_private", "about_privacy", "location_privacy", "wizard_save_failed", "plant_entry_failed",
-        )
-        for (key in protectedKeys) assertTrue(key, isProtected(key))
-        assertTrue(!isProtected("forecast_failed") && !isProtected("today_all_fine"))
+    fun theProtectedSetCoversTheAppsProtectedStrings() {
+        val names = texts.keys.map { it.substringBefore('/') }.toSet()
+        for (key in APP_PROTECTED) {
+            assertTrue("$key is not a string in res/values; update the list", key in names)
+            assertTrue("$key must be protected", isProtected(key))
+        }
+        for (key in listOf("forecast_failed", "today_all_fine", "action_water_now", "event_do_cold")) assertTrue(key, !isProtected(key))
+    }
+
+    @Test
+    fun protectedWordsAreCaughtAnywhereInAKey() {
+        for (key in listOf("toxic_to_cats", "frost_danger", "data_loss_warning", "poison_note", "plant_safety")) assertTrue(key, isProtected(key))
     }
 
     /** Every _boris resource is reachable: listed in [Voice]'s twins under its plain key. */
@@ -138,9 +144,33 @@ class VoiceTest {
         fun placeholders(text: String) = PLACEHOLDER.findAll(text).map { it.value }.filter { it != "%%" }.toList()
 
         // Text that must stay plain (voice rule 7): by key prefix, by word anywhere in the key, and by name.
-        val PROTECTED_PREFIXES = listOf("toxic", "safety", "notifications_", "permission", "import", "export", "delete", "photo_", "about_", "location_", "wizard_location_")
-        val PROTECTED_WORDS = listOf("toxic", "safety", "permission", "privacy", "private", "legal", "licence")
-        val PROTECTED_KEYS = setOf("deleted", "wizard_save_failed", "plant_entry_failed", "plant_delete_question", "place_in_use", "undo")
+        val PROTECTED_PREFIXES = listOf("notifications_", "import", "export", "photo_", "about_")
+        val PROTECTED_WORDS = listOf(
+            "toxic", "poison", "safety", "danger", "warning", "loss", "lost", "delete", "permission", "location",
+            "privacy", "private", "legal", "licence", "license", "credit",
+        )
+        val PROTECTED_KEYS = setOf("undo", "place_in_use", "wizard_save_failed", "plant_entry_failed", "wizard_plant_missing", "cold_in_ground")
+
+        // The app's current strings of the kinds rule 7 names, from res/values/strings*.xml.
+        val APP_PROTECTED = listOf(
+            // permissions and location
+            "notifications_reason", "notifications_allow", "wizard_use_location", "wizard_location_finding",
+            "wizard_location_denied", "wizard_location_unavailable", "location_privacy", "location_indoor",
+            // data loss
+            "delete", "deleted", "delete_failed", "delete_named", "undo", "place_in_use", "plant_delete_question",
+            "photo_delete", "photo_delete_question", "wizard_save_failed", "plant_entry_failed", "wizard_plant_missing",
+            "photo_failed", "photo_unreadable", "photo_too_large", "photo_missing",
+            // import and export
+            "import_json", "import_confirm_title", "import_confirm_text", "import_confirm", "import_done",
+            "import_done_missing_photos", "import_failed", "export_json", "export_done", "export_calibration",
+            // privacy
+            "photo_add_private", "about_privacy", "about_privacy_link",
+            // legal and attribution
+            "about_licence", "about_font_licence", "about_data", "about_weather", "about_care_notice",
+            "weather_credit_open_meteo", "weather_credit_met",
+            // safety: the frost-hardiness line
+            "cold_in_ground",
+        )
 
         fun isProtected(key: String) =
             key in PROTECTED_KEYS || PROTECTED_PREFIXES.any { key.startsWith(it) } || PROTECTED_WORDS.any { key.contains(it) }

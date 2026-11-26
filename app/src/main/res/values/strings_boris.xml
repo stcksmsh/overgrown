@@ -43,13 +43,13 @@
     <!-- Translators: twin of event_do_cold, a weather alert body. Keep the plain instruction and the plant names (%1$s) first and whole; one dry line after it. -->
     <string name="event_do_cold_boris">Move %1$s against a wall. The pot feels the cold before the plant does.</string>
     <!-- Translators: twin of event_do_cold_strong, a weather alert body. Keep the plain instruction and the plant names (%1$s) first and whole. -->
-    <string name="event_do_cold_strong_boris">Move %1$s somewhere sheltered. Roots in a pot freeze far sooner than in the ground.</string>
+    <string name="event_do_cold_strong_boris">Move %1$s somewhere sheltered. A cold one.</string>
     <!-- Translators: twin of event_do_heat, a weather alert body. Keep the plain instruction and the plant names (%1$s) first and whole. -->
     <string name="event_do_heat_boris">Shade %1$s and check the soil more often. A check, not a reflex watering.</string>
     <!-- Translators: twin of event_do_heavy_rain, a weather alert body. Keep the plain instruction and the plant names (%1$s) first and whole. -->
     <string name="event_do_heavy_rain_boris">Make sure %1$s can drain. The sky is doing the watering.</string>
     <!-- Translators: twin of event_do_wind, a weather alert body. Keep the plain instruction and the plant names (%1$s) first and whole. -->
-    <string name="event_do_wind_boris">Move %1$s out of the wind. Pots tip over.</string>
+    <string name="event_do_wind_boris">Move %1$s out of the wind. A windy one.</string>
     <!-- Translators: twin of event_do_waterlogging, a weather alert body. Keep the plain instruction and the plant names (%1$s) first and whole. -->
     <string name="event_do_waterlogging_boris">Tip the standing water out of %1$s. Too much water, as usual.</string>
 </resources>
