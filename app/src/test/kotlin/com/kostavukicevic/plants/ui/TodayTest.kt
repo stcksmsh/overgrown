@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -379,6 +380,8 @@ class TodayTest {
         g.changed()
         waitForText(s(R.string.forecast_fetched, ""), substring = true)
         compose.onNodeWithText(s(R.string.forecast_never)).assertDoesNotExist()
+        // The licence asks for the credit, as a link, wherever its forecast shows.
+        compose.onNode(hasText(s(R.string.weather_credit_open_meteo)) and hasClickAction()).assertExists()
     }
 
     @Test

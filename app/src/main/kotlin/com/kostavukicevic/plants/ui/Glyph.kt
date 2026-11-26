@@ -23,8 +23,7 @@ enum class GlyphKind(@DrawableRes val drawable: Int) {
 }
 
 /**
- * The glyph for a care archetype. Null or an unknown id falls back to [GlyphKind.Leafy]. No archetype maps to
- * [GlyphKind.Herb] yet; it exists for the add-plant picker.
+ * The glyph for a care archetype. Null or an unknown id falls back to [GlyphKind.Leafy].
  */
 fun glyphFor(archetypeId: String?): GlyphKind = when (archetypeId) {
     "hardy-potted-conifer" -> GlyphKind.Conifer
@@ -32,6 +31,7 @@ fun glyphFor(archetypeId: String?): GlyphKind = when (archetypeId) {
     "indoor-tropical-foliage" -> GlyphKind.Leafy
     "indoor-moisture-loving" -> GlyphKind.Fern
     "indoor-epiphytic-orchid" -> GlyphKind.Orchid
+    "outdoor-leafy-herb" -> GlyphKind.Herb
     else -> GlyphKind.Leafy
 }
 

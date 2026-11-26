@@ -130,7 +130,6 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
  */
 @Composable
 internal fun WeatherStatus(fetched: Pair<Long, String?>?, now: Instant, refreshing: Boolean, failed: Boolean, onRefresh: () -> Unit) {
-    val uri = LocalUriHandler.current
     val muted = Overgrown.colors.muted
     Column(Modifier.fillMaxWidth().padding(top = Spacing.grid * 2)) {
         when {
@@ -146,19 +145,29 @@ internal fun WeatherStatus(fetched: Pair<Long, String?>?, now: Instant, refreshi
                 val days = age.inWholeDays.toInt()
                 Text(voicedPlural(R.plurals.forecast_stale, days, days), style = Type.secondary, color = Overgrown.colors.errorText)
             }
-            val met = fetched.second == "MET_NORWAY"
-            Text(
-                stringResource(if (met) R.string.weather_credit_met else R.string.weather_credit_open_meteo),
-                modifier = Modifier.heightIn(min = Spacing.minTouchTarget).wrapContentHeight()
-                    .clickable { uri.openUri(if (met) MetNorway.CREDIT_URL else OpenMeteo.CREDIT_URL) },
-                style = Type.secondary,
-                color = muted,
-                textDecoration = TextDecoration.Underline,
-            )
+            WeatherCredit(fetched.second)
         }
         TextButton(enabled = !refreshing, onClick = onRefresh, modifier = Modifier.heightIn(min = Spacing.minTouchTarget), contentPadding = PaddingValues(0.dp)) {
             // Material's disabled alpha, so a Refresh that cannot be tapped looks it.
             Text(stringResource(R.string.refresh), style = Type.secondary, color = if (refreshing) muted.copy(alpha = 0.38f) else muted)
         }
     }
+}
+
+/**
+ * The weather provider's credit as a link, under anything drawn from its data (Open-Meteo licence, CC BY 4.0).
+ * [provider] is the provider of the last fetch.
+ */
+@Composable
+internal fun WeatherCredit(provider: String?) {
+    val uri = LocalUriHandler.current
+    val met = provider == "MET_NORWAY"
+    Text(
+        stringResource(if (met) R.string.weather_credit_met else R.string.weather_credit_open_meteo),
+        modifier = Modifier.heightIn(min = Spacing.minTouchTarget).wrapContentHeight()
+            .clickable { uri.openUri(if (met) MetNorway.CREDIT_URL else OpenMeteo.CREDIT_URL) },
+        style = Type.secondary,
+        color = Overgrown.colors.muted,
+        textDecoration = TextDecoration.Underline,
+    )
 }

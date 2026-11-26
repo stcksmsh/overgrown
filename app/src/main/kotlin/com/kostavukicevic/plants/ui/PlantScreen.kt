@@ -80,6 +80,10 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
     val tick = changeTick()
     val status by produceState<PlantStatus?>(null, tick) { value = g.garden.status(plantId) }
     val outlook by produceState(emptyList<OutlookDay>(), status) { value = status?.let { g.garden.outlook(it) } ?: emptyList() }
+    // An outdoor place with a fetched forecast: its alerts and day strip marks come from the provider's data.
+    val fetched by produceState<Pair<Long, String?>?>(null, status) {
+        value = status?.place?.takeIf { it.outdoor }?.let { g.garden.lastFetchOnce(it.id) }?.let { it to g.garden.lastProvider() }
+    }
     val events by g.garden.events(plantId).collectAsState(null)
     val weighing by g.settings.weighing.collectAsState(false)
     val scope = rememberCoroutineScope()
@@ -170,6 +174,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
             }
 
             if (outlook.isNotEmpty()) DayStrip(outlook, next = s.nextPrompt?.first)
+            fetched?.let { WeatherCredit(it.second) }
 
             LearningDots(
                 name = s.plant.name,

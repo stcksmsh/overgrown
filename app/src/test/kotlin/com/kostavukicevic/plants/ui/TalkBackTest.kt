@@ -236,7 +236,8 @@ class TalkBackTest {
         // The plant's own Delete, not a history row's, which is named after its entry.
         compose.onNode(hasText(s(R.string.delete)) and hasClickAction() and !SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription))
             .performScrollTo().performClick()
-        waitForText(s(R.string.cancel))
+        // The question, not Cancel: the Photo source dialog just dismissed may still show its own Cancel.
+        waitForText(s(R.string.plant_delete_question, "Fern"))
         assertEveryClickableNamed("Delete plant dialog")
     }
 

@@ -12,6 +12,7 @@ class GlyphTest {
         assertEquals(GlyphKind.Leafy, glyphFor("indoor-tropical-foliage"))
         assertEquals(GlyphKind.Fern, glyphFor("indoor-moisture-loving"))
         assertEquals(GlyphKind.Orchid, glyphFor("indoor-epiphytic-orchid"))
+        assertEquals(GlyphKind.Herb, glyphFor("outdoor-leafy-herb"))
     }
 
     @Test

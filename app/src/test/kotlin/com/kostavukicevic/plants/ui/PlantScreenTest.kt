@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -29,6 +30,7 @@ import com.kostavukicevic.plants.data.GardenDb
 import com.kostavukicevic.plants.data.PlaceEntity
 import com.kostavukicevic.plants.data.OutlookDay
 import com.kostavukicevic.plants.data.PlantEntity
+import com.kostavukicevic.plants.data.WeatherDayEntity
 import com.kostavukicevic.plants.graph
 import com.kostavukicevic.plants.ui.theme.OvergrownTheme
 import com.kostavukicevic.plants.weather.MetNorway
@@ -107,6 +109,50 @@ class PlantScreenTest {
     private fun stored() = runBlocking { g.garden.events(plantId).first() }
 
     private fun top(text: String) = compose.onNodeWithText(text).fetchSemanticsNode().positionInRoot.y
+
+    /** Moves the test plant to a new outdoor place, with a forecast row from [provider] unless that is null. */
+    private fun moveOutdoors(provider: String?) = runBlocking {
+        val balcony = g.garden.savePlace(PlaceEntity(name = "Balcony", outdoor = true, latitude = 44.8, longitude = 20.5))
+        if (provider != null) {
+            db.dao().upsertWeather(
+                listOf(WeatherDayEntity(balcony, "2026-11-24", 4.0, 11.0, 0.0, provider = provider, fetchedAtEpochMs = PLANT_TEST_NOW.toEpochMilliseconds())),
+            )
+        }
+        g.garden.savePlant(g.garden.plant(plantId)!!.copy(placeId = balcony))
+    }
+
+    @Test
+    fun anOutdoorPlantWithAForecastCreditsOpenMeteoAsALink() {
+        moveOutdoors("OPEN_METEO")
+        start()
+        waitFor(s(R.string.weather_credit_open_meteo))
+        compose.onNode(hasText(s(R.string.weather_credit_open_meteo)) and hasClickAction()).assertExists()
+    }
+
+    @Test
+    fun aForecastFromMetNorwayCreditsMetNorway() {
+        moveOutdoors("MET_NORWAY")
+        start()
+        waitFor(s(R.string.weather_credit_met))
+        compose.onNodeWithText(s(R.string.weather_credit_open_meteo)).assertDoesNotExist()
+    }
+
+    @Test
+    fun anIndoorPlantShowsNoCredit() {
+        start()
+        compose.waitForIdle()
+        compose.onNodeWithText(s(R.string.weather_credit_open_meteo)).assertDoesNotExist()
+    }
+
+    @Test
+    fun anOutdoorPlantWithNoForecastYetShowsNoCredit() {
+        moveOutdoors(null)
+        // The strip does not show with no weather stored, so wait for the plant's own buttons instead.
+        compose.setContent { OvergrownTheme { PlantScreen(plantId, onBack = {}, onEdit = {}) } }
+        waitFor(s(R.string.plant_check_in))
+        compose.waitForIdle()
+        compose.onNodeWithText(s(R.string.weather_credit_open_meteo)).assertDoesNotExist()
+    }
 
     @Test
     fun eachAnswerButtonStoresItsAnswer() {
