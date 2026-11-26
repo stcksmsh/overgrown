@@ -443,17 +443,25 @@ class NotificationsTest {
         waitUntil("Done is stored for both parts") { runBlocking { g.garden.alertEvents() }.isEmpty() }
     }
 
-    @Test
-    fun aJobHeldUpIntoTheNightWaitsForTheChosenTime() {
-        allow()
+    /** Runs [block] in a zone where it is now between 02:00 and 03:00, whatever the clock says. */
+    private fun atNight(block: () -> Unit) {
         val saved = java.util.TimeZone.getDefault()
         try {
-            // A zone where it is now between 02:00 and 03:00, whatever the clock says.
             val utc = Clock.System.now().toLocalDateTime(TimeZone.UTC)
             val offset = ((2 - utc.hour) % 24 + 24) % 24
             val hours = if (offset > 14) offset - 24 else offset
             java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("GMT" + (if (hours < 0) "-" else "+") + "%02d:00".format(kotlin.math.abs(hours))))
             assertEquals(2, Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).hour)
+            block()
+        } finally {
+            java.util.TimeZone.setDefault(saved)
+        }
+    }
+
+    @Test
+    fun aJobHeldUpIntoTheNightWaitsForTheChosenTime() {
+        allow()
+        atNight {
             val fern = plant(g, "Fern", place(g, "Hall"))
             val today = runBlocking { g.garden.today() }
             // Yesterday's 20:00 prompt, delayed past midnight: not posted at night, armed for 20:00 today.
@@ -470,8 +478,6 @@ class NotificationsTest {
                 g.scheduler.runPrompt(fern)
             }
             assertEquals(1, nm.allNotifications.size)
-        } finally {
-            java.util.TimeZone.setDefault(saved)
         }
     }
 
@@ -510,13 +516,7 @@ class NotificationsTest {
     @Test
     fun remindersAreHeldUpAtNightLikeWateringPrompts() {
         allow()
-        val saved = java.util.TimeZone.getDefault()
-        try {
-            val utc = Clock.System.now().toLocalDateTime(TimeZone.UTC)
-            val offset = ((2 - utc.hour) % 24 + 24) % 24
-            val hours = if (offset > 14) offset - 24 else offset
-            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("GMT" + (if (hours < 0) "-" else "+") + "%02d:00".format(kotlin.math.abs(hours))))
-            assertEquals(2, Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).hour)
+        atNight {
             val fern = remindedPlant()
             val today = runBlocking { g.garden.today() }
             runBlocking {
@@ -531,8 +531,6 @@ class NotificationsTest {
                 g.scheduler.runReminder(fern, today)
             }
             assertEquals(1, nm.allNotifications.size)
-        } finally {
-            java.util.TimeZone.setDefault(saved)
         }
     }
 }

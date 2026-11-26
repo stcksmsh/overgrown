@@ -278,9 +278,8 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val g = c.graph
         when (inputData.getString(KIND)) {
             KIND_PROMPT -> g.scheduler.runPrompt(inputData.getLong(PLANT, -1))
-            KIND_REMINDER -> g.scheduler.runReminder(
-                inputData.getLong(PLANT, -1), inputData.getString(DAY)?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
-            )
+            // Jobs armed before DAY existed carry none: they count as the day they run.
+            KIND_REMINDER -> g.scheduler.runReminder(inputData.getLong(PLANT, -1), inputData.getString(DAY)?.let(LocalDate::parse))
             KIND_ALERT -> decodeAckList(inputData.getString(KEY)).singleOrNull()?.let { g.scheduler.postEvent(it) }
             KIND_STALE -> Notifier.postStale(c)
         }
