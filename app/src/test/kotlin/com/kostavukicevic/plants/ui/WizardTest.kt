@@ -657,14 +657,11 @@ class WizardTest {
         providers.forEach { shadowOf(lm).setProviderEnabled(it, true) }
         toNewOutdoorPlace()
         field(R.string.wizard_place_name).performTextInput("Balcony")
+        providers.forEach { p -> shadowOf(lm).setLastKnownLocation(p, Location(p).apply { latitude = 44.81234; longitude = 20.46789 }) }
         tap(R.string.wizard_use_location)
 
         val near = s(R.string.wizard_city_picked, "Belgrade, Serbia")
-        compose.waitUntil(5_000) {
-            // The fix is asked for once the city list has loaded; sending it until it lands avoids guessing when.
-            providers.forEach { p -> shadowOf(lm).simulateLocation(Location(p).apply { latitude = 44.81234; longitude = 20.46789 }) }
-            compose.onAllNodesWithText(near).fetchSemanticsNodes().isNotEmpty()
-        }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(near).fetchSemanticsNodes().isNotEmpty() }
         // The name the person typed stays.
         assertEquals("Balcony", typed(R.string.wizard_place_name))
         assertEquals("44.81" to "20.47", latLonFields())

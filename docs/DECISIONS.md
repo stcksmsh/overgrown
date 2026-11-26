@@ -367,3 +367,10 @@ DESIGN section 8 asks that state is announced in words. Material's `FilterChip` 
 The `overgrown-data` submodule moves from `7756c25` to `ec9efde` (data PR #9), which marks `outdoor-mediterranean-shrub`, `outdoor-tender-perennial` and `outdoor-fruiting-vegetable` `reviewed`. The compiled asset now holds eight archetypes (the five of D36 and these three) and still no species. `CareDataPinTest` asserts those eight ids; flipping any of the three new ones to draft fails it.
 
 The new archetypes are reached through the wizard's name search (D38), which matches the archetype's name only: "Outdoor fruiting vegetable" is found by "fruiting", not by "tomato", which appears only in its description. They use the leafy fallback glyph for now; outdoor glyphs and "pick by look" tiles for outdoor types are a later, separate slice, so this bump changes no production code.
+
+## D48. Leftover review minors
+
+- Place delete (#21): `Garden.deletePlace` checks for plants inside the same write transaction as the delete and returns false, changing nothing, when one is there. A plant added between the screen's check and the delete is no longer lost with the place; the caller (`PlacesScreen`) already ignores the result and behaves as before.
+- Reminder day (#35): a reminder job carries the day it was armed for, and its once-a-day record and its unique name use that day, not the day it happens to run. A job that runs after midnight still belongs to the day it was meant for.
+- Night rule (#35): a test now covers feed and repot reminders being held at night and posted when not late, as watering prompts already were. The reminder job's logic moved from `NotifyWorker` to `Scheduler.runReminder` so it can be tested without a work-testing dependency.
+- Wizard location test (#36): the fake location fix is set before the wait, so `waitUntil` observes the result and can fail.

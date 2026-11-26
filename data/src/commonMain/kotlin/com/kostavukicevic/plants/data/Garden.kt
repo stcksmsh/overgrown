@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import com.kostavukicevic.plants.caredb.CareDb
 import com.kostavukicevic.plants.engine.Coefficients
 import com.kostavukicevic.plants.engine.Engine
@@ -98,10 +100,11 @@ class Garden(
         deleteFiles(photos.map { it.file })
     }
 
-    suspend fun deletePlace(id: Long) {
-        val photos = dao.plantIdsAt(id).flatMap { dao.photosOf(it) }
-        dao.deletePlaceFully(id)
-        deleteFiles(photos.map { it.file })
+    /** Deletes an empty place; false, and nothing changed, when a plant is there. Checked in the delete's own transaction, so a plant added meanwhile is not lost. */
+    suspend fun deletePlace(id: Long): Boolean = db.useWriterConnection { tx ->
+        tx.immediateTransaction {
+            if (dao.plantIdsAt(id).isNotEmpty()) false else { dao.deletePlaceFully(id); true }
+        }
     }
     suspend fun deleteEvent(id: Long) {
         val stored = dao.event(id)

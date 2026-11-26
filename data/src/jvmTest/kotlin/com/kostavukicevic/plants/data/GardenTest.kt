@@ -42,6 +42,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Instant
@@ -265,8 +266,9 @@ class GardenTest {
         g.importJson(g.exportJson("x"))
         assertTrue(dao.climatology(placeId).isEmpty())
 
-        g.deletePlace(placeId)
-        assertNull(g.plant(plantId))
+        g.deletePlant(plantId)
+        assertTrue(g.deletePlace(placeId))
+        assertNull(g.place(placeId))
         assertTrue(dao.events(plantId).isEmpty())
     }
 
@@ -577,13 +579,20 @@ class GardenTest {
     }
 
     @Test
-    fun deletingAPlaceRemovesItsPlantsPhotoFiles() = runTest {
+    fun aPlaceWithAPlantIsNotDeletedAndAnEmptyOneIs() = runTest {
         val g = garden("delete-place")
         val plantId = g.seed()
         g.addPhoto(plantId, jpeg)
         val file = g.photoFile(g.photos(plantId).first().single())
-        g.deletePlace(g.plant(plantId)!!.placeId)
+        val placeId = g.plant(plantId)!!.placeId
+        assertFalse(g.deletePlace(placeId))
+        assertNotNull(g.place(placeId))
+        assertNotNull(g.plant(plantId))
+        assertTrue(file.exists())
+        g.deletePlant(plantId)
         assertFalse(file.exists())
+        assertTrue(g.deletePlace(placeId))
+        assertNull(g.place(placeId))
     }
 
     @Test
