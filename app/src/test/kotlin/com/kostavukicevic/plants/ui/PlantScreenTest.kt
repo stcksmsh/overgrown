@@ -140,6 +140,8 @@ class PlantScreenTest {
     @Test
     fun anIndoorPlantShowsNoCredit() {
         start()
+        // The place line proves the screen has loaded this plant where it is, so no credit is not just not yet loaded.
+        waitFor("Hall")
         compose.waitForIdle()
         compose.onNodeWithText(s(R.string.weather_credit_open_meteo)).assertDoesNotExist()
     }
@@ -147,9 +149,10 @@ class PlantScreenTest {
     @Test
     fun anOutdoorPlantWithNoForecastYetShowsNoCredit() {
         moveOutdoors(null)
-        // The strip does not show with no weather stored, so wait for the plant's own buttons instead.
+        // The strip does not show with no weather stored, so wait for the place line instead.
         compose.setContent { OvergrownTheme { PlantScreen(plantId, onBack = {}, onEdit = {}) } }
-        waitFor(s(R.string.plant_check_in))
+        // The place line proves the screen has loaded this plant at its outdoor place.
+        waitFor("Balcony")
         compose.waitForIdle()
         compose.onNodeWithText(s(R.string.weather_credit_open_meteo)).assertDoesNotExist()
     }
