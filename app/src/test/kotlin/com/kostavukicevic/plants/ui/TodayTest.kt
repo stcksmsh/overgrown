@@ -385,6 +385,24 @@ class TodayTest {
     }
 
     @Test
+    fun todayCreditsEveryProviderOfThePlacesItShows() {
+        val db = weatherBy { _, _ -> HttpResponse(503, emptyMap(), "") }
+        val a = runBlocking { g.garden.savePlace(BALCONY.copy(id = 0)) }
+        val b = runBlocking { g.garden.savePlace(BALCONY.copy(id = 0, name = "Roof", latitude = 59.9, longitude = 10.7)) }
+        plant(g, "Rosemary", a)
+        plant(g, "Thyme", b)
+        val at = FETCHED.toEpochMilliseconds()
+        runBlocking {
+            db.dao().upsertWeather(listOf(WeatherDayEntity(a, g.garden.today().toString(), 1.0, 9.0, 0.0, provider = "OPEN_METEO", fetchedAtEpochMs = at)))
+            // B fell back to MET Norway on a later fetch.
+            db.dao().upsertWeather(listOf(WeatherDayEntity(b, g.garden.today().toString(), 1.0, 9.0, 0.0, provider = "MET_NORWAY", fetchedAtEpochMs = at + 60_000)))
+        }
+        showTodayScreen()
+        waitForText(s(R.string.weather_credit_met))
+        waitForText(s(R.string.weather_credit_open_meteo))
+    }
+
+    @Test
     fun aFailedFetchSaysSoAndKeepsTheLastTime() {
         val db = weatherBy { _, _ -> throw IOException("offline") }
         val placeId = runBlocking { g.garden.savePlace(BALCONY.copy(id = 0)) }
@@ -500,6 +518,6 @@ internal fun fullToday() = listOf(
 
 /** The weather status with a fixed fetch time, so captures do not change with the clock. */
 @Composable
-internal fun FixedWeather(refreshing: Boolean = false) = WeatherStatus(FETCHED.toEpochMilliseconds() to "OPEN_METEO", FETCHED, refreshing, failed = false) {}
+internal fun FixedWeather(refreshing: Boolean = false) = WeatherStatus(FETCHED.toEpochMilliseconds() to listOf("OPEN_METEO"), FETCHED, refreshing, failed = false) {}
 
 private val FETCHED = Instant.parse("2026-11-24T07:30:00Z")

@@ -88,7 +88,8 @@ class Garden(
     fun calibration(plantId: Long) = dao.calibrationFlow(plantId)
     fun lastFetch(placeId: Long) = dao.lastFetchFlow(placeId)
     suspend fun lastFetchOnce(placeId: Long): Long? = dao.lastFetchFlow(placeId).first()
-    suspend fun lastProvider(): String? = dao.lastProvider()
+    /** Every provider whose stored days these places use: fallback is per place, and a place falls back mid-range. */
+    suspend fun providers(placeIds: List<Long>): List<String> = dao.providers(placeIds)
 
     suspend fun place(id: Long) = dao.place(id)
     suspend fun plant(id: Long) = dao.plant(id)
