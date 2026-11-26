@@ -171,6 +171,8 @@ class NotificationsTest {
         val events = listOf(
             AlertEvent(AlertKind.COLD, today, today, AlertType.ROOT_FREEZE_CAUTION, listOf(entity)),
             AlertEvent(AlertKind.COLD, today, today.plus(DatePeriod(days = 1)), AlertType.ROOT_FREEZE_STRONG, listOf(entity)),
+            AlertEvent(AlertKind.COLD, today, today, AlertType.COLD, listOf(entity)),
+            AlertEvent(AlertKind.COLD, today, today, AlertType.FROST, listOf(entity)),
             AlertEvent(AlertKind.HEAT, today, today, AlertType.HEAT, listOf(entity)),
             AlertEvent(AlertKind.HEAVY_RAIN, today, today, AlertType.HEAVY_RAIN, listOf(entity)),
             AlertEvent(AlertKind.WIND, today, today, AlertType.WIND, listOf(entity)),

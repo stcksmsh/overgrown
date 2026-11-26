@@ -129,6 +129,42 @@ class RulesTest {
         assertTrue(Alerts.forecastAlerts(plant, listOf(day(june1, -20.0, 40.0, rain = 50.0, wind = 20.0))).isEmpty())
     }
 
+    // Basil's care data: frost class tender, minimum 10 degC, root-freeze alerts unknown.
+    private val basil = CareProfile(WaterStrategy.EVENLY_MOIST, rootFreezeAlerts = null, minTempC = 10.0, frostClass = FrostClass.TENDER)
+
+    private fun coldAlerts(profile: CareProfile, tMin: Double, place: Place = Place.Outdoor(44.82, RainExposure.PARTIAL)) =
+        Alerts.forecastAlerts(Plant(profile, 25.0, Pot(5.0), place), listOf(day(june1, tMin, tMin + 8))).map { it.type }
+
+    @Test
+    fun tenderPlantsGetColdBelowTheirMinimumAndFrostNearZero() {
+        assertEquals(emptyList(), coldAlerts(basil, 10.0))
+        assertEquals(listOf(AlertType.COLD), coldAlerts(basil, 8.0))
+        assertEquals(listOf(AlertType.FROST), coldAlerts(basil, Coefficients.FROST_ALERT_C))
+        assertEquals(listOf(AlertType.FROST), coldAlerts(basil, -1.0))
+        // A frost hard enough to freeze the pot as well is still one alert, the frost one.
+        assertEquals(listOf(AlertType.FROST), coldAlerts(basil, -12.0))
+        // Lemon: frost free, minimum unknown.
+        val lemon = CareProfile(WaterStrategy.DRY_TOP_PART, minTempC = null, frostClass = FrostClass.FROST_FREE)
+        assertEquals(listOf(AlertType.FROST), coldAlerts(lemon, 2.0))
+        assertEquals(emptyList(), coldAlerts(lemon, 2.1))
+    }
+
+    @Test
+    fun hardyPottedConiferGetsNoColdOrFrostAlert() {
+        // hardy-potted-conifer: frost class hardy, no minimum, root-freeze alerts on.
+        val hardy = conifer.copy(frostClass = FrostClass.HARDY)
+        assertEquals(emptyList(), coldAlerts(hardy, -1.0))
+        assertEquals(listOf(AlertType.ROOT_FREEZE_CAUTION), coldAlerts(hardy, -4.0))
+    }
+
+    @Test
+    fun noColdAlertIndoorsOrWithoutAKnownMinimum() {
+        assertEquals(emptyList(), coldAlerts(basil, -1.0, Place.Indoor(44.8, LightClass.HIGH)))
+        assertEquals(emptyList(), coldAlerts(basil.copy(minTempC = null, frostClass = null), 8.0))
+        // Cold and root freeze caution on the same day: the plant's own limit wins.
+        assertEquals(listOf(AlertType.COLD), coldAlerts(conifer.copy(minTempC = -3.0), -4.0))
+    }
+
     @Test
     fun waterloggingCautionAfterProlongedRainOnOpenUndrainedPot() {
         val plant = balconyPlant(pot = Pot(8.0, drainageHoles = false), exposure = RainExposure.OPEN)

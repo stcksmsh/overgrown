@@ -3,6 +3,7 @@ package com.kostavukicevic.plants.caredb
 
 import com.kostavukicevic.plants.engine.CareProfile
 import com.kostavukicevic.plants.engine.DroughtAsymmetry
+import com.kostavukicevic.plants.engine.FrostClass
 import com.kostavukicevic.plants.engine.WaterStrategy
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -222,5 +223,14 @@ fun CareGroups.toProfile(): CareProfile {
         winterRules = engine?.winterRules ?: false,
         rootFreezeAlerts = engine?.rootFreezeAlerts,
         windSensitive = site?.windSensitive ?: false,
+        minTempC = temperature?.minTempC,
+        frostClass = when (temperature?.frostClass) {
+            "tender" -> FrostClass.TENDER
+            "frost_free" -> FrostClass.FROST_FREE
+            "light_frost" -> FrostClass.LIGHT_FROST
+            "hardy" -> FrostClass.HARDY
+            "very_hardy" -> FrostClass.VERY_HARDY
+            else -> null
+        },
     )
 }

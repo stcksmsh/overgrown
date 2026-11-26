@@ -6,6 +6,7 @@ import com.kostavukicevic.plants.engine.AlertType
 import com.kostavukicevic.plants.engine.Alerts
 import com.kostavukicevic.plants.engine.CareProfile
 import com.kostavukicevic.plants.engine.DroughtAsymmetry
+import com.kostavukicevic.plants.engine.FrostClass
 import com.kostavukicevic.plants.engine.LightClass
 import com.kostavukicevic.plants.engine.Place
 import com.kostavukicevic.plants.engine.Plant
@@ -162,7 +163,10 @@ class CareDbTest {
     @Test
     fun unknownRootFreezeAlertsAreOnForAnOutdoorPot() {
         val species = basil.species("ocimum-basilicum")!!.groupsFor(Context.OUTDOOR_CONTAINER).toProfile()
-        assertEquals(listOf(Alert(AlertType.ROOT_FREEZE_CAUTION, rootFreeze.date)), Alerts.forecastAlerts(potOutside(species), forecast))
+        assertNull(species.rootFreezeAlerts)
+        // Without basil's frost class and minimum, which would give stronger alerts on the same days.
+        val rootOnly = species.copy(minTempC = null, frostClass = null)
+        assertEquals(listOf(Alert(AlertType.ROOT_FREEZE_CAUTION, rootFreeze.date)), Alerts.forecastAlerts(potOutside(rootOnly), forecast))
         // An archetype without an engine block is unknown in the same way.
         val archetype = basil.archetypes.getValue("tender").defaults.toProfile()
         assertEquals(listOf(Alert(AlertType.ROOT_FREEZE_CAUTION, rootFreeze.date)), Alerts.forecastAlerts(potOutside(archetype), forecast))
@@ -183,14 +187,26 @@ class CareDbTest {
         assertEquals(Alerts.forecastAlerts(potInside(known), forecast), Alerts.forecastAlerts(potInside(unknown), forecast))
     }
 
-    /**
-     * The engine reads neither min_temp_c nor frost_class: a tender pot gets no alert at its 10 degC
-     * minimum or just below 0 degC, only at the root-freeze thresholds.
-     */
+    /** min_temp_c and frost_class reach the engine: a tender pot is warned below its 10 degC minimum and of frost. */
     @Test
-    fun aTenderPotGetsNoAlertAtItsMinimumTemperature() {
+    fun aTenderPotGetsColdBelowItsMinimumAndFrostBelowZero() {
         val p = basil.species("ocimum-basilicum")!!.groupsFor(Context.OUTDOOR_CONTAINER).toProfile()
-        assertTrue(Alerts.forecastAlerts(potOutside(p), listOf(belowMinimum, belowZero)).isEmpty())
+        assertEquals(10.0, p.minTempC)
+        assertEquals(FrostClass.TENDER, p.frostClass)
+        assertEquals(
+            listOf(AlertType.COLD, AlertType.FROST, AlertType.FROST),
+            Alerts.forecastAlerts(potOutside(p), forecast).map { it.type },
+        )
+    }
+
+    @Test
+    fun frostClassesMapAndUnknownStaysNull() {
+        val classes = listOf("tender", "frost_free", "light_frost", "hardy", "very_hardy", null)
+        assertEquals(
+            listOf(FrostClass.TENDER, FrostClass.FROST_FREE, FrostClass.LIGHT_FROST, FrostClass.HARDY, FrostClass.VERY_HARDY, null),
+            classes.map { CareGroups(temperature = Temperature(frostClass = it)).toProfile().frostClass },
+        )
+        assertNull(CareGroups().toProfile().minTempC)
     }
 
     /** Winter rules change the watering action only, so an unknown value removes no cold or frost alert. */

@@ -18,6 +18,8 @@ enum class DroughtAsymmetry {
 }
 
 enum class LightClass { LOW, MEDIUM, HIGH, DIRECT }
+/** The care data's frost classes (schema `frostClass`). */
+enum class FrostClass { TENDER, FROST_FREE, LIGHT_FROST, HARDY, VERY_HARDY }
 enum class RainExposure { OPEN, PARTIAL, COVERED }
 enum class WindExposure { SHELTERED, NORMAL, EXPOSED }
 enum class PotMaterial { PLASTIC, GLAZED_CERAMIC, UNGLAZED_TERRACOTTA }
@@ -79,6 +81,10 @@ data class CareProfile(
     val rootFreezeAlerts: Boolean? = false,
     /** Needs shelter from wind: wind alerts come earlier. */
     val windSensitive: Boolean = false,
+    /** Lowest temperature the plant takes in its context, degC. Null means unknown: no cold alert from it. */
+    val minTempC: Double? = null,
+    /** Null means unknown: no frost alert from it. */
+    val frostClass: FrostClass? = null,
 )
 
 data class Plant(
