@@ -28,12 +28,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
+import com.kostavukicevic.plants.voicedPlural
+import com.kostavukicevic.plants.voicedResource
 import com.kostavukicevic.plants.data.AlertEvent
 import com.kostavukicevic.plants.data.PlantStatus
 import com.kostavukicevic.plants.notify.Notifier
@@ -134,7 +135,7 @@ internal fun WeatherStatus(fetched: Pair<Long, String?>?, now: Instant, refreshi
     Column(Modifier.fillMaxWidth().padding(top = Spacing.grid * 2)) {
         when {
             refreshing -> Text(stringResource(R.string.forecast_loading), style = Type.secondary, color = muted)
-            failed -> Text(stringResource(R.string.forecast_failed), style = Type.secondary, color = Overgrown.colors.errorText)
+            failed -> Text(voicedResource(R.string.forecast_failed), style = Type.secondary, color = Overgrown.colors.errorText)
             fetched == null -> Text(stringResource(R.string.forecast_never), style = Type.secondary, color = muted)
         }
         if (fetched != null) {
@@ -143,7 +144,7 @@ internal fun WeatherStatus(fetched: Pair<Long, String?>?, now: Instant, refreshi
             if (!refreshing) Text(stringResource(R.string.forecast_fetched, Texts.dateTime(at)), style = Type.secondary, color = muted)
             if (age > 3.days) {
                 val days = age.inWholeDays.toInt()
-                Text(pluralStringResource(R.plurals.forecast_stale, days, days), style = Type.secondary, color = Overgrown.colors.errorText)
+                Text(voicedPlural(R.plurals.forecast_stale, days, days), style = Type.secondary, color = Overgrown.colors.errorText)
             }
             val met = fetched.second == "MET_NORWAY"
             Text(

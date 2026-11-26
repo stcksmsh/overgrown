@@ -5,6 +5,10 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalTime
@@ -65,5 +69,24 @@ class SettingsTest {
         assertEquals(LocalTime(8, 0), settings.reminderTime.first())
         assertEquals(ThemeChoice.DARK, settings.theme.first())
         assertFalse(settings.weighing.first())
+    }
+
+    @Test
+    fun borisIsTheVoiceUntilTurnedOff() = runTest {
+        assertTrue(settings.borisVoice.first())
+        settings.setBorisVoice(false)
+        assertFalse(settings.borisVoice.first())
+    }
+
+    /** A restart is a new DataStore over the same file, after the old one has closed. */
+    @Test
+    fun thePlainVoiceSurvivesARestart() = runTest {
+        val file = Files.createTempDirectory("voice-test").resolve("s.preferences_pb")
+        val firstRun = Job()
+        val before = Settings(PreferenceDataStoreFactory.createWithPath(scope = CoroutineScope(Dispatchers.IO + firstRun)) { file.toOkioPath() })
+        before.setBorisVoice(false)
+        firstRun.cancelAndJoin()
+        val after = Settings(PreferenceDataStoreFactory.createWithPath(scope = CoroutineScope(Dispatchers.IO + Job())) { file.toOkioPath() })
+        assertFalse(after.borisVoice.first())
     }
 }

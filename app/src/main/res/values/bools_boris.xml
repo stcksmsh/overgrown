@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<resources>
+    <!--
+        Whether this language has Boris lines (strings_boris.xml). True only here, in English. A translated
+        values-xx/ sets it to false until someone writes Boris in that language; otherwise Android's fallback
+        would show English Boris lines between translated plain ones.
+    -->
+    <bool name="boris_voice_available">true</bool>
+</resources>

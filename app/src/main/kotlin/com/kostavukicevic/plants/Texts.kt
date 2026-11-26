@@ -90,8 +90,10 @@ object Texts {
 
     private val AlertEvent.strong get() = severity == AlertType.ROOT_FREEZE_STRONG
 
-    /** What to do about the event: "Move Boris and Fern against a wall." */
-    fun eventAdvice(c: Context, e: AlertEvent): String = c.getString(
+    /** What to do about the event: "Move Boris and Fern against a wall." [boris] voices it, for the notification only. */
+    fun eventAdvice(c: Context, e: AlertEvent, boris: Boolean = false): String = Voice.string(
+        c.resources,
+        boris,
         when (e.kind) {
             AlertKind.COLD -> if (e.strong) R.string.event_do_cold_strong else R.string.event_do_cold
             AlertKind.HEAT -> R.string.event_do_heat
@@ -144,15 +146,16 @@ object Texts {
         return "${date(t.date)} ${t.hour.toString().padStart(2, '0')}:${t.minute.toString().padStart(2, '0')}"
     }
 
-    fun action(c: Context, a: Action): String = when (a) {
-        is Action.WaterNow -> c.getString(R.string.action_water_now, roundDose(a.doseMl))
-        is Action.CheckSoil -> c.getString(R.string.action_check_soil)
+    /** What to do today. [boris] voices it, for the notification body only. */
+    fun action(c: Context, a: Action, boris: Boolean = false): String = when (a) {
+        is Action.WaterNow -> Voice.string(c.resources, boris, R.string.action_water_now, roundDose(a.doseMl))
+        is Action.CheckSoil -> Voice.string(c.resources, boris, R.string.action_check_soil)
         is Action.Hold -> when (a.reason) {
             HoldReason.FROST -> c.getString(R.string.action_hold_frost)
             HoldReason.TOO_COLD -> c.getString(R.string.action_hold_cold)
             HoldReason.RAIN_EXPECTED -> c.getString(R.string.action_hold_rain)
         }
-        Action.RepotOrWaterDaily -> c.getString(R.string.action_repot)
+        Action.RepotOrWaterDaily -> Voice.string(c.resources, boris, R.string.action_repot)
         Action.None -> c.getString(R.string.action_none)
     }
 

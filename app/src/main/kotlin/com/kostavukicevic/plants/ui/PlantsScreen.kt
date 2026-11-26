@@ -6,6 +6,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.stringResource
 import com.kostavukicevic.plants.R
+import com.kostavukicevic.plants.voicedResource
 
 @Composable
 fun PlantsScreen(
@@ -28,7 +29,7 @@ fun PlantsScreen(
         onBack = null,
         addLabel = stringResource(R.string.add_plant),
         onAdd = onAdd,
-        empty = stringResource(R.string.plants_empty),
+        empty = voicedResource(R.string.plants_empty),
         undo = undo,
         menu = { TopMenu(onPlaces, onSettings) },
         items = plants?.map { p ->

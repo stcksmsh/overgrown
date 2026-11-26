@@ -14,6 +14,10 @@ import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
 import com.kostavukicevic.plants.data.AlertAck
+import com.kostavukicevic.plants.data.AlertEvent
+import com.kostavukicevic.plants.data.AlertKind
+import com.kostavukicevic.plants.data.Reminder
+import com.kostavukicevic.plants.engine.AlertType
 import com.kostavukicevic.plants.data.Garden
 import com.kostavukicevic.plants.data.GardenDb
 import com.kostavukicevic.plants.data.WeatherDayEntity
@@ -104,7 +108,7 @@ class NotificationsTest {
     private fun answers(plantId: Long) = runBlocking { g.garden.events(plantId).first() }.filter { it.type == "CHECK_IN" }.sortedBy { it.id }.map { it.moisture }
 
     private fun soilCheck(plantId: Long, name: String): Notification {
-        assertTrue(Notifier.postPrompt(app, plantId, name, Action.CheckSoil(PromptReason.UNCERTAIN), emptyList()))
+        assertTrue(Notifier.postPrompt(app, plantId, name, Action.CheckSoil(PromptReason.UNCERTAIN), emptyList(), boris = false))
         return nm.getNotification(Notifier.promptId(plantId))
     }
 
@@ -136,10 +140,58 @@ class NotificationsTest {
     fun aWateringPromptStillOffersWateredAndSnooze() {
         allow()
         val pothos = plant(g, "Pothos", place(g, "Hall"))
-        assertTrue(Notifier.postPrompt(app, pothos, "Pothos", Action.WaterNow(700, PromptReason.DRY_BY_MODEL), emptyList()))
+        assertTrue(Notifier.postPrompt(app, pothos, "Pothos", Action.WaterNow(700, PromptReason.DRY_BY_MODEL), emptyList(), boris = false))
         val n = nm.getNotification(Notifier.promptId(pothos))
         assertEquals(app.getString(R.string.notif_water_title, "Pothos"), n.extras.getString(Notification.EXTRA_TITLE))
         assertEquals(listOf(R.string.notif_action_watered, R.string.notif_action_snooze).map { app.getString(it) }, n.actions.map { it.title.toString() })
+    }
+
+    /** The title and body of the notification [post] puts up under [id], or under [tag] and [id]. */
+    private fun posted(id: Int, tag: String? = null, post: () -> Unit): Pair<String, String> {
+        app.getSystemService(NotificationManager::class.java).cancelAll()
+        post()
+        val n = if (tag == null) nm.getNotification(id) else nm.getNotification(tag, id)
+        return n.extras.getCharSequence(Notification.EXTRA_TITLE).toString() to n.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+    }
+
+    /** Voice rule 2, over every kind of notification the app posts: Boris writes only the body, never the title. */
+    @Test
+    fun titlesAreTheSameInBothVoices() {
+        allow()
+        val boris = plant(g, "Boris", place(g, "Balcony"))
+        val entity = runBlocking { g.garden.plant(boris)!! }
+        val today = g.garden.today()
+        val prompts = listOf(
+            Action.WaterNow(700, PromptReason.DRY_BY_MODEL) to emptyList(),
+            Action.CheckSoil(PromptReason.UNCERTAIN) to emptyList(),
+            Action.RepotOrWaterDaily to emptyList(),
+            Action.WaterNow(300, PromptReason.WINTER_FLOOR) to listOf(Reminder.FEED),
+            Action.None to listOf(Reminder.FEED, Reminder.REPOT),
+        )
+        val events = listOf(
+            AlertEvent(AlertKind.COLD, today, today, AlertType.ROOT_FREEZE_CAUTION, listOf(entity)),
+            AlertEvent(AlertKind.COLD, today, today.plus(DatePeriod(days = 1)), AlertType.ROOT_FREEZE_STRONG, listOf(entity)),
+            AlertEvent(AlertKind.HEAT, today, today, AlertType.HEAT, listOf(entity)),
+            AlertEvent(AlertKind.HEAVY_RAIN, today, today, AlertType.HEAVY_RAIN, listOf(entity)),
+            AlertEvent(AlertKind.WIND, today, today, AlertType.WIND, listOf(entity)),
+            AlertEvent(AlertKind.WATERLOGGING, today, today, AlertType.WATERLOGGING, listOf(entity)),
+        )
+        val kinds: List<(Boolean) -> Pair<String, String>> =
+            prompts.map { (action, reminders) ->
+                { voice: Boolean -> posted(Notifier.promptId(boris)) { assertTrue(Notifier.postPrompt(app, boris, "Boris", action, reminders, voice)) } }
+            } + events.map { e ->
+                { voice: Boolean -> posted(Notifier.alertId(AlertAck.of(e)), Notifier.ALERT_TAG) { assertTrue(Notifier.postAlert(app, e, today, voice)) } }
+            } + listOf { voice: Boolean -> posted(Notifier.STALE_ID) { Notifier.postStale(app, voice) } }
+        var voiced = 0
+        for (kind in kinds) {
+            val (plainTitle, plainText) = kind(false)
+            val (borisTitle, borisText) = kind(true)
+            assertEquals(plainTitle, borisTitle)
+            assertTrue(plainTitle.isNotEmpty() && borisText.isNotEmpty())
+            if (borisText != plainText) voiced++
+        }
+        // Only the reminder-only notification has no Boris body: feed and repot reminders have no twin.
+        assertEquals(kinds.size - 1, voiced)
     }
 
     @Test
@@ -167,7 +219,9 @@ class NotificationsTest {
         val title = n.extras.getString(Notification.EXTRA_TITLE)!!
         assertEquals(Texts.eventTitle(app, e, g.garden.today()), title)
         assertTrue(title, title.startsWith("Heat ") && title.endsWith(": Boris and Fern"))
-        assertEquals(Texts.eventAdvice(app, e), n.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
+        // Boris is the default voice; the body is his line, starting with the plain instruction.
+        assertEquals(Texts.eventAdvice(app, e, boris = true), n.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
+        assertTrue(Texts.eventAdvice(app, e, boris = true).startsWith(Texts.eventAdvice(app, e)))
         assertEquals(listOf(R.string.alert_done, R.string.alert_dismiss).map { app.getString(it) }, n.actions.map { it.title.toString() })
 
         tap(n.actions[0])

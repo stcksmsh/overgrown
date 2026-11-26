@@ -6,6 +6,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.stringResource
 import com.kostavukicevic.plants.R
+import com.kostavukicevic.plants.voicedResource
 import kotlinx.coroutines.flow.first
 
 @Composable
@@ -23,7 +24,7 @@ fun PlacesScreen(undo: UndoDelete, onBack: () -> Unit, onEdit: (Long) -> Unit, o
         onBack = onBack,
         addLabel = stringResource(R.string.add_place),
         onAdd = onAdd,
-        empty = stringResource(R.string.places_empty),
+        empty = voicedResource(R.string.places_empty),
         undo = undo,
         // Shown once the plants are known too, so a delete tap never lands before the in-use check can run.
         items = places?.takeIf { plants != null }?.map { p ->

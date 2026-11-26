@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.dropbox.differ.SimpleImageComparator
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.kostavukicevic.plants.LocalBoris
 import com.kostavukicevic.plants.engine.Action
 import com.kostavukicevic.plants.engine.PromptReason
 import com.kostavukicevic.plants.ui.theme.Overgrown
@@ -35,7 +36,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.util.TimeZone
 
-/** Golden images of Today's cards, tiles and whole screen, light and dark, at 1.0x and 1.3x font scale. */
+/** Golden images of Today's cards, tiles and whole screen, light and dark, at 1.0x and 1.3x font scale, in both voices. */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w400dp-h1600dp-xhdpi")
@@ -105,6 +106,21 @@ class TodayScreenshotTest(private val dark: Boolean, private val fontScale: Floa
     @Test
     fun emptyToday() = capture("empty") {
         TodayContent(emptyList(), TODAY, onPlant = {}, onAdd = {}, onWatered = {}, onAnswer = { _, _ -> }) { FixedWeather() }
+    }
+
+    // The same two screens in Boris's voice; the captures above are the plain voice.
+    @Test
+    fun wholeTodayInBorisVoice() = capture("full_boris") {
+        CompositionLocalProvider(LocalBoris provides true) {
+            TodayContent(fullToday(), TODAY, onPlant = {}, onAdd = {}, onWatered = {}, onAnswer = { _, _ -> }) { FixedWeather() }
+        }
+    }
+
+    @Test
+    fun emptyTodayInBorisVoice() = capture("empty_boris") {
+        CompositionLocalProvider(LocalBoris provides true) {
+            TodayContent(emptyList(), TODAY, onPlant = {}, onAdd = {}, onWatered = {}, onAnswer = { _, _ -> }) { FixedWeather() }
+        }
     }
 
     companion object {

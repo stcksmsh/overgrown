@@ -130,13 +130,16 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * The theme chosen in Settings, applied as soon as it changes. Nothing is drawn until the choice is read, so a
- * chosen theme does not flash the system's one first.
+ * The theme and voice chosen in Settings, applied as soon as they change. Nothing is drawn until both are read, so
+ * a chosen theme does not flash the system's one first and plain wording does not flash Boris's.
  */
 @Composable
 internal fun ChosenTheme(content: @Composable () -> Unit) {
-    val choice by LocalContext.current.graph.settings.theme.collectAsState(null)
+    val settings = LocalContext.current.graph.settings
+    val choice by settings.theme.collectAsState(null)
+    val boris by settings.borisVoice.collectAsState(null)
     val system = isSystemInDarkTheme()
+    val voice = boris ?: return
     val dark = when (choice ?: return) {
         ThemeChoice.SYSTEM -> system
         ThemeChoice.LIGHT -> false
@@ -150,7 +153,7 @@ internal fun ChosenTheme(content: @Composable () -> Unit) {
             navigationBarStyle = SystemBarStyle.auto(LIGHT_SCRIM, DARK_SCRIM) { dark },
         )
     }
-    OvergrownTheme(dark = dark, content = content)
+    CompositionLocalProvider(LocalBoris provides voice) { OvergrownTheme(dark = dark, content = content) }
 }
 
 // The scrims enableEdgeToEdge uses by default behind three-button navigation.

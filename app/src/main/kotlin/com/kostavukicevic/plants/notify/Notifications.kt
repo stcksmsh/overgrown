@@ -29,6 +29,7 @@ import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.MainActivity
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
+import com.kostavukicevic.plants.Voice
 import com.kostavukicevic.plants.data.AlertAck
 import com.kostavukicevic.plants.data.AlertEvent
 import com.kostavukicevic.plants.data.alreadyPosted
@@ -121,9 +122,9 @@ object Notifier {
 
     /**
      * One notification per plant: a watering prompt, the feeding and repotting reminders due today,
-     * or both together. True if it was shown.
+     * or both together. True if it was shown. [boris] voices the body; the title is plain in both voices.
      */
-    fun postPrompt(c: Context, plantId: Long, plantName: String, action: Action, reminders: List<Reminder>): Boolean {
+    fun postPrompt(c: Context, plantId: Long, plantName: String, action: Action, reminders: List<Reminder>, boris: Boolean): Boolean {
         if (!allowed(c)) return false
         val prompt = action.isPrompt()
         if (!prompt && reminders.isEmpty()) return false
@@ -133,7 +134,7 @@ object Notifier {
             Action.RepotOrWaterDaily -> c.getString(R.string.notif_repot_title, plantName)
             else -> c.getString(R.string.notif_reminder_title, plantName)
         }
-        val text = (listOfNotNull(if (prompt) Texts.action(c, action) else null) + reminders.map { Texts.reminder(c, it) }).joinToString(" ")
+        val text = (listOfNotNull(if (prompt) Texts.action(c, action, boris) else null) + reminders.map { Texts.reminder(c, it) }).joinToString(" ")
         val b = NotificationCompat.Builder(c, CHANNEL_PROMPTS)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
@@ -160,10 +161,13 @@ object Notifier {
     /** One posted event's notification: the same kind and first day replace it. */
     fun alertId(posted: AlertAck) = "${posted.kind}-${posted.start}".hashCode()
 
-    /** One notification per weather event, naming all its plants: "Frost Mon-Wed: Boris". True if it was shown. */
-    fun postAlert(c: Context, e: AlertEvent, today: LocalDate): Boolean {
+    /**
+     * One notification per weather event, naming all its plants: "Frost Mon-Wed: Boris". True if it was shown.
+     * [boris] voices the body after the plain instruction; the title is plain in both voices.
+     */
+    fun postAlert(c: Context, e: AlertEvent, today: LocalDate, boris: Boolean): Boolean {
         if (!allowed(c)) return false
-        val text = Texts.eventAdvice(c, e)
+        val text = Texts.eventAdvice(c, e, boris)
         val n = NotificationCompat.Builder(c, CHANNEL_ALERTS)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(Texts.eventTitle(c, e, today))
@@ -180,12 +184,13 @@ object Notifier {
     /** Takes down the notification posted for [posted]. */
     fun cancelAlert(c: Context, posted: AlertAck) = NotificationManagerCompat.from(c).cancel(ALERT_TAG, alertId(posted))
 
-    fun postStale(c: Context) {
+    /** Asks for a foreground visit to refresh the forecast. [boris] voices the body; the title is plain in both voices. */
+    fun postStale(c: Context, boris: Boolean) {
         if (!allowed(c)) return
         val n = NotificationCompat.Builder(c, CHANNEL_STATUS)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(c.getString(R.string.notif_stale_title))
-            .setContentText(c.getString(R.string.notif_stale_text))
+            .setContentText(Voice.string(c.resources, boris, R.string.notif_stale_text))
             .setContentIntent(openApp(c, null))
             .setAutoCancel(true)
             .build()
@@ -281,7 +286,7 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             // Jobs armed before DAY existed carry none: they count as the day they run.
             KIND_REMINDER -> g.scheduler.runReminder(inputData.getLong(PLANT, -1), inputData.getString(DAY)?.let(LocalDate::parse))
             KIND_ALERT -> decodeAckList(inputData.getString(KEY)).singleOrNull()?.let { g.scheduler.postEvent(it) }
-            KIND_STALE -> Notifier.postStale(c)
+            KIND_STALE -> Notifier.postStale(c, g.settings.borisVoice.first())
         }
         return Result.success()
     }
@@ -365,7 +370,7 @@ class Scheduler(private val context: Context, private val graph: Graph) {
                 armPrompt(plantId, nextAt(today, graph.settings.reminderTime.first(), TimeZone.currentSystemDefault(), now), now)
                 return
             }
-            if (!Notifier.postPrompt(context, plantId, status.plant.name, status.today, status.reminders)) {
+            if (!Notifier.postPrompt(context, plantId, status.plant.name, status.today, status.reminders, graph.settings.borisVoice.first())) {
                 schedulePrompt(plantId, today.plus(DatePeriod(days = 1)), today)
                 return
             }
@@ -391,7 +396,7 @@ class Scheduler(private val context: Context, private val graph: Graph) {
         }
         // Reminders only, once a day. With a watering prompt due today, the prompt's own job carries them.
         if (!status.today.isPrompt() && status.reminders.isNotEmpty() && !alertPosted(key) &&
-            Notifier.postPrompt(context, plantId, status.plant.name, Action.None, status.reminders)
+            Notifier.postPrompt(context, plantId, status.plant.name, Action.None, status.reminders, graph.settings.borisVoice.first())
         ) markAlertPosted(key)
         // Re-armed here, so the next reminder needs no refresh or network.
         scheduleReminder(status, today, includeToday = false)
@@ -482,13 +487,14 @@ class Scheduler(private val context: Context, private val graph: Graph) {
     suspend fun postEvent(scheduled: AlertAck): Boolean {
         val today = graph.garden.today()
         val e = graph.garden.alertEvents().find { scheduled.overlaps(it) } ?: return false
+        val boris = graph.settings.borisVoice.first()
         // Checked, posted and recorded as one step: two workers at once would otherwise both post it.
         synchronized(POSTED_LOCK) {
             if (eventPosted(e, today)) return false
             // A milder notification of the same event is replaced, not left beside the new one.
             val earlier = postedEvents(today).filter { it.overlaps(e) }
             for (a in earlier) Notifier.cancelAlert(context, a)
-            if (!Notifier.postAlert(context, e, today)) return false
+            if (!Notifier.postAlert(context, e, today, boris)) return false
             savePosted(postedEvents(today) + AlertAck.of(e))
             return true
         }

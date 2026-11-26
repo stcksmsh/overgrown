@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!--
+    Boris voice. Boris is the app's mascot, a small false cypress in a black nursery pot: dry, short, against
+    overwatering, never cutesy. He speaks for the app; the person's own plants never speak.
+    Each string here is the twin of the plain string named without "_boris", with the same placeholders in the
+    same order. The plain string is always complete; these are shown only when Settings, Voice is Boris and
+    bools_boris.xml says this language has Boris lines.
+    Never add a twin for toxicity, safety, permission, data-loss, privacy, import or export text.
+-->
+<resources>
+    <!-- Translators: twin of today_all_fine. Dry, short; "not yet" is Boris's stance. Rewrite rather than translate. -->
+    <string name="today_all_fine_boris">Not yet. Nothing to water today.</string>
+    <!-- Translators: twin of today_nothing_to_water; the weather summary follows it. Rewrite rather than translate. -->
+    <string name="today_nothing_to_water_boris">Not yet. Nothing to water.</string>
+    <!-- Translators: twin of tile_fine, on a resting plant's tile. Rewrite rather than translate. -->
+    <string name="tile_fine_boris">Not yet.</string>
+    <!-- Translators: twin of tile_fine_check. Keep the day (%1$s) as in the plain string. Rewrite rather than translate. -->
+    <string name="tile_fine_check_boris">Not yet. Check %1$s.</string>
+    <!-- Translators: twin of today_empty, the first thing a new user reads. Boris speaks as "I" for the app. Rewrite rather than translate. -->
+    <string name="today_empty_boris">I tell you when each of your potted plants needs water, from its pot and the weather where it stands. Mostly they don\'t.</string>
+    <!-- Translators: twin of plants_empty. Rewrite rather than translate. -->
+    <string name="plants_empty_boris">No plants yet. Nothing to overwater.</string>
+    <!-- Translators: twin of places_empty. Rewrite rather than translate. -->
+    <string name="places_empty_boris">No places yet. A pot has to stand somewhere.</string>
+    <!-- Translators: twin of forecast_stale. Keep the number of days and the warning sentence as in the plain string. Rewrite rather than translate. -->
+    <plurals name="forecast_stale_boris">
+        <item quantity="one">The forecast is %1$d day old, so I\'m guessing. Reminders may be off until it refreshes.</item>
+        <item quantity="other">The forecast is %1$d days old, so I\'m guessing. Reminders may be off until it refreshes.</item>
+    </plurals>
+    <!-- Translators: twin of forecast_failed, a passing error. Keep what failed and what to do as in the plain string. Rewrite rather than translate. -->
+    <string name="forecast_failed_boris">Could not get the forecast. Check the connection; I\'m not going anywhere.</string>
+
+    <!-- Notification body lines. Titles are never voiced: they stay plain in both voices. -->
+    <!-- Translators: twin of notif_stale_text, a notification body. Rewrite rather than translate. -->
+    <string name="notif_stale_text_boris">Reminders use a forecast that is several days old. I\'m guessing until you open the app.</string>
+    <!-- Translators: twin of action_water_now, a notification body. The dose (%1$d ml) and "Water now" come first, as in the plain string. Rewrite rather than translate. -->
+    <string name="action_water_now_boris">Water now: about %1$d ml. Then leave it alone.</string>
+    <!-- Translators: twin of action_check_soil, a notification body. The instruction comes first. Rewrite rather than translate. -->
+    <string name="action_check_soil_boris">Check the soil. Finger in, then tell me what you find.</string>
+    <!-- Translators: twin of action_repot, a notification body. Keep the plain sentence first and whole. Rewrite rather than translate. -->
+    <string name="action_repot_boris">Repot, or expect to water daily: this pot holds less than the plant uses in a day. It has outgrown it.</string>
+    <!-- Translators: twin of event_do_cold, a weather alert body. Keep the plain instruction and the plant names (%1$s) first and whole; one dry line after it. -->
+    <string name="event_do_cold_boris">Move %1$s against a wall. The pot feels the cold before the plant does.</string>
+    <!-- Translators: twin of event_do_cold_strong, a weather alert body. Keep the plain instruction and the plant names (%1$s) first and whole. -->
+    <string name="event_do_cold_strong_boris">Move %1$s somewhere sheltered. A cold one.</string>
+    <!-- Translators: twin of event_do_heat, a weather alert body. Keep the plain instruction and the plant names (%1$s) first and whole. -->
+    <string name="event_do_heat_boris">Shade %1$s and check the soil more often. A check, not a reflex watering.</string>
+    <!-- Translators: twin of event_do_heavy_rain, a weather alert body. Keep the plain instruction and the plant names (%1$s) first and whole. -->
+    <string name="event_do_heavy_rain_boris">Make sure %1$s can drain. The sky is doing the watering.</string>
+    <!-- Translators: twin of event_do_wind, a weather alert body. Keep the plain instruction and the plant names (%1$s) first and whole. -->
+    <string name="event_do_wind_boris">Move %1$s out of the wind. A windy one.</string>
+    <!-- Translators: twin of event_do_waterlogging, a weather alert body. Keep the plain instruction and the plant names (%1$s) first and whole. -->
+    <string name="event_do_waterlogging_boris">Tip the standing water out of %1$s. Too much water, as usual.</string>
+</resources>

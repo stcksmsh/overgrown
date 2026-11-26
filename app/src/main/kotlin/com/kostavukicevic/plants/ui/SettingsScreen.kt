@@ -55,6 +55,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     val developer by g.settings.developerMode.collectAsState(false)
     val weighing by g.settings.weighing.collectAsState(false)
     val theme by g.settings.theme.collectAsState(ThemeChoice.SYSTEM)
+    val boris by g.settings.borisVoice.collectAsState(true)
     val time by g.settings.reminderTime.collectAsState(null)
     var message by remember { mutableStateOf<String?>(null) }
     var fontLicence by remember { mutableStateOf(false) }
@@ -134,6 +135,11 @@ fun SettingsScreen(onBack: () -> Unit) {
             ),
             theme,
         ) { t -> scope.launch { g.settings.setTheme(t) } }
+        Choice(
+            stringResource(R.string.settings_voice),
+            listOf(true to stringResource(R.string.settings_voice_mascot), false to stringResource(R.string.settings_voice_plain)),
+            boris,
+        ) { on -> scope.launch { g.settings.setBorisVoice(on) } }
         Text(stringResource(R.string.settings_units))
 
         HorizontalDivider()
@@ -153,6 +159,7 @@ fun SettingsScreen(onBack: () -> Unit) {
         HorizontalDivider()
         Text(stringResource(R.string.about_title), style = MaterialTheme.typography.titleMedium)
         Text(stringResource(R.string.about_version, g.versionName))
+        Text(stringResource(R.string.about_dedication))
         Text(stringResource(R.string.about_built))
         Text(stringResource(R.string.about_licence))
         Text(stringResource(R.string.about_weather, OpenMeteo.CREDIT, OpenMeteo.LICENCE))
