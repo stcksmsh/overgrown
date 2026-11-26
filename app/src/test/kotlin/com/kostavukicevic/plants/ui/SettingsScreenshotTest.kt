@@ -49,7 +49,7 @@ class SettingsScreenshotTest(private val dark: Boolean, private val fontScale: F
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
-                OvergrownTheme(dark = dark) { SettingsScreen(onBack = {}) }
+                OvergrownTheme(dark = dark) { SettingsScreen(onBack = {}, onRemindersHelp = {}) }
             }
         }
         // The reminder time comes from DataStore a frame after the rest.

@@ -4,6 +4,7 @@ package com.kostavukicevic.plants.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -100,8 +101,17 @@ class TodayScreenshotTest(private val dark: Boolean, private val fontScale: Floa
         TodayContent(fullToday(), TODAY, onPlant = {}, onAdd = {}, onWatered = {}, onAnswer = { _, _ -> }) { FixedWeather() }
     }
 
+    // Laid out as TodayScreen lays it: the line above the cards, a card gap apart.
     @Test
-    fun gettingTheForecast() = capture("weather_loading") { FixedWeather(refreshing = true) }
+    fun remindersOff() = capture("reminders_off") {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.cardGap)) {
+            RemindersOffLine(onDismiss = {})
+            TodayContent(fullToday(), TODAY, onPlant = {}, onAdd = {}, onWatered = {}, onAnswer = { _, _ -> }) { FixedWeather() }
+        }
+    }
+
+    @Test
+    fun gettingTheForecast()= capture("weather_loading") { FixedWeather(refreshing = true) }
 
     @Test
     fun emptyToday() = capture("empty") {

@@ -2,7 +2,6 @@
 package com.kostavukicevic.plants.ui
 
 import android.Manifest
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -12,12 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,13 +31,13 @@ import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
 import com.kostavukicevic.plants.voicedPlural
 import com.kostavukicevic.plants.voicedResource
 import com.kostavukicevic.plants.data.AlertEvent
 import com.kostavukicevic.plants.data.PlantStatus
-import com.kostavukicevic.plants.notify.Notifier
 import com.kostavukicevic.plants.ui.theme.Overgrown
 import com.kostavukicevic.plants.ui.theme.Spacing
 import kotlinx.coroutines.CancellationException
@@ -74,8 +71,16 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
     val failed by g.fetchFailed.collectAsState()
     val scope = rememberCoroutineScope()
 
-    var notifAllowed by remember { mutableStateOf(Notifier.allowed(c)) }
-    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notifAllowed = it }
+    // Read again on each return, so a switch turned on in the system's settings takes the line away.
+    var off by remember { mutableStateOf(remindersOff(c)) }
+    LifecycleResumeEffect(Unit) {
+        off = remindersOff(c)
+        onPauseOrDispose {}
+    }
+    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { off = remindersOff(c) }
+    // Keyed on the tick: saving a plant signals a change, and this screen may still be composed when it does.
+    var explain by remember(tick) { mutableStateOf(Onboarding.askNow(c)) }
+    var dismissed by remember(tick) { mutableStateOf(Onboarding.dismissed(c)) }
 
     // Recording reloads this screen in place, as on the plant screen.
     fun act(block: suspend () -> Unit) = scope.launch { block(); g.scheduler.reschedule(); g.changed() }
@@ -90,14 +95,7 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
     ) {
         val list = statuses ?: return@Page
         val visible = (events ?: return@Page).filterNot { it.key in answered }
-        if (list.isNotEmpty() && !notifAllowed && Build.VERSION.SDK_INT >= 33) {
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(Spacing.cardPadding)) {
-                    Text(stringResource(R.string.notifications_reason))
-                    Button(onClick = { askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS) }) { Text(stringResource(R.string.notifications_allow)) }
-                }
-            }
-        }
+        if (list.isNotEmpty() && off && !dismissed && !explain) RemindersOffLine(onDismiss = { dismissed = true; Onboarding.dismiss(c) })
         TodayContent(
             list,
             g.garden.today(),
@@ -126,7 +124,20 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
             }
         }
     }
-    LaunchedEffect(Unit) { notifAllowed = Notifier.allowed(c) }
+    if (explain) {
+        // The reason first, then the system's own dialog, which cannot say why.
+        fun answer(allow: Boolean) {
+            explain = false
+            Onboarding.asked(c)
+            if (allow) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        AlertDialog(
+            onDismissRequest = { answer(false) },
+            text = { Text(stringResource(R.string.notifications_reason), style = Type.body) },
+            confirmButton = { TextButton(onClick = { answer(true) }) { Text(stringResource(R.string.notifications_allow), style = Type.label) } },
+            dismissButton = { TextButton(onClick = { answer(false) }) { Text(stringResource(R.string.notifications_not_now), style = Type.label) } },
+        )
+    }
 }
 
 /**

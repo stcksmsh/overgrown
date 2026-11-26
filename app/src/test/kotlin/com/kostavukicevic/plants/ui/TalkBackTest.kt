@@ -181,7 +181,7 @@ class TalkBackTest {
     @Test
     fun settingsDialogsNameEveryButton() {
         useTestDatabase()
-        compose.setContent { OvergrownTheme { SettingsScreen(onBack = {}) } }
+        compose.setContent { OvergrownTheme { SettingsScreen(onBack = {}, onRemindersHelp = {}) } }
         waitForText(s(R.string.import_json))
         tap(s(R.string.import_json))
         waitForText(s(R.string.cancel))
@@ -353,7 +353,7 @@ class TalkBackTest {
     @Test
     fun theThemeChoiceSaysItIsOneOfThreeAndWhichIsChosen() {
         useTestDatabase()
-        compose.setContent { OvergrownTheme { SettingsScreen(onBack = {}) } }
+        compose.setContent { OvergrownTheme { SettingsScreen(onBack = {}, onRemindersHelp = {}) } }
         waitForText(s(R.string.settings_theme_dark))
         val options = listOf(R.string.settings_theme_system, R.string.settings_theme_light, R.string.settings_theme_dark).map { choice(s(it)) }
         for (o in options) assertEquals(Role.RadioButton, role(o))

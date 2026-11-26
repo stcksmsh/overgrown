@@ -357,6 +357,7 @@ private val afterSave = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 @Composable
 fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = rememberGraph().careDb) {
     val g = rememberGraph()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val places by g.garden.places.collectAsState(null)
     val plants by g.garden.plants.collectAsState(emptyList())
@@ -403,6 +404,7 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
         scope.launch {
             try {
                 val newOutdoorPlace = savePlantAndPlace(g, st, plantId, known)
+                if (plantId == null) Onboarding.plantAdded(context)
                 g.scheduler.reschedule(); g.changed(); onDone()
                 // A new outdoor place has no forecast yet, as in EditPlaceScreen; the screen does not wait for it.
                 if (newOutdoorPlace) afterSave.launch { refreshAfterSave(g) }

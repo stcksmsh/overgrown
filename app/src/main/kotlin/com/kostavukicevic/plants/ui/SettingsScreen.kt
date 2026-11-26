@@ -46,7 +46,7 @@ import kotlinx.datetime.LocalTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onRemindersHelp: () -> Unit) {
     val g = rememberGraph()
     val c = LocalContext.current
     val res = LocalResources.current
@@ -124,6 +124,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
         }
         Text(stringResource(R.string.settings_reminder_time_hint), style = MaterialTheme.typography.bodySmall)
+        TextButton(onClick = onRemindersHelp) { Text(stringResource(R.string.notifications_help)) }
 
         HorizontalDivider()
         Choice(
