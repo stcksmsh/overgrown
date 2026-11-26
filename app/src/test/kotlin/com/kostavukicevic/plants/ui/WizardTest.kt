@@ -152,6 +152,15 @@ class WizardTest {
     }
 
     @Test
+    fun theShippedOutdoorLeafyHerbArchetypeIsFoundByItsName() {
+        compose.setContent { OvergrownTheme { AddPlantWizard(null, onDone = { done = true }, careDb = g.careDb) } }
+        field(R.string.wizard_name).performTextInput("herb")
+        tap("Outdoor leafy herb")
+        compose.onNodeWithText(s(R.string.wizard_no_match)).assertDoesNotExist()
+        compose.onNode(hasSetTextAction() and hasText("Outdoor leafy herb")).assertExists()
+    }
+
+    @Test
     fun pickingASearchResultSavesTheSpeciesAndTheExistingPlaceTakesTheRainAndWind() {
         val balcony = runBlocking { g.garden.savePlace(PlaceEntity(name = "Balcony", outdoor = true, latitude = 44.8, longitude = 20.5)) }
         plant(g, "Boris", balcony)
