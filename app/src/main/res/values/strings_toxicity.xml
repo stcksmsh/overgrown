@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!--
+    Toxicity on the plant screen and the general care notice in About. Plain text only: no Boris twins here, and
+    never the word "safe". "Unknown" and "no known toxicity" must read differently: the first means nobody has
+    checked, the second that the checked sources record none.
+-->
+<resources>
+    <string name="toxicity_title">Toxicity</string>
+    <string name="toxicity_cats">Cats</string>
+    <string name="toxicity_dogs">Dogs</string>
+    <string name="toxicity_horses">Horses</string>
+    <string name="toxicity_humans">People</string>
+    <!-- One line per category; %1$s is the category, for example "Cats". -->
+    <string name="toxicity_unknown">%1$s: unknown, not yet checked</string>
+    <string name="toxicity_no_known">%1$s: no known toxicity in the sources checked</string>
+    <string name="toxicity_mild_irritant">%1$s: caution, can irritate</string>
+    <string name="toxicity_toxic">%1$s: caution, toxic</string>
+    <string name="toxicity_disclaimer">General information, not veterinary or medical advice. This data is incomplete, and no warning here does not mean a plant is harmless. If a pet or person has eaten a plant, contact a vet or a poison centre.</string>
+    <!-- Shown in About right after about_care_notice. -->
+    <string name="about_care_no_guarantee">Check your own plant: there is no guarantee that this advice suits it.</string>
+</resources>

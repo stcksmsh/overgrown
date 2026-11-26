@@ -16,6 +16,7 @@ import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
+import com.kostavukicevic.plants.caredb.CareDb
 import com.kostavukicevic.plants.data.EventEntity
 import com.kostavukicevic.plants.data.GardenDb
 import com.kostavukicevic.plants.data.PlaceEntity
@@ -41,8 +42,8 @@ import kotlin.time.Duration.Companion.hours
 
 /**
  * Golden images of the plant screen, light and dark, at 1.0x and 1.3x: an outdoor plant with frost ahead and two
- * weeks of history, a plant the app knows well, a plant with nothing logged, and the edit-entry dialog. The window
- * is tall enough to show the whole page.
+ * weeks of history, a plant the app knows well, a plant with nothing logged, the edit-entry dialog, and the
+ * toxicity lines for unknown, no known and toxic fixture species. The window is tall enough to show the whole page.
  */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -61,7 +62,9 @@ class PlantScreenshotTest(private val dark: Boolean, private val fontScale: Floa
     )
 
     private var now = PLANT_TEST_NOW
-    private val graph: Pair<Graph, GardenDb> by lazy { fixedClockGraph { now } }
+    /** Set before the graph is first used to show the fixture care database instead of the bundled one. */
+    private var fixture: CareDb? = null
+    private val graph: Pair<Graph, GardenDb> by lazy { fixedClockGraph({ now }, fixture) }
     private val g get() = graph.first
     private val db get() = graph.second
 
@@ -70,7 +73,7 @@ class PlantScreenshotTest(private val dark: Boolean, private val fontScale: Floa
     private fun start(plantId: Long) = compose.setContent {
         val density = LocalDensity.current
         CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
-            OvergrownTheme(dark = dark) { PlantScreen(plantId, onBack = {}, onEdit = {}) }
+            OvergrownTheme(dark = dark) { PlantScreen(plantId, onBack = {}, onEdit = {}, careDb = fixture ?: g.careDb) }
         }
     }
 
@@ -185,6 +188,29 @@ class PlantScreenshotTest(private val dark: Boolean, private val fontScale: Floa
         waitForStrip()
         capture("learned")
     }
+
+    /** An indoor plant of a fixture species from ToxicityTest, for its toxicity lines. */
+    private fun toxicity(slug: String, name: String) {
+        fixture = ToxicityTest.FIXTURE
+        val id = runBlocking {
+            val hall = g.garden.savePlace(PlaceEntity(name = "Hall", outdoor = false, latitude = 44.8, longitude = 20.5))
+            g.garden.savePlant(PlantEntity(name = "Fern", placeId = hall, speciesSlug = slug, canopyWidthCm = 20.0, potVolumeL = 2.0, acquiredOn = "2026-11-20"))
+        }
+        start(id)
+        waitFor(s(R.string.toxicity_disclaimer))
+        waitForStrip()
+        capture(name)
+    }
+
+    @Test
+    fun toxicityUnknown() = toxicity("unknownus", "toxicity_unknown")
+
+    @Test
+    fun toxicityNoKnown() = toxicity("nonus", "toxicity_no_known")
+
+    /** Toxic for cats, an irritant for dogs, none known for horses, unknown for people. */
+    @Test
+    fun toxicityToxic() = toxicity("toxicus", "toxicity_toxic")
 
     companion object {
         @JvmStatic
