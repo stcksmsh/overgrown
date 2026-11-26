@@ -8,6 +8,17 @@ Weather: 2015-2024 daily history from the Open-Meteo Historical Weather API (CC 
 
 The baseline uses the same inputs and learning rule as the engine. Its summer interval is the engine's own dry-out time for the plant on the site's mean July day with K = 1, so both start from the same knowledge.
 
+## Headline: prompts answered still wet
+
+The share of prompts (water now, or check the soil) the person answered "too wet" or "ok": each is a prompt that came before the plant needed water, and the cost the person feels most. The engine asks for a soil check while it is unsure and the plant could already be dry, so more of its prompts find wet soil than the baseline's, which waits for its interval and lets the plant dry further (see stress days below).
+
+| Scenario | Engine, still wet | Baseline, still wet |
+|---|---:|---:|
+| belgrade, outdoor | 30 % | 12 % |
+| belgrade, indoor | 18 % | 9 % |
+| seville, outdoor | 31 % | 15 % |
+| edinburgh, outdoor | 36 % | 13 % |
+
 ## Metrics
 
 Per plant per year unless stated, averaged over plants.
@@ -22,10 +33,10 @@ Per plant per year unless stated, averaged over plants.
 
 | Scenario | Model | Stress days | Over-wet days | Wet waterings | Prompts | Still wet | Dry-out error, days | Dry-out error, rel. | Answers to accurate | Never accurate | Use error | Repot prompts |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| belgrade, outdoor | engine, provider ET0 | 18.2 | 0.1 | 0.3 | 62.8 | 30 % | 1.0 | 11 % | 10.0 | 0 % | 27 % | 0.3 |
-| belgrade, outdoor | engine, Hargreaves only | 22.2 | 0.2 | 0.6 | 62.3 | 29 % | 1.0 | 17 % | 9.0 | 0 % | 36 % | 0.2 |
+| belgrade, outdoor | engine, provider ET0 | 18.4 | 0.1 | 0.3 | 62.7 | 30 % | 1.0 | 11 % | 10.0 | 0 % | 28 % | 0.0 |
+| belgrade, outdoor | engine, Hargreaves only | 22.4 | 0.2 | 0.6 | 62.3 | 29 % | 1.0 | 17 % | 9.0 | 0 % | 36 % | 0.0 |
 | belgrade, outdoor | baseline | 50.4 | 6.2 | 7.2 | 52.7 | 12 % | 2.0 | 50 % | 6.0 | 10 % | 65 % | 0.0 |
-| belgrade, indoor | engine, provider ET0 | 38.6 | 1.8 | 0.7 | 86.8 | 18 % | 1.0 | 7 % | 8.0 | 7 % | 29 % | 11.4 |
+| belgrade, indoor | engine, provider ET0 | 38.6 | 1.8 | 0.7 | 86.8 | 18 % | 0.0 | 0 % | 8.0 | 7 % | 29 % | 0.0 |
 | belgrade, indoor | baseline | 103.6 | 2.1 | 5.3 | 80.2 | 9 % | 1.0 | 25 % | 4.0 | 20 % | 36 % | 0.0 |
 | seville, outdoor | engine, provider ET0 | 22.9 | 0.0 | 0.3 | 80.3 | 31 % | 1.0 | 25 % | 11.0 | 0 % | 27 % | 0.0 |
 | seville, outdoor | engine, Hargreaves only | 25.5 | 0.1 | 0.5 | 80.6 | 31 % | 1.0 | 25 % | 12.5 | 0 % | 30 % | 0.0 |
