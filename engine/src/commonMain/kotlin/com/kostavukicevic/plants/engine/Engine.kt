@@ -18,6 +18,10 @@ data class EngineState(
     /** Consecutive days filled from climatology. */
     val gapStreak: Int = 0,
     val lastSoilCheck: LocalDate? = null,
+    /** The pot "Repot or water daily" was already given for; it is not repeated until the pot changes. */
+    val repotAdvisedFor: Pot? = null,
+    /** K when the day began, before its events: what the day's first recommendation used. Null before the first [Engine.advance]. */
+    val kAtDayStart: Double? = null,
 )
 
 /**
@@ -41,7 +45,8 @@ object Engine : WateringModel<EngineState> {
     override fun advance(plant: Plant, state: EngineState, day: WeatherDay): EngineState {
         val use = WaterBalance.dailyUseMl(plant, day, state.belief.k)
         val refill = WaterBalance.rainRefillMl(plant, day)
-        val depletion = WaterBalance.stepDepletion(state.depletion, use, refill, WaterBalance.capacityMl(plant.pot))
+        val capacity = WaterBalance.capacityMl(plant.pot)
+        val depletion = WaterBalance.stepDepletion(state.depletion, use, refill, capacity)
 
         var belief = Learning.addVariance(state.belief, C.PROCESS_VARIANCE_PER_DAY)
         val gap = if (day.quality == WeatherQuality.CLIMATOLOGY_FILL) state.gapStreak + 1 else 0
@@ -53,6 +58,15 @@ object Engine : WateringModel<EngineState> {
             recent = (state.recent + day).takeLast(C.WINTER_MODE_WINDOW_DAYS),
             daysSinceRain = if (refill > 0) 0 else state.daysSinceRain + 1,
             gapStreak = gap,
+            // Judged with the K the day started from, so the advice counts as given only if the
+            // day's first recommendation gave it; a check-in that raised K today cannot mark it
+            // given before it was shown.
+            repotAdvisedFor = if (WaterBalance.dailyUseMl(plant, day, state.kAtDayStart ?: state.belief.k) > capacity) {
+                plant.pot
+            } else {
+                state.repotAdvisedFor
+            },
+            kAtDayStart = belief.k,
         )
     }
 
@@ -62,7 +76,9 @@ object Engine : WateringModel<EngineState> {
             val checked = event.moisture?.let { checkIn(plant, state, it, event.date) } ?: state
             checked.copy(depletion = if (event.ranOutOfBottom) 0.0 else C.PARTIAL_WATERING_DEPLETION)
         }
-        is Event.Moved, is Event.Repotted -> state.copy(belief = Learning.addVariance(state.belief, C.VARIANCE_BUMP_CHANGE))
+        // A move changes the demand, not the pot, so it does not repeat the repot advice.
+        is Event.Moved -> state.copy(belief = Learning.addVariance(state.belief, C.VARIANCE_BUMP_CHANGE))
+        is Event.Repotted -> state.copy(belief = Learning.addVariance(state.belief, C.VARIANCE_BUMP_CHANGE), repotAdvisedFor = null)
     }
 
     private fun inHeat(state: EngineState) = state.recent.lastOrNull()?.let { it.tMaxC >= C.HEAT_ALERT_MAX_C } ?: false
@@ -92,7 +108,9 @@ object Engine : WateringModel<EngineState> {
     private fun action(plant: Plant, state: EngineState, upcoming: List<WeatherDay>): Action {
         val today = upcoming.first()
         val capacity = WaterBalance.capacityMl(plant.pot)
-        if (WaterBalance.dailyUseMl(plant, today, state.belief.k) > capacity) return Action.RepotOrWaterDaily
+        if (state.repotAdvisedFor != plant.pot && WaterBalance.dailyUseMl(plant, today, state.belief.k) > capacity) {
+            return Action.RepotOrWaterDaily
+        }
 
         val outdoor = plant.place is Place.Outdoor
         val dryFraction = WaterBalance.dryFraction(plant.profile)

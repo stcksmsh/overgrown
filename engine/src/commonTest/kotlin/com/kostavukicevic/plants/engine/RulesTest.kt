@@ -157,6 +157,48 @@ class RulesTest {
     }
 
     @Test
+    fun repotAdviceIsGivenOnceUntilThePotChanges() {
+        // A 40 cm canopy in a 2 l pot on a hot day uses more than the pot holds.
+        val plant = Plant(CareProfile(WaterStrategy.DRY_TOP_PART), 40.0, Pot(2.0), Place.Outdoor(44.8, RainExposure.COVERED))
+        val hot = { d: LocalDate -> WeatherDay(d, 20.0, 34.0, 0.0, et0Mm = 8.0) }
+        fun date(i: Int) = june1.plus(DatePeriod(days = i))
+        fun action(p: Plant, s: EngineState, i: Int) = Engine.recommend(p, s, listOf(hot(date(i)))).action
+        assertTrue(WaterBalance.dailyUseMl(plant, hot(june1), 1.0) > WaterBalance.capacityMl(plant.pot))
+
+        var state = Engine.initial(plant)
+        assertEquals(Action.RepotOrWaterDaily, action(plant, state, 0))
+        for (i in 0 until 5) {
+            state = Engine.advance(plant, state, hot(date(i)))
+            assertNotEquals(Action.RepotOrWaterDaily, action(plant, state, i + 1), "day ${i + 1}")
+        }
+
+        val moved = Engine.apply(plant, state, Event.Moved(date(5)))
+        assertNotEquals(Action.RepotOrWaterDaily, action(plant, moved, 5))
+
+        val repotted = Engine.apply(plant, state, Event.Repotted(date(5)))
+        assertEquals(Action.RepotOrWaterDaily, action(plant, repotted, 5))
+
+        val newPot = plant.copy(pot = Pot(2.5))
+        assertTrue(WaterBalance.dailyUseMl(newPot, hot(june1), 1.0) > WaterBalance.capacityMl(newPot.pot))
+        assertEquals(Action.RepotOrWaterDaily, action(newPot, state, 5))
+    }
+
+    @Test
+    fun repotAdviceIsNotMarkedGivenByAnAnswerThatRaisedKAfterTheDaysPrompt() {
+        val plant = Plant(CareProfile(WaterStrategy.DRY_TOP_PART), 40.0, Pot(2.0), Place.Outdoor(44.8, RainExposure.COVERED))
+        val hot = { d: LocalDate -> WeatherDay(d, 20.0, 34.0, 0.0, et0Mm = 8.0) }
+        val day1 = june1.plus(DatePeriod(days = 1))
+        val day2 = june1.plus(DatePeriod(days = 2))
+        var state = Engine.advance(plant, EngineState(belief = KBelief(logKMean = -1.0)), hot(june1))
+        assertNotEquals(Action.RepotOrWaterDaily, Engine.recommend(plant, state, listOf(hot(day1))).action)
+
+        // An answer later that day raises K enough that the pot is now too small.
+        state = state.copy(belief = KBelief(logKMean = 0.0))
+        state = Engine.advance(plant, state, hot(day1))
+        assertEquals(Action.RepotOrWaterDaily, Engine.recommend(plant, state, listOf(hot(day2))).action)
+    }
+
+    @Test
     fun tooWetActsAtOnceButDryNeedsTwoAnswers() {
         val plant = Plant(CareProfile(WaterStrategy.DRY_TOP_PART), 30.0, Pot(2.0), Place.Indoor(44.8, LightClass.MEDIUM))
         val predicted = EngineState(depletion = 0.5)

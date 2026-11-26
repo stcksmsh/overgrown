@@ -79,7 +79,13 @@ fun midsummer(weather: List<ObsDay>): WeatherDay {
     )
 }
 
-data class Row(val scenario: String, val model: String, val results: List<PlantResult>)
+data class Row(val scenario: String, val model: String, val results: List<PlantResult>) {
+    /** Share of all prompts answered "too wet" or "ok". */
+    fun stillWetShare(): Double {
+        val prompts = results.sumOf { it.prompts }
+        return if (prompts == 0) 0.0 else results.sumOf { it.promptsAnsweredStillWet }.toDouble() / prompts
+    }
+}
 
 private fun List<Double>.median(): Double = if (isEmpty()) Double.NaN else sorted().let { s ->
     if (s.size % 2 == 1) s[s.size / 2] else (s[s.size / 2 - 1] + s[s.size / 2]) / 2
@@ -123,6 +129,17 @@ fun report(rows: List<Row>): String = buildString {
     appendLine()
     appendLine("The baseline uses the same inputs and learning rule as the engine. Its summer interval is the engine's own dry-out time for the plant on the site's mean July day with K = 1, so both start from the same knowledge.")
     appendLine()
+    appendLine("## Headline: prompts answered still wet")
+    appendLine()
+    appendLine("The share of prompts (water now, or check the soil) the person answered \"too wet\" or \"ok\": each is a prompt that came before the plant needed water, and the cost the person feels most. The engine asks for a soil check while it is unsure and the plant could already be dry, so more of its prompts find wet soil than the baseline's, which waits for its interval and lets the plant dry further (see stress days below).")
+    appendLine()
+    appendLine("| Scenario | Engine, still wet | Baseline, still wet |")
+    appendLine("|---|---:|---:|")
+    for ((scenario, scenarioRows) in rows.groupBy { it.scenario }) {
+        val share = { model: String -> scenarioRows.first { it.model == model }.stillWetShare() }
+        appendLine("| $scenario | ${pct(share("engine, provider ET0"))} | ${pct(share("baseline"))} |")
+    }
+    appendLine()
     appendLine("## Metrics")
     appendLine()
     appendLine("Per plant per year unless stated, averaged over plants.")
@@ -139,13 +156,11 @@ fun report(rows: List<Row>): String = buildString {
     appendLine("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     for (r in rows) {
         val perYear = { f: (PlantResult) -> Number -> r.results.map { f(it).toDouble() / it.years }.average() }
-        val prompts = r.results.sumOf { it.prompts }
-        val stillWet = r.results.sumOf { it.promptsAnsweredStillWet }
         val untils = r.results.mapNotNull { it.answersUntilAccurate?.toDouble() }
         val never = r.results.count { it.answersUntilAccurate == null }.toDouble() / r.results.size
         appendLine(
             "| ${r.scenario} | ${r.model} | ${f1(perYear { it.stressDays })} | ${f1(perYear { it.overwetDays })} | " +
-                "${f1(perYear { it.wateringsWhileWet })} | ${f1(perYear { it.prompts })} | ${pct(if (prompts == 0) 0.0 else stillWet.toDouble() / prompts)} | " +
+                "${f1(perYear { it.wateringsWhileWet })} | ${f1(perYear { it.prompts })} | ${pct(r.stillWetShare())} | " +
                 "${f1(r.results.flatMap { it.dryOutErrorsDays }.median())} | ${pct(r.results.flatMap { it.dryOutErrorsRelative }.median())} | " +
                 "${f1(untils.median())} | ${pct(never)} | ${pct(r.results.map { it.useError }.average())} | ${f1(perYear { it.repotPrompts })} |",
         )
