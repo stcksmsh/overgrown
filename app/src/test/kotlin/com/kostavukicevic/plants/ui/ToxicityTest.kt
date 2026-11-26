@@ -16,6 +16,7 @@ import com.kostavukicevic.plants.data.PlaceEntity
 import com.kostavukicevic.plants.data.PlantEntity
 import com.kostavukicevic.plants.ui.theme.OvergrownTheme
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -91,6 +92,16 @@ class ToxicityTest {
     @Test
     fun unknownAndNoKnownToxicityReadDifferently() {
         assertTrue(s(R.string.toxicity_unknown, "x") != s(R.string.toxicity_no_known, "x"))
+    }
+
+    /** BRIEF section 9's four points, and "unknown" claims nothing about why it is unknown. */
+    @Test
+    fun theWordingSaysWhatTheBriefRequiresAndNoMore() {
+        val d = s(R.string.toxicity_disclaimer)
+        for (part in listOf("not veterinary or medical advice", "incomplete", "The absence of a warning does not mean a plant is harmless", "contact a vet or a poison centre")) {
+            assertTrue("disclaimer lacks \"$part\": $d", d.contains(part))
+        }
+        assertEquals("Cats: unknown", s(R.string.toxicity_unknown, s(R.string.toxicity_cats)))
     }
 
     @Test
