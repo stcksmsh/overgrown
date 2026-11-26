@@ -85,6 +85,15 @@ class TalkBackTest {
         compose.onAllNodesWithText(s(id))[0].performClick()
     }
 
+    /**
+     * Taps the open dialog's Cancel. A dialog is composed in its own window, which can appear some frames after the
+     * tap that opened it on a busy machine, so wait for its Cancel first.
+     */
+    private fun cancel() {
+        waitForText(s(R.string.cancel))
+        compose.onNodeWithText(s(R.string.cancel)).performClick()
+    }
+
     private fun back() = compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
 
     /** The words TalkBack has for a node: its text, typed text and description, merged as TalkBack reads them. */
@@ -175,9 +184,11 @@ class TalkBackTest {
         compose.setContent { OvergrownTheme { SettingsScreen(onBack = {}) } }
         waitForText(s(R.string.import_json))
         tap(s(R.string.import_json))
+        waitForText(s(R.string.cancel))
         assertEveryClickableNamed("Import dialog")
         compose.onAllNodesWithText(s(R.string.cancel))[0].performClick()
         tap(s(R.string.about_font_licence))
+        waitForText(s(R.string.close))
         assertEveryClickableNamed("Font licence dialog")
         compose.onNodeWithText(s(R.string.close)).performClick()
 
@@ -210,19 +221,22 @@ class TalkBackTest {
         compose.onNodeWithContentDescription(editEntry).performScrollTo().performClick()
         waitForText(s(R.string.plant_edit_entry))
         assertEveryClickableNamed("Edit entry dialog")
-        compose.onNodeWithText(s(R.string.cancel)).performClick()
+        cancel()
 
         tap(s(R.string.plant_watered))
+        waitForText(s(R.string.no))
         assertEveryClickableNamed("Ran out of the bottom dialog")
         compose.onNodeWithText(s(R.string.no)).performClick()
 
         tap(s(R.string.photo_add))
+        waitForText(s(R.string.photo_add_title))
         assertEveryClickableNamed("Photo source dialog")
-        compose.onNodeWithText(s(R.string.cancel)).performClick()
+        cancel()
 
         // The plant's own Delete, not a history row's, which is named after its entry.
         compose.onNode(hasText(s(R.string.delete)) and hasClickAction() and !SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription))
             .performScrollTo().performClick()
+        waitForText(s(R.string.cancel))
         assertEveryClickableNamed("Delete plant dialog")
     }
 
@@ -251,7 +265,7 @@ class TalkBackTest {
         compose.onNode(hasContentDescription(s(R.string.wizard_acquired_button, "X").substringBefore(" X"), substring = true)).performScrollTo().performClick()
         waitForText(s(R.string.wizard_ok))
         assertEveryClickableNamed("Acquired date dialog")
-        compose.onNodeWithText(s(R.string.cancel)).performClick()
+        cancel()
         field(R.string.wizard_pot_width).performTextInput("20")
         field(R.string.wizard_plant_width).performTextInput("30")
         press(R.string.wizard_next_exposure)

@@ -79,7 +79,9 @@ class TransitionsTest {
         compose.mainClock.advanceTimeBy(Motion.MEDIUM2 / 2L - loading)
         assertTrue("halfway: today=$todayShown plant=$plantShown", todayShown && plantShown)
 
-        compose.mainClock.advanceTimeBy(Motion.MEDIUM2.toLong())
+        // The card, name and glyph start growing once the plant screen has them, so the push ends a full duration
+        // after the load, not after the tap. The load takes more frames on a busy machine.
+        compose.mainClock.advanceTimeBy(loading + Motion.MEDIUM2.toLong())
         assertTrue("after: today=$todayShown plant=$plantShown", !todayShown && plantShown)
     }
 
