@@ -14,7 +14,7 @@ Overgrown is published by Kosta Vukićević. Questions: open an issue at https:/
 
 Your places, plants, pots, watering and soil check-ins, pot weights (if you use calibration), the weather history the app keeps and your plant photos. All of it is stored only on your phone.
 
-**Photos.** A photo you take with the camera app or choose from the gallery is copied into the app's own storage, with its date. Photos are not uploaded and nothing analyses them. They are excluded from Android's Auto Backup and from device-to-device transfer, so a photo leaves your phone only in an export you start (see below). The app asks for no camera or storage permission: the camera app or Android's photo picker does the taking or choosing.
+**Photos.** A photo you take with the camera app or choose from the gallery is copied into the app's own storage, with its date. Photos are not uploaded and nothing analyses them. A photo up to 4 MB is stored byte for byte, so any metadata the camera wrote into it, including the place it was taken if location tagging is on, stays in the stored copy and goes into your export zip; a larger photo is re-encoded as a smaller JPEG, which drops that metadata. They are excluded from Android's Auto Backup and from device-to-device transfer, so a photo leaves your phone only in an export you start (see below). The app asks for no camera or storage permission: the camera app or Android's photo picker does the taking or choosing.
 
 If Android's Auto Backup is on for your phone, Android backs up the rest of this data (everything except the photos and the app's bundled care data) to your own Google account, as it does for other apps. Google, not the developer, handles that backup. You can turn it off in Android's settings.
 
