@@ -54,16 +54,24 @@ class CareDataPinTest {
     }
 
     @Test
-    fun exactlyTheFourReviewedSpeciesShip() {
+    fun exactlyTheSixReviewedSpeciesShip() {
         assertEquals(
-            setOf("buxus-sempervirens", "citrus-limon", "impatiens-walleriana", "ocimum-basilicum"),
+            setOf(
+                "buxus-sempervirens",
+                "chamaecyparis-lawsoniana",
+                "citrus-limon",
+                "dracaena-trifasciata",
+                "impatiens-walleriana",
+                "ocimum-basilicum",
+            ),
             ids("species", reviewed = true),
         )
+        assertEquals(emptySet(), ids("species", reviewed = false))
     }
 
     @Test
-    fun draftSpeciesStayOutOfTheAsset() {
-        assertTrue("dracaena-trifasciata" in ids("species", reviewed = false))
-        assertTrue("dracaena-trifasciata" !in ids("species", reviewed = true))
+    fun theCypressAndTheSnakePlantAreReviewed() {
+        assertTrue("chamaecyparis-lawsoniana" in ids("species", reviewed = true))
+        assertTrue("dracaena-trifasciata" in ids("species", reviewed = true))
     }
 }
