@@ -133,6 +133,30 @@ class CareDbTest {
     fun theEmptyAssetOfAnUnreviewedDatabaseParses() {
         val db = CareDb.parse("""{"schema_version":1,"data_version":1,"source_commit":"x","archetypes":{},"species":{}}""")
         assertEquals(0, db.species.size)
+        // Compiled before the name table: no "names" key at all.
+        assertEquals(emptyMap(), db.names)
+    }
+
+    @Test
+    fun nameRowsParseWithTheirArchetypeTaxonAndNamesPerLanguage() {
+        // Shaped like overgrown-data's compileName output.
+        val db = CareDb.parse(
+            """
+            {"schema_version":1,"data_version":1,"source_commit":"x","archetypes":{},"species":{},"names":{
+              "testus-namus":{"archetype":"outdoor-leafy-herb",
+                "taxon":{"accepted_name":"Testus namus","rank":"genus","wfo_id":"wfo-0000000001","wikidata_qid":"Q1"},
+                "common_names":{"en":[{"name":"Test mint","source":"https://example.org/a"}],"sr":[{"name":"Тест нана","source":"https://example.org/b"}]},
+                "sources":{"taxon":["https://example.org/a"]}}
+            }}
+            """.trimIndent(),
+        )
+        val row = db.names.getValue("testus-namus")
+        assertEquals("outdoor-leafy-herb", row.archetype)
+        assertEquals("Testus namus", row.taxon.acceptedName)
+        assertEquals("genus", row.taxon.rank)
+        assertEquals(listOf("Test mint"), row.commonNames.getValue("en").map { it.name })
+        assertEquals(listOf("Тест нана"), row.commonNames.getValue("sr").map { it.name })
+        assertEquals(listOf("https://example.org/a"), row.sources.getValue("taxon"))
     }
 
     /** Shaped like the compiled ocimum-basilicum entry: tender, 10 degC minimum, engine flags explicitly unknown. */

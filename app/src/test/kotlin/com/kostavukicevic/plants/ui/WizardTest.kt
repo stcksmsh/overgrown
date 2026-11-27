@@ -33,6 +33,7 @@ import com.kostavukicevic.plants.caredb.Archetype
 import com.kostavukicevic.plants.caredb.CareDb
 import com.kostavukicevic.plants.caredb.CommonName
 import com.kostavukicevic.plants.caredb.Context as CareContext
+import com.kostavukicevic.plants.caredb.NameRow
 import com.kostavukicevic.plants.caredb.Species
 import com.kostavukicevic.plants.caredb.Taxon
 import com.kostavukicevic.plants.caredb.Toxicity
@@ -77,8 +78,8 @@ class WizardTest {
 
     private fun s(id: Int, vararg args: Any) = compose.activity.getString(id, *args)
 
-    private fun start(plantId: Long? = null) = compose.setContent {
-        OvergrownTheme { AddPlantWizard(plantId, onDone = { done = true }, careDb = FIXTURE_DB) }
+    private fun start(plantId: Long? = null, db: CareDb = FIXTURE_DB) = compose.setContent {
+        OvergrownTheme { AddPlantWizard(plantId, onDone = { done = true }, careDb = db) }
     }
 
     private fun field(label: Int): SemanticsNodeInteraction = compose.onNode(hasSetTextAction() and hasText(s(label))).performScrollTo()
@@ -215,6 +216,61 @@ class WizardTest {
         for (s in db.species.values) {
             for (level in listOf(s.toxicity.forCats, s.toxicity.forDogs, s.toxicity.forHorses, s.toxicity.forHumans)) assertEquals(ToxicityLevel.UNKNOWN, level)
         }
+    }
+
+    @Test
+    fun nameRowsComeAfterSpeciesAndBeforeArchetypesWithNoSlug() {
+        // "mint" matches only the name row.
+        assertEquals(listOf(CareMatch(null, "outdoor-leafy-herb", "Test mint", "Testus namus")), searchCare(NAMES_DB, "mint"))
+        // "test" matches a species, a name row and the archetype the name row maps to: in that order.
+        val hits = searchCare(NAMES_DB, "test")
+        assertEquals(listOf("testus-plantus", null, null), hits.map { it.slug })
+        assertEquals(listOf("Test cactus", "Test mint", "Test leafy group"), hits.map { it.label })
+        assertEquals("outdoor-leafy-herb", hits[1].archetype)
+    }
+
+    @Test
+    fun aNameRowIsShownOnceAndNeverBesideItsOwnSpecies() {
+        // "Garden test mint" also matches "test", but the row is shown once, with its first matching name.
+        assertEquals(1, searchCare(NAMES_DB, "test").count { it.detail == "Testus namus" })
+        // The Testus plantus name row stays out while the species matches ...
+        assertEquals(listOf("testus-plantus"), searchCare(NAMES_DB, "testus plantus").map { it.slug })
+        // ... and shows when only its own name matches.
+        assertEquals(listOf(CareMatch(null, "indoor-succulent", "Test spike", "Testus plantus")), searchCare(NAMES_DB, "spike"))
+    }
+
+    @Test
+    fun aCyrillicQueryFindsTheSerbianNameInEitherCase() {
+        for (q in listOf("мушк", "МУШК")) {
+            assertEquals(listOf(CareMatch(null, "outdoor-leafy-herb", "Тест мушкатла", "Testus namus")), searchCare(NAMES_DB, q))
+        }
+        assertEquals(emptyList<CareMatch>(), searchCare(NAMES_DB, "м"))
+    }
+
+    @Test
+    fun pickingANameRowStoresItsArchetypeAndNoSpecies() {
+        val balcony = runBlocking { g.garden.savePlace(PlaceEntity(name = "Balcony", outdoor = true, latitude = 44.8, longitude = 20.5)) }
+        start(db = NAMES_DB)
+        field(R.string.wizard_name).performTextInput("mint")
+        compose.onNodeWithText("Testus namus").assertExists()
+        tap("Test mint")
+        compose.onNode(hasSetTextAction() and hasText("Test mint")).assertExists()
+        press(R.string.wizard_next_where)
+        tap(R.string.place_outdoor)
+        tap("Balcony")
+        press(R.string.wizard_next_pot)
+        field(R.string.wizard_pot_width).performTextInput("20")
+        field(R.string.wizard_plant_width).performTextInput("20")
+        press(R.string.wizard_next_exposure)
+        compose.onAllNodesWithText(s(R.string.answer_unsure))[0].performScrollTo().performClick()
+        compose.onAllNodesWithText(s(R.string.answer_unsure))[1].performScrollTo().performClick()
+        saveAndWait()
+
+        val p = plants().single()
+        assertEquals("Test mint", p.name)
+        assertNull(p.speciesSlug)
+        assertEquals("outdoor-leafy-herb", p.archetypeId)
+        assertEquals(balcony, p.placeId)
     }
 
     @Test
@@ -819,6 +875,27 @@ class WizardTest {
                     taxon = Taxon(acceptedName = "Testus plantus", rank = "species"),
                     commonNames = mapOf("en" to listOf(CommonName("Test cactus", "test"))),
                     toxicity = Toxicity(),
+                ),
+            ),
+        )
+
+        /** [FIXTURE_DB] with name-table rows, and an archetype a name row maps to. Made up like the rest. */
+        internal val NAMES_DB = FIXTURE_DB.copy(
+            archetypes = FIXTURE_DB.archetypes + ("outdoor-leafy-herb" to Archetype("Test leafy group")),
+            names = mapOf(
+                "testus-namus" to NameRow(
+                    archetype = "outdoor-leafy-herb",
+                    taxon = Taxon(acceptedName = "Testus namus", rank = "species"),
+                    commonNames = mapOf(
+                        "en" to listOf(CommonName("Test mint", "test"), CommonName("Garden test mint", "test")),
+                        "sr" to listOf(CommonName("Тест мушкатла", "test")),
+                    ),
+                ),
+                // The same taxon as the testus-plantus species.
+                "testus-plantus" to NameRow(
+                    archetype = "indoor-succulent",
+                    taxon = Taxon(acceptedName = "Testus plantus", rank = "species"),
+                    commonNames = mapOf("en" to listOf(CommonName("Test spike", "test"))),
                 ),
             ),
         )

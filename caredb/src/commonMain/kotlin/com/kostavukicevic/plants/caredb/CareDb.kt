@@ -23,6 +23,8 @@ data class CareDb(
     val archetypes: Map<String, Archetype> = emptyMap(),
     val species: Map<String, Species> = emptyMap(),
     val redirects: Map<String, String> = emptyMap(),
+    /** Reviewed name-table rows by slug. Assets compiled before the name table have none. */
+    val names: Map<String, NameRow> = emptyMap(),
 ) {
     /** Follows a retired slug to its current one. */
     fun species(slug: String): Species? = species[slug] ?: redirects[slug]?.let { species[it] }
@@ -108,6 +110,18 @@ data class Species(
         )
     }
 }
+
+/**
+ * Common names for a taxon with no species entry, mapped to an archetype (overgrown-data names schema). It carries no
+ * care data: a plant picked from it takes the archetype's defaults.
+ */
+@Serializable
+data class NameRow(
+    val archetype: String,
+    val taxon: Taxon,
+    @SerialName("common_names") val commonNames: Map<String, List<CommonName>> = emptyMap(),
+    val sources: Map<String, List<String>> = emptyMap(),
+)
 
 enum class Context { IN_GROUND, OUTDOOR_CONTAINER, INDOOR }
 
