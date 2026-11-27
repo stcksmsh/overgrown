@@ -10,7 +10,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -46,6 +45,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -191,9 +191,9 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit, careDb: C
 
             Text(stringResource(R.string.plant_check_in), style = Type.label, color = colors.ink)
             AnswerButtons { m -> act { g.garden.checkIn(plantId, m.name) } }
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
-                PrimaryButton(stringResource(R.string.plant_watered), onClick = { askRanOut = true }, modifier = Modifier.weight(1f))
-                SecondaryButton(stringResource(R.string.plant_snooze), onClick = { act { g.garden.snooze(plantId) } }, modifier = Modifier.weight(1f))
+            EvenRows(2) {
+                PrimaryButton(stringResource(R.string.plant_watered), onClick = { askRanOut = true })
+                SecondaryButton(stringResource(R.string.plant_snooze), onClick = { act { g.garden.snooze(plantId) } })
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2), verticalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
                 SecondaryButton(stringResource(R.string.plant_moved), onClick = { act { g.garden.moved(plantId) } })
@@ -204,7 +204,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit, careDb: C
             photoMessage?.let { Text(it, style = Type.secondary, color = colors.errorText) }
 
             SurfaceCard {
-                Text(stringResource(R.string.plant_history), style = Type.cardTitle, color = colors.ink)
+                Text(stringResource(R.string.plant_history), Modifier.semantics { heading() }, style = Type.cardTitle, color = colors.ink)
                 // Newest first; on the same day a photo comes after that day's events. Capped like the events,
                 // because the page is not a lazy list and every photo shown is decoded.
                 val shown = log.filter { "event:${it.id}" !in undo.hidden }.take(50)
@@ -241,7 +241,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit, careDb: C
             if (askDelete) {
                 AlertDialog(
                     onDismissRequest = { askDelete = false },
-                    title = { Text(stringResource(R.string.plant_delete_question, s.plant.name)) },
+                    title = { Text(stringResource(R.string.plant_delete_question, s.plant.name), Modifier.semantics { heading() }) },
                     confirmButton = { DeleteButton(onClick = { askDelete = false; act { g.garden.deletePlant(plantId) }; onBack() }) },
                     dismissButton = { TextButton(onClick = { askDelete = false }) { Text(stringResource(R.string.cancel)) } },
                 )
@@ -283,7 +283,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit, careDb: C
     if (askRanOut) {
         AlertDialog(
             onDismissRequest = { askRanOut = false },
-            title = { Text(stringResource(R.string.plant_watered_question)) },
+            title = { Text(stringResource(R.string.plant_watered_question), Modifier.semantics { heading() }) },
             confirmButton = { TextButton(onClick = { askRanOut = false; act { g.garden.watered(plantId, ranOutOfBottom = true) } }) { Text(stringResource(R.string.yes)) } },
             dismissButton = { TextButton(onClick = { askRanOut = false; act { g.garden.watered(plantId, ranOutOfBottom = false) } }) { Text(stringResource(R.string.no)) } },
         )
@@ -292,7 +292,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit, careDb: C
     if (askPhotoSource) {
         AlertDialog(
             onDismissRequest = { askPhotoSource = false },
-            title = { Text(stringResource(R.string.photo_add_title)) },
+            title = { Text(stringResource(R.string.photo_add_title), Modifier.semantics { heading() }) },
             text = {
                 Column {
                     Text(stringResource(R.string.photo_add_private), style = MaterialTheme.typography.bodySmall)
@@ -321,7 +321,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit, careDb: C
     deletePhoto?.let { photo ->
         AlertDialog(
             onDismissRequest = { deletePhoto = null },
-            title = { Text(stringResource(R.string.photo_delete_question)) },
+            title = { Text(stringResource(R.string.photo_delete_question), Modifier.semantics { heading() }) },
             confirmButton = {
                 DeleteButton(onClick = { deletePhoto = null; scope.launch { g.garden.deletePhoto(photo.id) } })
             },
@@ -429,7 +429,7 @@ private fun Calibration(plantId: Long) {
     var grams by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var error by remember { mutableStateOf(false) }
-    Text(stringResource(R.string.calibration_title), style = MaterialTheme.typography.titleMedium)
+    Text(stringResource(R.string.calibration_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
     Text(stringResource(R.string.calibration_hint), style = MaterialTheme.typography.bodySmall)
     OutlinedTextField(grams, { grams = it; error = false }, label = { Text(stringResource(R.string.calibration_grams)) }, isError = error, modifier = Modifier.fillMaxWidth())
     OutlinedTextField(note, { note = it }, label = { Text(stringResource(R.string.calibration_note)) }, modifier = Modifier.fillMaxWidth())

@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.data.ThemeChoice
@@ -112,7 +113,7 @@ fun SettingsScreen(onBack: () -> Unit, onRemindersHelp: () -> Unit) {
     }
 
     Page(stringResource(R.string.settings), onBack = onBack) {
-        Text(stringResource(R.string.settings_reminders), style = MaterialTheme.typography.titleMedium)
+        SectionTitle(stringResource(R.string.settings_reminders))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.settings_reminder_time), Modifier.weight(1f))
             val shown = time?.let { "${it.hour.toString().padStart(2, '0')}:${it.minute.toString().padStart(2, '0')}" } ?: ""
@@ -142,7 +143,7 @@ fun SettingsScreen(onBack: () -> Unit, onRemindersHelp: () -> Unit) {
         Text(stringResource(R.string.settings_units))
 
         HorizontalDivider()
-        Text(stringResource(R.string.settings_data), style = MaterialTheme.typography.titleMedium)
+        SectionTitle(stringResource(R.string.settings_data))
         TextButton(onClick = { exportZip.launch("overgrown-export.zip") }) { Text(stringResource(R.string.export_json)) }
         TextButton(onClick = { confirmImport = true }) { Text(stringResource(R.string.import_json)) }
         message?.let { Text(it) }
@@ -156,7 +157,7 @@ fun SettingsScreen(onBack: () -> Unit, onRemindersHelp: () -> Unit) {
         }
 
         HorizontalDivider()
-        Text(stringResource(R.string.about_title), style = MaterialTheme.typography.titleMedium)
+        SectionTitle(stringResource(R.string.about_title))
         Text(stringResource(R.string.about_version, g.versionName))
         Text(stringResource(R.string.about_dedication))
         Text(stringResource(R.string.about_built))
@@ -183,7 +184,7 @@ fun SettingsScreen(onBack: () -> Unit, onRemindersHelp: () -> Unit) {
             containerColor = block.fill,
             titleContentColor = block.text,
             textContentColor = block.text,
-            title = { Text(stringResource(R.string.import_confirm_title), style = Type.cardTitle) },
+            title = { Text(stringResource(R.string.import_confirm_title), Modifier.semantics { heading() }, style = Type.cardTitle) },
             text = { Text(stringResource(R.string.import_confirm_text), style = Type.body) },
             confirmButton = {
                 TextButton(onClick = {
@@ -226,3 +227,7 @@ fun SettingsScreen(onBack: () -> Unit, onRemindersHelp: () -> Unit) {
 
 private const val SOURCE_URL = "https://github.com/stcksmsh/overgrown"
 private const val PRIVACY_URL = "https://github.com/stcksmsh/overgrown/blob/main/docs/PRIVACY.md"
+
+/** A section of Settings, a heading TalkBack can jump to. */
+@Composable
+private fun SectionTitle(text: String) = Text(text, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
