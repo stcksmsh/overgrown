@@ -15,12 +15,11 @@ Handover for the next coordinator. Read this, then run `nonslop status` in BOTH 
 
 ## Done (this round)
 
-#55 four species; #56 flake fixes; #57 docs D53/D54 + PRIVACY; #58 weather credit + herb glyph; #59 unknown root_freeze_alerts = on outdoors (D57); #60 per-place credit (D55/D56); #61 cold/frost alerts for tender plants (D58); #62 toxicity display + disclaimers (D59); #63 reproducible build: R8 keep rule (D61), CI double build green at 606cbd0; #64 onboarding + battery guidance (D60); #66 G5 archetype test (`docs/reports/archetype-test.md`: 3 of 4 pass; basil fails on stress, mostly a simulation limit; four-in-five needs >= 5 species); #67 store metadata (`fastlane/`, draft F-Droid text, not published); #68 accessibility pass (48 dp, headings, 2.0x without clipping, contrast; owner accepted the outline and moss changes, D62). Data: PR #15 merged (cold fields never null; the most cautious of archetype and quotes unless two publishers agree). Last APK sent: 445465e.
+#55 four species; #56 flake fixes; #57 docs D53/D54 + PRIVACY; #58 weather credit + herb glyph; #59 unknown root_freeze_alerts = on outdoors (D57); #60 per-place credit (D55/D56); #61 cold/frost alerts for tender plants (D58); #62 toxicity display + disclaimers (D59); #63 reproducible build: R8 keep rule (D61), CI double build green at 606cbd0; #64 onboarding + battery guidance (D60); #66 G5 archetype test (`docs/reports/archetype-test.md`: 3 of 4 pass; basil fails on stress, mostly a simulation limit; four-in-five needs >= 5 species); #67 store metadata (`fastlane/`, draft F-Droid text, not published); #68 accessibility pass (48 dp, headings, 2.0x without clipping, contrast; owner accepted the outline and moss changes, D62). #70 Today names a single notification channel that is off; tap helpers in AccessibilityTest/TalkBackTest use semantic clicks against a load flake. Data: PR #15 merged (cold fields never null; the most cautious of archetype and quotes unless two publishers agree). Last APK sent: 445465e.
 
 ## In flight
 
 - Data PR #14 (settle Lawson cypress + snake plant): data-review minor at 30746d6. The marking commit waits until the owner's edit of the data repo `.nonslop.toml` line 35 ("Only the owner sets reviewed" -> the agent marks reviewed after a fresh data-review; toxicity other than `unknown` stays owner-only) reaches data main. He said he edited it; it was not on main when last checked.
-- App polish: per-channel notifications off shows no reminders-off line (its own slice).
 
 ## Next, in order
 
