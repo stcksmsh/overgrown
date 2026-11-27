@@ -1,0 +1,1 @@
+First version: watering reminders with a dose in millilitres, weather alerts for outdoor plants, soil check-ins that teach the app each plant, and a small open care database. No account, no analytics.
