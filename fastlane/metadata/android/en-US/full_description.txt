@@ -1,0 +1,24 @@
+Overgrown tells you when and how much to water each plant, and when to protect outdoor plants from the weather.
+
+It works from the care needs of the plant, its pot and place, the local weather, and your own answers about how the soil feels. When it is unsure, it asks. The more it learns a plant, the less often it asks.
+
+<b>What it does</b>
+• Watering reminders with a dose in millilitres, with Watered and Snooze buttons in the notification
+• Alerts for frost, heat, heavy rain and wind on outdoor plants
+• Fertilizing and repotting reminders from simple rules
+• Plants, places (indoor room or outdoor spot) and pots
+• Pick a plant from the care database, or choose a general care profile when your species is not in it
+• Light check with the phone's light sensor, reported as low, medium, high or direct light
+• Export and import of all your data
+
+<b>Private by design</b>
+• No account, no analytics, no advertising
+• No developer server: nothing you enter is sent to the developer
+• Works offline except for the weather forecast and place search, which the app fetches from Open-Meteo (open-meteo.com), with MET Norway as a fallback
+
+<b>Open source</b>
+The app is free and open source (GPL-3.0-only). The care database is open too (AGPL-3.0-only) and lives in a separate repository. The care database is still small: it covers a handful of species and twelve general care profiles.
+
+Overgrown is written by AI coding agents under the direction of its developer, who reviews the code.
+
+Weather data by Open-Meteo.com. The app is in English only.
