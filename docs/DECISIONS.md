@@ -391,7 +391,7 @@ CI comes back in a cheaper form, on the advisor's answer to the status report (a
 
 **Repot advice is given once per pot.** The sim report showed 11.4 repot prompts per plant-year for Belgrade indoor. All of them came from one of 30 plants, which got 3434 prompts in 3653 days. That plant really outgrows its pot (true use 445 ml/day against 451 ml capacity), so the advice was right but repeated every day. The repeats also blocked every check-in, which froze K. The engine now gives "Repot or water daily" once for a pot (`EngineState.repotAdvisedFor`) and then falls back to the normal rules. It is given again after a Repotted event, or when the plant's pot changes. A move does not repeat it, because it changes the plant's water use, not what the pot holds. Whether the advice was given is judged with the K at the start of the day (`kAtDayStart`), so an answer later in the day cannot mark it as given before it was shown. After the change, the plant gets 1 repot prompt in ten years, and Belgrade indoor repot prompts go from 11.4 to 0.0 per plant-year.
 
-Open follow-up: `data/Planner` replays history with the current pot, so a pot edit without a Repotted event, or a backdated acquisition date, can mark the advice as given before it was shown. The harness dry-out error for Belgrade indoor now reads 0.0 because the median is pooled over all refills; a per-plant median would fix the metric.
+Open follow-up: `data/Planner` replays history with the current pot, so a pot edit without a Repotted event, or a backdated acquisition date, can mark the advice as given before it was shown. The harness half (the dry-out error pooled over all refills, which made Belgrade indoor read 0.0) is resolved by D64. The Planner half waits on an owner decision about recording pot-change and added-on times: nullable `PlantEntity` columns with an AutoMigration, new event types, or leave it.
 
 ## D52. Boris voice (PR #53)
 
@@ -510,3 +510,16 @@ BRIEF section 10 (G6), DESIGN.md section 8.
   - A selected chip or tile shows its state by its moss fill; on the dark ground it was 2.89:1. Moss goes from `#2F6B3F` to `#31703F` (3.0:1 there; white on it stays 6.0:1). This is a DESIGN colour change and an owner decision; DESIGN.md was outside the slice and still says `#2F6B3F`.
   - Moss on a card or dialog surface is under 3:1 in dark (2.70:1). A moss selection on a surface (a wizard tile, the chosen answer in the edit-entry dialog) therefore also shows a check mark. `ContrastTest` lets a graphic pair under 3:1 pass only when it names that mark, and `assertSelectionsMarked` fails any chosen radio button without it.
 - **Not checked, on purpose.** The learning dots and the unfilled wizard progress segments are below 3:1, but the same information is in text next to them ("2 of about 8 answers", "3 of 4"). A disabled button is exempt under WCAG. Decorative glyphs have no description and are not focusable.
+
+## D63. Today names a single notification channel that is off (PR #70)
+
+Today's reminders-off line also shows when one of the app's reminder channels, watering reminders (`prompts`) or weather alerts (`alerts`), is turned off in the system's settings. The line names the channel, and its button opens that channel's settings (`ACTION_CHANNEL_NOTIFICATION_SETTINGS` with the app package and the channel id). A phone without that page falls back to the app's notification settings, then to the app's details page.
+
+- The `status` channel does not count. It only reports background work, so turning it off stops no reminder.
+- A channel is off only when its importance is `IMPORTANCE_NONE`. A channel that has not been created yet counts as on.
+- Each channel has its own sentence (`notifications_prompts_off`, `notifications_alerts_off`) instead of a format string built from the channel name, so each line can say what is lost. Plain text, no Boris twin.
+- When both channels are off, or the app's own switch is off, the line is the general one and its button opens the app's notification settings, as before.
+
+## D64. Dry-out error is a median over plants (D51 follow-up) (PR #71)
+
+The harness and archetype test take the dry-out error as the median over plants of each plant's own median error over its refills with a dry-out prediction, in days and relative. The old median, pooled over all refills, let a plant with thousands of refills decide the metric; Belgrade indoor read 0.0 for that reason. Plants with no dry-out prediction (none of their refills had both crossings within the 90-day horizon) have no error, are left out, and are counted in both reports. A run where no plant has a prediction is no data, not 0.0. Because each plant's median is a whole or half day, the median over plants is a multiple of a quarter day, so the archetype test's 20 % dry-out tolerance allows no increase below 1.25 days. No archetype verdict changed.

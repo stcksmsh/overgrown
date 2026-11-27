@@ -15,7 +15,7 @@ Handover for the next coordinator. Read this, then run `nonslop status` in BOTH 
 
 ## Done (this round)
 
-#55 four species; #56 flake fixes; #57 docs D53/D54 + PRIVACY; #58 weather credit + herb glyph; #59 unknown root_freeze_alerts = on outdoors (D57); #60 per-place credit (D55/D56); #61 cold/frost alerts for tender plants (D58); #62 toxicity display + disclaimers (D59); #63 reproducible build: R8 keep rule (D61), CI double build green at 606cbd0; #64 onboarding + battery guidance (D60); #66 G5 archetype test (`docs/reports/archetype-test.md`: 3 of 4 pass; basil fails on stress, mostly a simulation limit; four-in-five needs >= 5 species); #67 store metadata (`fastlane/`, draft F-Droid text, not published); #68 accessibility pass (48 dp, headings, 2.0x without clipping, contrast; owner accepted the outline and moss changes, D62). #70 Today names a single notification channel that is off; tap helpers in AccessibilityTest/TalkBackTest use semantic clicks against a load flake. Data: PR #15 merged (cold fields never null; the most cautious of archetype and quotes unless two publishers agree). Last APK sent: 445465e.
+#55 four species; #56 flake fixes; #57 docs D53/D54 + PRIVACY; #58 weather credit + herb glyph; #59 unknown root_freeze_alerts = on outdoors (D57); #60 per-place credit (D55/D56); #61 cold/frost alerts for tender plants (D58); #62 toxicity display + disclaimers (D59); #63 reproducible build: R8 keep rule (D61), CI double build green at 606cbd0; #64 onboarding + battery guidance (D60); #66 G5 archetype test (`docs/reports/archetype-test.md`: 3 of 4 pass; basil fails on stress, mostly a simulation limit; four-in-five needs >= 5 species); #67 store metadata (`fastlane/`, draft F-Droid text, not published); #68 accessibility pass (48 dp, headings, 2.0x without clipping, contrast; owner accepted the outline and moss changes, D62). #70 Today names a single notification channel that is off; tap helpers in AccessibilityTest/TalkBackTest use semantic clicks against a load flake. #71 per-plant median dry-out error (D64): reports regenerated; engine still lower or tied vs baseline in days, lower in relative error everywhere; archetype verdicts unchanged. Data: PR #15 merged (cold fields never null; the most cautious of archetype and quotes unless two publishers agree). Last APK sent: 445465e.
 
 ## In flight
 
@@ -26,12 +26,13 @@ Handover for the next coordinator. Read this, then run `nonslop status` in BOTH 
 1. After #14: data next-entry batch (tomato, chilli pepper, sweet pepper, rosemary, lavender).
 2. Data PR #15 minors: item 7 first sentence vs the two-publisher exception; next-entry:50 typo; copy the two-publisher exception into the D entry.
 3. Data-review skill wording: an explicit null on a cold field turns alerts off, it does not fall back.
-4. Engine/Planner: repot advice re-arm on pot edit and backdated acquisition (D51 follow-up); harness per-plant median dry-out error.
+4. Engine/Planner: repot advice re-arm on pot edit and backdated acquisition (D51 follow-up; waits on the pot-history decision below).
 5. Data PR #12 review minors: two runners starting at once both pass the one-runner check; diff-merge note should quote both drafts; PIPELINE lacks the 5-plant cap; data-review scratch wording.
 
 ## Waiting on the owner
 
 - The `.nonslop.toml` change on data main (blocks the #14 marking commit).
+- Pot history (D51 follow-up): record pot-change and added-on times? A: nullable PlantEntity columns + AutoMigration; B: new event types; C: leave it.
 - Optional CI changes: upload both APKs and mapping.txt when the double-build compare fails (snippet in the PR #63 body); run `:engine-sim:archetypeReport` in the "Simulation report is current" step.
 - Boris: cold nights 30 Nov to 2 Dec (drop this item once past 2 Dec): insulate, lift off the floor, against the wall; below -5 °C into an unheated room.
 - Weigh Boris daily (nursery pot only, same time, note rain); first full mark at the next real watering (G4 exit condition, G5 input). More plants are coming: he reports gaps.
