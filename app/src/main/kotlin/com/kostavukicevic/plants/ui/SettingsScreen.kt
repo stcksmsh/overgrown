@@ -28,7 +28,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -46,12 +45,11 @@ import kotlinx.datetime.LocalTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onRemindersHelp: () -> Unit) {
     val g = rememberGraph()
     val c = LocalContext.current
     val res = LocalResources.current
     val scope = rememberCoroutineScope()
-    val uri = LocalUriHandler.current
     val developer by g.settings.developerMode.collectAsState(false)
     val weighing by g.settings.weighing.collectAsState(false)
     val theme by g.settings.theme.collectAsState(ThemeChoice.SYSTEM)
@@ -124,6 +122,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
         }
         Text(stringResource(R.string.settings_reminder_time_hint), style = MaterialTheme.typography.bodySmall)
+        TextButton(onClick = onRemindersHelp) { Text(stringResource(R.string.notifications_help)) }
 
         HorizontalDivider()
         Choice(
@@ -163,15 +162,15 @@ fun SettingsScreen(onBack: () -> Unit) {
         Text(stringResource(R.string.about_built))
         Text(stringResource(R.string.about_licence))
         Text(stringResource(R.string.about_weather, OpenMeteo.CREDIT, OpenMeteo.LICENCE))
-        TextButton(onClick = { uri.openUri(OpenMeteo.CREDIT_URL) }) { Text(OpenMeteo.CREDIT_URL) }
+        TextButton(onClick = { openLink(c, OpenMeteo.CREDIT_URL) }) { Text(OpenMeteo.CREDIT_URL) }
         Text(stringResource(R.string.about_weather, MetNorway.CREDIT, MetNorway.LICENCE))
-        TextButton(onClick = { uri.openUri(MetNorway.LICENCE_URL) }) { Text(MetNorway.LICENCE_URL) }
+        TextButton(onClick = { openLink(c, MetNorway.LICENCE_URL) }) { Text(MetNorway.LICENCE_URL) }
         Text(stringResource(R.string.about_data))
         Text(stringResource(R.string.about_privacy))
-        TextButton(onClick = { uri.openUri(PRIVACY_URL) }) { Text(stringResource(R.string.about_privacy_link)) }
+        TextButton(onClick = { openLink(c, PRIVACY_URL) }) { Text(stringResource(R.string.about_privacy_link)) }
         Text(stringResource(R.string.about_care_notice), style = MaterialTheme.typography.bodySmall)
         Text(stringResource(R.string.about_care_no_guarantee), style = MaterialTheme.typography.bodySmall)
-        TextButton(onClick = { uri.openUri(SOURCE_URL) }) { Text(stringResource(R.string.about_source)) }
+        TextButton(onClick = { openLink(c, SOURCE_URL) }) { Text(stringResource(R.string.about_source)) }
         Text(stringResource(R.string.about_font))
         TextButton(onClick = { fontLicence = true }) { Text(stringResource(R.string.about_font_licence)) }
     }

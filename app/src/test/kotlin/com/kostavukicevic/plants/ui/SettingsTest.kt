@@ -48,7 +48,7 @@ class SettingsTest {
     @Before
     fun setUp() {
         g = useTestDatabase()
-        compose.setContent { OvergrownTheme { SettingsScreen(onBack = {}) } }
+        compose.setContent { OvergrownTheme { SettingsScreen(onBack = {}, onRemindersHelp = {}) } }
     }
 
     private fun s(id: Int, vararg args: Any) = compose.activity.getString(id, *args)

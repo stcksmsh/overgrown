@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!--
+    Notification permission and battery-saver guidance for a new user. Plain text only: no Boris twins for
+    permission text. The rationale shown before the system's permission dialog is notifications_reason in strings.xml.
+-->
+<resources>
+    <string name="notifications_not_now">Not now</string>
+    <!-- A line on Today while notifications are off for the app. -->
+    <string name="notifications_off">Reminders are off, so Overgrown cannot tell you when a plant needs water or protection from weather.</string>
+    <string name="notifications_open_settings">Notification settings</string>
+    <!-- Not "Dismiss": an alert card's Dismiss can be on the same screen. -->
+    <string name="notifications_off_hide">Hide</string>
+
+    <!-- The Settings row and the title of the screen it opens. -->
+    <string name="notifications_help">Reminders not arriving?</string>
+    <string name="notifications_help_text">Overgrown checks your plants once a day in the background. Some phones stop background work to save battery, and then reminders do not arrive.</string>
+    <string name="notifications_help_setting">Check the battery setting for Overgrown: set it to Unrestricted, or Don\'t optimise. In the list that opens, find Overgrown; on some phones this setting is under App info, Battery.</string>
+    <string name="notifications_help_battery">Open battery settings</string>
+    <string name="notifications_help_vendor">Some makers add their own battery savers. dontkillmyapp.com has the steps for each make of phone.</string>
+    <string name="notifications_help_vendor_link">Steps for your phone</string>
+
+    <!-- Shown when a link is tapped on a phone with no browser. -->
+    <string name="link_no_app">No app on this phone can open links.</string>
+</resources>

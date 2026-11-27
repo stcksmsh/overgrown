@@ -98,6 +98,7 @@ class ToxicityTest {
     @Test
     fun theWordingSaysWhatTheBriefRequiresAndNoMore() {
         val d = s(R.string.toxicity_disclaimer)
+        assertTrue("disclaimer does not open with \"General information\": $d", d.startsWith("General information"))
         for (part in listOf("not veterinary or medical advice", "incomplete", "The absence of a warning does not mean a plant is harmless", "contact a vet or a poison centre")) {
             assertTrue("disclaimer lacks \"$part\": $d", d.contains(part))
         }

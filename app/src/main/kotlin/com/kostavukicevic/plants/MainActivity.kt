@@ -85,6 +85,8 @@ import com.kostavukicevic.plants.ui.LocalSharedTransition
 import com.kostavukicevic.plants.ui.PlacesScreen
 import com.kostavukicevic.plants.ui.PlantScreen
 import com.kostavukicevic.plants.ui.PlantsScreen
+import com.kostavukicevic.plants.ui.NotificationQuestion
+import com.kostavukicevic.plants.ui.RemindersHelpScreen
 import com.kostavukicevic.plants.ui.SettingsScreen
 import com.kostavukicevic.plants.ui.TodayScreen
 import com.kostavukicevic.plants.ui.UndoDelete
@@ -168,6 +170,7 @@ sealed interface Screen {
     data class EditPlant(val id: Long?) : Screen
     data class EditPlace(val id: Long?) : Screen
     data object Settings : Screen
+    data object RemindersHelp : Screen
 
     fun key(): String = when (this) {
         Today -> "today"
@@ -177,6 +180,7 @@ sealed interface Screen {
         is EditPlant -> "editplant:${id ?: 0}"
         is EditPlace -> "editplace:${id ?: 0}"
         Settings -> "settings"
+        RemindersHelp -> "reminders"
     }
 
     companion object {
@@ -189,6 +193,7 @@ sealed interface Screen {
                 "editplant" -> EditPlant(arg.takeIf { it > 0 })
                 "editplace" -> EditPlace(arg.takeIf { it > 0 })
                 "settings" -> Settings
+                "reminders" -> RemindersHelp
                 else -> Today
             }
         }
@@ -280,7 +285,8 @@ internal fun App(openPlant: Long?) {
                     is Screen.Plant -> PlantScreen(screen.id, onBack = { back(screen) }, onEdit = { go(screen, Screen.EditPlant(screen.id)) })
                     is Screen.EditPlant -> AddPlantWizard(screen.id, onDone = { back(screen) })
                     is Screen.EditPlace -> EditPlaceScreen(screen.id, onDone = { back(screen) })
-                    Screen.Settings -> SettingsScreen(onBack = { back(screen) })
+                    Screen.Settings -> SettingsScreen(onBack = { back(screen) }, onRemindersHelp = { go(screen, Screen.RemindersHelp) })
+                    Screen.RemindersHelp -> RemindersHelpScreen(onBack = { back(screen) })
                 }
             }
             if (screen.isTab) {
@@ -294,6 +300,8 @@ internal fun App(openPlant: Long?) {
         }
     }
 
+    // Over every screen: a plant added from Plants returns there, not to Today.
+    NotificationQuestion()
     Scaffold(
         // The screens inside draw their own top bar and status-bar inset.
         contentWindowInsets = WindowInsets(0),

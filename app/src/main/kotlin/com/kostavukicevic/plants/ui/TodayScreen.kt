@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.ui
 
-import android.Manifest
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,12 +8,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,20 +20,19 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
 import com.kostavukicevic.plants.voicedPlural
 import com.kostavukicevic.plants.voicedResource
 import com.kostavukicevic.plants.data.AlertEvent
 import com.kostavukicevic.plants.data.PlantStatus
-import com.kostavukicevic.plants.notify.Notifier
 import com.kostavukicevic.plants.ui.theme.Overgrown
 import com.kostavukicevic.plants.ui.theme.Spacing
 import kotlinx.coroutines.CancellationException
@@ -74,8 +66,16 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
     val failed by g.fetchFailed.collectAsState()
     val scope = rememberCoroutineScope()
 
-    var notifAllowed by remember { mutableStateOf(Notifier.allowed(c)) }
-    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notifAllowed = it }
+    // Read again on each return, so a switch turned on in the system's settings takes the line away, and on each
+    // change, which NotificationQuestion signals once it is answered.
+    var off by remember(tick) { mutableStateOf(remindersOff(c)) }
+    LifecycleResumeEffect(Unit) {
+        off = remindersOff(c)
+        onPauseOrDispose {}
+    }
+    // The line waits while NotificationQuestion asks.
+    val asking = remember(tick) { Onboarding.askNow(c) }
+    var dismissed by remember(tick) { mutableStateOf(Onboarding.dismissed(c)) }
 
     // Recording reloads this screen in place, as on the plant screen.
     fun act(block: suspend () -> Unit) = scope.launch { block(); g.scheduler.reschedule(); g.changed() }
@@ -90,14 +90,7 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
     ) {
         val list = statuses ?: return@Page
         val visible = (events ?: return@Page).filterNot { it.key in answered }
-        if (list.isNotEmpty() && !notifAllowed && Build.VERSION.SDK_INT >= 33) {
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(Spacing.cardPadding)) {
-                    Text(stringResource(R.string.notifications_reason))
-                    Button(onClick = { askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS) }) { Text(stringResource(R.string.notifications_allow)) }
-                }
-            }
-        }
+        if (list.isNotEmpty() && off && !dismissed && !asking) RemindersOffLine(onDismiss = { dismissed = true; Onboarding.dismiss(c) })
         TodayContent(
             list,
             g.garden.today(),
@@ -126,7 +119,6 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
             }
         }
     }
-    LaunchedEffect(Unit) { notifAllowed = Notifier.allowed(c) }
 }
 
 /**
@@ -165,12 +157,12 @@ internal fun WeatherStatus(fetched: Pair<Long, List<String>>?, now: Instant, ref
  */
 @Composable
 internal fun WeatherCredit(provider: String) {
-    val uri = LocalUriHandler.current
+    val c = LocalContext.current
     val met = provider == "MET_NORWAY"
     Text(
         stringResource(if (met) R.string.weather_credit_met else R.string.weather_credit_open_meteo),
         modifier = Modifier.heightIn(min = Spacing.minTouchTarget).wrapContentHeight()
-            .clickable(role = Role.Button) { uri.openUri(if (met) MetNorway.CREDIT_URL else OpenMeteo.CREDIT_URL) },
+            .clickable(role = Role.Button) { openLink(c, if (met) MetNorway.CREDIT_URL else OpenMeteo.CREDIT_URL) },
         style = Type.secondary,
         color = Overgrown.colors.muted,
         textDecoration = TextDecoration.Underline,
