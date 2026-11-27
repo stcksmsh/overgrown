@@ -56,7 +56,10 @@ data class PlantResult(
 
 class Harness(private val weather: List<ObsDay>, private val withEt0: Boolean, private val forecastDays: Int = 7) {
 
-    private val horizonDays = 90
+    companion object {
+        /** Days after a refill within which both dry-out days must fall for the refill to get a prediction; the report quotes it. */
+        const val HORIZON_DAYS = 90
+    }
 
     /**
      * [plant] is what the model is told. It differs from the true plant [tp] only when a test gives the model another
@@ -192,7 +195,7 @@ class Harness(private val weather: List<ObsDay>, private val withEt0: Boolean, p
     /** Days from [start] until the model, left alone with the real weather, believes the plant reaches its dry fraction. */
     private fun <S> predictCrossing(model: WateringModel<S>, plant: Plant, from: S, start: Int, dryFraction: Double): Int? {
         var s = from
-        for (j in start until min(weather.size, start + horizonDays)) {
+        for (j in start until min(weather.size, start + HORIZON_DAYS)) {
             if (model.predictedDepletion(plant, s, weather[j].date) >= dryFraction) return j - start
             s = model.advance(plant, s, weather[j].toWeatherDay(withEt0))
         }
@@ -202,7 +205,7 @@ class Harness(private val weather: List<ObsDay>, private val withEt0: Boolean, p
     /** Days from [start] until the true plant, left alone, reaches the dry fraction. */
     private fun truthCrossing(tp: TruthPlant, from: Double, start: Int, dryFraction: Double): Int? {
         var d = from
-        for (j in start until min(weather.size, start + horizonDays)) {
+        for (j in start until min(weather.size, start + HORIZON_DAYS)) {
             if (d >= dryFraction) return j - start
             d = Truth.day(tp, weather[j], d).endDepletion
         }

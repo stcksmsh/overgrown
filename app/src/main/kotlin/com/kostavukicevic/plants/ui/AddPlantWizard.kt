@@ -411,15 +411,15 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
         scope.launch {
             try {
                 // The save outlives the wizard; only closing it waits on it here.
-                val newOutdoorPlace = g.outlive {
-                    savePlantAndPlace(g, st, plantId, known).also {
-                        if (plantId == null) Onboarding.plantAdded(context)
-                        g.scheduler.reschedule(); g.changed()
-                    }
+                g.outlive {
+                    val newOutdoorPlace = savePlantAndPlace(g, st, plantId, known)
+                    if (plantId == null) Onboarding.plantAdded(context)
+                    g.scheduler.reschedule(); g.changed()
+                    // A new outdoor place has no forecast yet, as in EditPlaceScreen. Launched, not awaited, so the
+                    // wizard closes without waiting for it and leaving the wizard first does not stop it.
+                    if (newOutdoorPlace) g.scope.launch { refreshAfterSave(g) }
                 }
                 onDone()
-                // A new outdoor place has no forecast yet, as in EditPlaceScreen; the screen does not wait for it.
-                if (newOutdoorPlace) g.scope.launch { refreshAfterSave(g) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

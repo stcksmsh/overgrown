@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
@@ -45,7 +46,9 @@ import com.kostavukicevic.plants.ui.theme.OvergrownTheme
 import com.kostavukicevic.plants.weather.MetNorway
 import com.kostavukicevic.plants.weather.WeatherService
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onEach
@@ -430,6 +433,54 @@ class NavigationTest {
         compose.runOnUiThread { onScreen.value = false }
         compose.mainClock.advanceTimeBy(SNACKBAR_GONE)
         compose.waitForIdle()
+        assertEquals(1, runBlocking { g.garden.events(boris).first().size })
+    }
+
+    @Test
+    fun undoAndLeavingTheScreenInOneFrameKeepsTheEvent() {
+        val boris = plant(g, "Boris", place(g, "Hall"))
+        runBlocking { g.garden.watered(boris, ranOutOfBottom = false) }
+        val onScreen = mutableStateOf(true)
+        var screenScope: CoroutineScope? = null
+        var undo: UndoDelete? = null
+        compose.setContent {
+            OvergrownTheme {
+                val snackbar = remember { SnackbarHostState() }
+                Box {
+                    if (onScreen.value) {
+                        val scope = rememberCoroutineScope()
+                        screenScope = scope
+                        undo = remember { UndoDelete(snackbar, scope) }
+                    }
+                    SnackbarHost(snackbar)
+                }
+            }
+        }
+        compose.waitForIdle()
+        val id = runBlocking { g.garden.events(boris).first().single().id }
+        var committed = false
+        compose.runOnUiThread {
+            undo!!.delete("event:$id", s(R.string.deleted, "Watered"), s(R.string.undo), s(R.string.delete_failed, "Watered")) {
+                committed = true
+                g.garden.deleteEvent(id)
+            }
+        }
+        waitFor(s(R.string.deleted, "Watered"))
+
+        compose.mainClock.autoAdvance = false
+        val undoButton = compose.onNodeWithText(s(R.string.undo)).fetchSemanticsNode()
+        // The Undo click and the screen going away land before the coroutine waiting on the snackbar runs again: its
+        // scope is cancelled in the same call, as when the frame that drops the screen comes before that coroutine.
+        compose.runOnUiThread {
+            undoButton.config[SemanticsActions.OnClick].action!!.invoke()
+            onScreen.value = false
+            screenScope!!.cancel()
+        }
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(SNACKBAR_GONE)
+        compose.waitForIdle()
+        assertFalse(committed)
         assertEquals(1, runBlocking { g.garden.events(boris).first().size })
     }
 

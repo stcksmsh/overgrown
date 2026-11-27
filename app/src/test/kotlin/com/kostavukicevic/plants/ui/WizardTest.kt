@@ -9,6 +9,7 @@ import android.location.Location
 import android.location.LocationManager
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -40,12 +41,21 @@ import com.kostavukicevic.plants.caredb.Toxicity
 import com.kostavukicevic.plants.caredb.ToxicityLevel
 import com.kostavukicevic.plants.caredb.toProfile
 import com.kostavukicevic.plants.data.CareSource
+import com.kostavukicevic.plants.data.Garden
+import com.kostavukicevic.plants.data.GardenDb
 import com.kostavukicevic.plants.data.PlaceEntity
 import com.kostavukicevic.plants.data.PlantEntity
 import com.kostavukicevic.plants.data.Planner
 import com.kostavukicevic.plants.ui.theme.OvergrownTheme
+import com.kostavukicevic.plants.weather.HttpResponse
+import com.kostavukicevic.plants.weather.HttpTransport
+import com.kostavukicevic.plants.weather.InMemoryResponseStore
+import com.kostavukicevic.plants.weather.MetNorway
+import com.kostavukicevic.plants.weather.OpenMeteo
+import com.kostavukicevic.plants.weather.WeatherService
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.TimeZone
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -57,7 +67,9 @@ import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import java.io.File
 import kotlin.math.PI
+import kotlin.time.Clock
 
 /** The add-plant wizard driven through its real screens, saving to an in-memory database. */
 @RunWith(RobolectricTestRunner::class)
@@ -145,6 +157,52 @@ class WizardTest {
         assertFalse(place.outdoor)
         assertEquals(44.8, place.latitude, 1e-9)
         assertEquals("HIGH", place.lightClass)
+    }
+
+    @Test
+    fun aNewOutdoorPlaceGetsItsForecastEvenIfTheWizardIsLeftDuringTheSave() {
+        // Every weather request is recorded and refused; one for the new place's coordinates is the forecast fetch.
+        val requests = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val db = Garden::class.java.getDeclaredField("db").apply { isAccessible = true }.get(g.garden) as GardenDb
+        val now = { Clock.System.now() }
+        val http = HttpTransport { url, _ -> requests += url; HttpResponse(503, emptyMap(), "") }
+        val om = OpenMeteo(http, InMemoryResponseStore(), now)
+        val met = MetNorway(http, InMemoryResponseStore(), now, "test", TimeZone.UTC)
+        val garden = Garden(db, g.settings, WeatherService(om, met, g.settings), om, { null }, now, { TimeZone.currentSystemDefault() }, File(compose.activity.filesDir, "photos"))
+        Graph::class.java.getDeclaredField("garden").apply { isAccessible = true }.set(g, garden)
+        // The plant's write is held until the wizard is gone.
+        val reached = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        interceptDao(g) { method, args, real ->
+            if (method.name == "upsertPlant") { reached.countDown(); release.await() }
+            callReal(method, args, real)
+        }
+        val open = mutableStateOf(true)
+        compose.setContent { OvergrownTheme { if (open.value) AddPlantWizard(null, onDone = { done = true }, careDb = FIXTURE_DB) } }
+
+        field(R.string.wizard_name).performTextInput("Zzplant")
+        press(R.string.wizard_next_where)
+        tap(R.string.place_outdoor)
+        field(R.string.wizard_place_name).performTextInput("Terrace")
+        tap(R.string.wizard_advanced)
+        field(R.string.field_latitude).performTextInput("44.8")
+        field(R.string.field_longitude).performTextInput("20.5")
+        press(R.string.wizard_next_pot)
+        field(R.string.wizard_pot_width).performTextInput("20")
+        field(R.string.wizard_plant_width).performTextInput("20")
+        press(R.string.wizard_next_exposure)
+        compose.onAllNodesWithText(s(R.string.answer_unsure))[0].performScrollTo().performClick()
+        compose.onAllNodesWithText(s(R.string.answer_unsure))[1].performScrollTo().performClick()
+        press(R.string.save)
+        assertTrue(reached.await(5, java.util.concurrent.TimeUnit.SECONDS))
+
+        compose.runOnUiThread { open.value = false }
+        compose.waitForIdle()
+        release.countDown()
+
+        compose.waitUntil(10_000) { synchronized(requests) { requests.any { "api.open-meteo.com/v1/forecast?latitude=44.8" in it } } }
+        assertEquals("Terrace", places().single().name)
+        assertFalse(done)
     }
 
     // Archetype search matches the archetype's own name, not its description, so "tomato" finds nothing.

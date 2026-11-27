@@ -167,7 +167,7 @@ val compileCareAsset = tasks.register<CompileCareAsset>("compileCareAsset") {
 
 // NameTablePinTest reads the generated asset from disk, so the tests need it built first and rerun when it changes.
 tasks.withType<Test>().configureEach {
-    inputs.files(compileCareAsset).withPropertyName("careAsset")
+    inputs.files(compileCareAsset).withPropertyName("careAsset").withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 androidComponents {
