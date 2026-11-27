@@ -553,3 +553,11 @@ The `overgrown-data` submodule moves from `f794c39` to `4d3196f` (data PR #17). 
 The `overgrown-data` submodule moves from `4d3196f` to `ab7d73a` (data PR #18). Forty more name-table rows are `reviewed`, fifty in total, so add-plant search (D67) finds forty more names. This is user-visible: for example "peace lily" now gives a name row for `indoor-moisture-loving`. `NameTablePinTest` asserts the fifty row ids in the real compiled asset and the "peace lily" search. The simulation report is unchanged; the archetype report only carries the new data commit.
 
 Two build gaps found in the review of PR #76 are closed. `compileCareAsset` now lists `names/**` among its inputs, so editing a name row reruns it instead of relying on the pinned commit changing. App unit tests declare the task's output as an input, which makes Gradle run the task before them and rerun the tests when the asset changes, rather than depending on task order. The asset bytes for the same data are unchanged.
+
+## D70. Care-data pin moved to ninety-nine reviewed names
+
+The `overgrown-data` submodule moves from `ab7d73a` to `dec2e85`. 49 more reviewed name rows (99 in total) ship, so add-plant search finds them (user-visible). Ranking is unchanged.
+
+## D71. Care-data pin moved to 145 reviewed names
+
+The `overgrown-data` submodule moves from `dec2e85` to `00a0328` (data PR #20). 46 more reviewed name rows (145 in total) ship, so add-plant search finds them (user-visible): for example "dragon tree" now gives a name row for `indoor-tropical-foliage`. `NameTablePinTest` asserts the 145 row ids in the real compiled asset and the "dragon tree" search. Ranking is unchanged.
