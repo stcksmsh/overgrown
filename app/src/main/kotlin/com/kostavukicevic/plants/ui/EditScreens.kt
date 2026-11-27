@@ -114,9 +114,13 @@ fun EditPlaceScreen(placeId: Long?, onDone: () -> Unit) {
                     dryAir = if (outdoor) loaded?.dryAir ?: false else dryAir,
                 )
             scope.launch {
-                g.garden.savePlace(entity)
-                if (outdoor) g.garden.refreshWeather(foreground = true)
-                g.scheduler.reschedule(); g.changed(); onDone()
+                // The save outlives the screen; only going back waits on it here.
+                g.outlive {
+                    g.garden.savePlace(entity)
+                    if (outdoor) g.garden.refreshWeather(foreground = true)
+                    g.scheduler.reschedule(); g.changed()
+                }
+                onDone()
             }
         }) { Text(stringResource(R.string.save)) }
     }

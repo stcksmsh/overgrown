@@ -22,7 +22,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,7 +49,6 @@ fun SettingsScreen(onBack: () -> Unit, onRemindersHelp: () -> Unit) {
     val g = rememberGraph()
     val c = LocalContext.current
     val res = LocalResources.current
-    val scope = rememberCoroutineScope()
     val developer by g.settings.developerMode.collectAsState(false)
     val weighing by g.settings.weighing.collectAsState(false)
     val theme by g.settings.theme.collectAsState(ThemeChoice.SYSTEM)
@@ -63,7 +61,8 @@ fun SettingsScreen(onBack: () -> Unit, onRemindersHelp: () -> Unit) {
 
     val exportZip = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { target ->
         target ?: return@rememberLauncherForActivityResult
-        scope.launch {
+        // Exports, the import and every setting run in the app's scope, so leaving Settings does not cut them short.
+        g.scope.launch {
             message = try {
                 val out = withContext(Dispatchers.IO) { c.contentResolver.openOutputStream(target) } ?: throw java.io.IOException("unwritable file")
                 g.garden.exportZip(g.versionName, out) // closes out, also when it fails
@@ -85,7 +84,7 @@ fun SettingsScreen(onBack: () -> Unit, onRemindersHelp: () -> Unit) {
     }
     val exportCsv = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { target ->
         target ?: return@rememberLauncherForActivityResult
-        scope.launch {
+        g.scope.launch {
             message = try {
                 val text = g.garden.calibrationCsv()
                 withContext(Dispatchers.IO) { c.contentResolver.openOutputStream(target)?.use { it.write(text.toByteArray()) } }
@@ -97,7 +96,7 @@ fun SettingsScreen(onBack: () -> Unit, onRemindersHelp: () -> Unit) {
     }
     val importJson = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { source ->
         source ?: return@rememberLauncherForActivityResult
-        scope.launch {
+        g.scope.launch {
             message = try {
                 val input = withContext(Dispatchers.IO) { c.contentResolver.openInputStream(source) } ?: throw java.io.IOException("unreadable file")
                 val before = g.garden.plants.first()
@@ -134,12 +133,12 @@ fun SettingsScreen(onBack: () -> Unit, onRemindersHelp: () -> Unit) {
                 ThemeChoice.DARK to stringResource(R.string.settings_theme_dark),
             ),
             theme,
-        ) { t -> scope.launch { g.settings.setTheme(t) } }
+        ) { t -> g.scope.launch { g.settings.setTheme(t) } }
         Choice(
             stringResource(R.string.settings_voice),
             listOf(true to stringResource(R.string.settings_voice_mascot), false to stringResource(R.string.settings_voice_plain)),
             boris,
-        ) { on -> scope.launch { g.settings.setBorisVoice(on) } }
+        ) { on -> g.scope.launch { g.settings.setBorisVoice(on) } }
         Text(stringResource(R.string.settings_units))
 
         HorizontalDivider()
@@ -149,9 +148,9 @@ fun SettingsScreen(onBack: () -> Unit, onRemindersHelp: () -> Unit) {
         message?.let { Text(it) }
 
         HorizontalDivider()
-        SwitchRow(stringResource(R.string.settings_weighing), weighing) { on -> scope.launch { g.settings.setWeighing(on) } }
+        SwitchRow(stringResource(R.string.settings_weighing), weighing) { on -> g.scope.launch { g.settings.setWeighing(on) } }
         Text(stringResource(R.string.settings_weighing_hint), style = MaterialTheme.typography.bodySmall)
-        SwitchRow(stringResource(R.string.developer_mode), developer) { on -> scope.launch { g.settings.setDeveloperMode(on) } }
+        SwitchRow(stringResource(R.string.developer_mode), developer) { on -> g.scope.launch { g.settings.setDeveloperMode(on) } }
         if (developer) {
             TextButton(onClick = { exportCsv.launch("overgrown-calibration.csv") }) { Text(stringResource(R.string.export_calibration)) }
         }
@@ -204,7 +203,7 @@ fun SettingsScreen(onBack: () -> Unit, onRemindersHelp: () -> Unit) {
             confirmButton = {
                 TextButton(onClick = {
                     pickTime = false
-                    scope.launch {
+                    g.scope.launch {
                         g.settings.setReminderTime(LocalTime(state.hour, state.minute))
                         g.scheduler.reschedule()
                     }

@@ -44,9 +44,11 @@ fun PlacesScreen(undo: UndoDelete, onBack: () -> Unit, onEdit: (Long) -> Unit, o
                         return@onDelete
                     }
                     undo.delete(key, deleted.format(p.name), undoLabel, failed.format(p.name)) {
-                        // A plant may have been put here while the snackbar was showing.
-                        if (g.garden.plants.first().none { it.placeId == p.id }) g.garden.deletePlace(p.id) else undo.hidden -= key
-                        g.changed()
+                        g.outlive {
+                            // A plant may have been put here while the snackbar was showing.
+                            if (g.garden.plants.first().none { it.placeId == p.id }) g.garden.deletePlace(p.id) else undo.hidden -= key
+                            g.changed()
+                        }
                     }
                 },
             )

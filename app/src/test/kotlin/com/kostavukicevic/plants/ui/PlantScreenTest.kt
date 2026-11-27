@@ -3,6 +3,7 @@ package com.kostavukicevic.plants.ui
 
 import android.app.Application
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -336,6 +337,23 @@ class PlantScreenTest {
         compose.mainClock.advanceTimeBy(SNACKBAR_GONE)
         compose.waitUntil(15_000) { stored().isEmpty() }
         compose.onNodeWithContentDescription(delete).assertDoesNotExist()
+    }
+
+    @Test
+    fun wateringThenLeavingAtOnceStillRecordsAndReschedules() {
+        val onScreen = mutableStateOf(true)
+        compose.setContent { OvergrownTheme { if (onScreen.value) PlantScreen(plantId, onBack = {}, onEdit = {}) } }
+        waitFor(s(R.string.plant_watered))
+        compose.onNodeWithText(s(R.string.plant_watered)).performScrollTo().performClick()
+        waitFor(s(R.string.plant_watered_question))
+        val before = g.changes.value
+        // Leaving in the frame of the tap, as Back pressed with it: the screen's scope is cancelled before its next frame.
+        compose.runOnUiThread {
+            compose.onNodeWithText(s(R.string.yes)).performClick()
+            onScreen.value = false
+        }
+        // changed() follows reschedule() in the same coroutine, so the count moving means the reschedule finished.
+        compose.waitUntil(15_000) { stored().any { it.type == "WATERED" } && g.changes.value > before }
     }
 
     @Test

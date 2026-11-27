@@ -42,9 +42,11 @@ fun PlantsScreen(
                 onEdit = { onEdit(p.id) },
                 onDelete = {
                     undo.delete(key, deleted.format(p.name), undoLabel, failed.format(p.name)) {
-                        g.garden.deletePlant(p.id)
-                        g.scheduler.reschedule()
-                        g.changed()
+                        g.outlive {
+                            g.garden.deletePlant(p.id)
+                            g.scheduler.reschedule()
+                            g.changed()
+                        }
                     }
                 },
             )
