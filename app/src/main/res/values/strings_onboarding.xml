@@ -8,6 +8,9 @@
     <string name="notifications_not_now">Not now</string>
     <!-- A line on Today while notifications are off for the app. -->
     <string name="notifications_off">Reminders are off, so Overgrown cannot tell you when a plant needs water or protection from weather.</string>
+    <!-- The line when only one of the app's notification channels is off in the system's settings. -->
+    <string name="notifications_prompts_off">Watering reminders are off, so Overgrown cannot tell you when a plant needs water.</string>
+    <string name="notifications_alerts_off">Weather alerts are off, so Overgrown cannot warn you when a plant needs protection from weather.</string>
     <string name="notifications_open_settings">Notification settings</string>
     <!-- Not "Dismiss": an alert card's Dismiss can be on the same screen. -->
     <string name="notifications_off_hide">Hide</string>

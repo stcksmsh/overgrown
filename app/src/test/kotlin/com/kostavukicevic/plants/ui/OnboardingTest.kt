@@ -7,7 +7,9 @@ import android.app.Application
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.content.pm.ResolveInfo
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
@@ -28,6 +30,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.kostavukicevic.plants.App
 import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
+import com.kostavukicevic.plants.notify.Notifier
 import com.kostavukicevic.plants.ui.theme.OvergrownTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -72,6 +75,13 @@ class OnboardingTest {
     private fun grant() = shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
     private fun systemSwitch(on: Boolean) =
         shadowOf(app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).setNotificationsEnabled(on)
+
+    /** One channel's switch in the system's settings, the app's own switch left as it is. */
+    private fun channelSwitch(id: String, on: Boolean) {
+        Notifier.createChannels(app)
+        app.getSystemService(NotificationManager::class.java).getNotificationChannel(id).importance =
+            if (on) NotificationManager.IMPORTANCE_DEFAULT else NotificationManager.IMPORTANCE_NONE
+    }
 
     /** Today with the question over it, as App shows them. */
     private fun showToday() = compose.setContent {
@@ -310,10 +320,13 @@ class OnboardingTest {
     fun notificationsOnShowNoLine() {
         grant()
         systemSwitch(true)
+        Notifier.createChannels(app)
         plant(g, "Fern", place(g, "Hall"))
         showToday()
         waitFor("Fern")
         compose.onNodeWithText(s(R.string.notifications_off)).assertDoesNotExist()
+        compose.onNodeWithText(s(R.string.notifications_prompts_off)).assertDoesNotExist()
+        compose.onNodeWithText(s(R.string.notifications_alerts_off)).assertDoesNotExist()
     }
 
     @Test
@@ -335,6 +348,65 @@ class OnboardingTest {
         systemSwitch(true)
         compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
         gone(s(R.string.notifications_off))
+    }
+
+    @Test
+    fun oneChannelOffNamesItAndOpensItsSettings() {
+        grant()
+        systemSwitch(true)
+        channelSwitch(Notifier.CHANNEL_ALERTS, on = false)
+        plant(g, "Fern", place(g, "Hall"))
+        showToday()
+        waitFor(s(R.string.notifications_alerts_off))
+        compose.onNodeWithText(s(R.string.notifications_off)).assertDoesNotExist()
+        compose.onNodeWithText(s(R.string.notifications_open_settings)).performScrollTo().performClick()
+        val opened = startedActivity()!!
+        assertEquals(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS, opened.action)
+        assertEquals(app.packageName, opened.getStringExtra(Settings.EXTRA_APP_PACKAGE))
+        assertEquals(Notifier.CHANNEL_ALERTS, opened.getStringExtra(Settings.EXTRA_CHANNEL_ID))
+    }
+
+    /** Only the app's notification settings resolve: the channel's page is skipped, not the app's details shown. */
+    @Test
+    fun aPhoneWithoutChannelSettingsOpensTheAppNotificationSettings() {
+        grant()
+        systemSwitch(true)
+        channelSwitch(Notifier.CHANNEL_PROMPTS, on = false)
+        plant(g, "Fern", place(g, "Hall"))
+        shadowOf(app).checkActivities(true)
+        val settings = ResolveInfo().apply { activityInfo = ActivityInfo().apply { packageName = "settings"; name = "Settings" } }
+        shadowOf(app.packageManager).addResolveInfoForIntent(notificationSettingsIntent(app), settings)
+        showToday()
+        waitFor(s(R.string.notifications_prompts_off))
+        compose.onNodeWithText(s(R.string.notifications_open_settings)).performScrollTo().performClick()
+        assertEquals(Settings.ACTION_APP_NOTIFICATION_SETTINGS, startedActivity()!!.action)
+    }
+
+    @Test
+    fun bothChannelsOffShowTheGeneralLine() {
+        grant()
+        systemSwitch(true)
+        channelSwitch(Notifier.CHANNEL_PROMPTS, on = false)
+        channelSwitch(Notifier.CHANNEL_ALERTS, on = false)
+        plant(g, "Fern", place(g, "Hall"))
+        showToday()
+        waitFor(s(R.string.notifications_off))
+        compose.onNodeWithText(s(R.string.notifications_open_settings)).performScrollTo().performClick()
+        assertEquals(Settings.ACTION_APP_NOTIFICATION_SETTINGS, startedActivity()!!.action)
+    }
+
+    @Test
+    fun aChannelTurnedBackOnTakesTheLineAwayOnReturn() {
+        grant()
+        systemSwitch(true)
+        channelSwitch(Notifier.CHANNEL_ALERTS, on = false)
+        plant(g, "Fern", place(g, "Hall"))
+        showToday()
+        waitFor(s(R.string.notifications_alerts_off))
+        compose.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+        channelSwitch(Notifier.CHANNEL_ALERTS, on = true)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        gone(s(R.string.notifications_alerts_off))
     }
 
     @Test
