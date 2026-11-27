@@ -153,7 +153,7 @@ val dataDir = rootProject.layout.projectDirectory.dir("overgrown-data")
 val compileCareAsset = tasks.register<CompileCareAsset>("compileCareAsset") {
     dataRoot.set(dataDir)
     dataFiles.from(fileTree(dataDir) {
-        include("species/**", "archetypes/**", "schema/**", "provenance/snapshots/**", "redirects.yaml", "DATA_VERSION")
+        include("species/**", "names/**", "archetypes/**", "schema/**", "provenance/snapshots/**", "redirects.yaml", "DATA_VERSION")
     })
     toolClasspath.from(careTool)
     sourceCommit.set(
@@ -163,6 +163,11 @@ val compileCareAsset = tasks.register<CompileCareAsset>("compileCareAsset") {
         }.standardOutput.asText.map { it.trim() },
     )
     outputDir.set(layout.buildDirectory.dir("generated/caredb"))
+}
+
+// NameTablePinTest reads the generated asset from disk, so the tests need it built first and rerun when it changes.
+tasks.withType<Test>().configureEach {
+    inputs.files(compileCareAsset).withPropertyName("careAsset")
 }
 
 androidComponents {
