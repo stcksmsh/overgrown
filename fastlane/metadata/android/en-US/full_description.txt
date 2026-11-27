@@ -13,8 +13,8 @@ It works from the care needs of the plant, its pot and place, the local weather,
 
 <b>Private by design</b>
 • No account, no analytics, no advertising
-• Your data stays on your phone
-• Works offline except for the weather forecast, which the app fetches from Open-Meteo (open-meteo.com), with MET Norway as a fallback
+• No developer server: nothing you enter is sent to the developer
+• Works offline except for the weather forecast and place search, which the app fetches from Open-Meteo (open-meteo.com), with MET Norway as a fallback
 
 <b>Open source</b>
 The app is free and open source (GPL-3.0-only). The care database is open too (AGPL-3.0-only) and lives in a separate repository. The care database is still small: it covers a handful of species and twelve general care profiles.
