@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.ui
 
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
+import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,16 +19,21 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.notify.Notifier
@@ -42,29 +52,74 @@ internal fun shouldAskForNotifications(sdk: Int, granted: Boolean, plantJustAdde
 internal fun remindersOff(c: Context) = !Notifier.allowed(c) || !NotificationManagerCompat.from(c).areNotificationsEnabled()
 
 /**
- * Two flags kept across restarts: a plant was just added and the permission may be asked for, and the reminders-off
- * line was dismissed. Adding a plant sets the first and clears the second, so a dismissed line comes back then.
+ * Flags kept across restarts: a plant was just added and the permission may be asked for, the reminders-off line was
+ * dismissed, and the system no longer shows its permission dialog. Adding a plant sets the first and clears the
+ * second, so a dismissed line comes back then. Written only from callbacks, never while composing.
  */
 internal object Onboarding {
     private const val ASK = "ask_notifications"
     private const val DISMISSED = "reminders_off_dismissed"
+    private const val BLOCKED = "notifications_blocked"
 
     private fun prefs(c: Context) = c.getSharedPreferences("onboarding", Context.MODE_PRIVATE)
 
-    fun plantAdded(c: Context) = prefs(c).edit().putBoolean(ASK, true).putBoolean(DISMISSED, false).apply()
-
-    /** Whether to ask now. A pending ask that does not apply, the permission being granted, is dropped. */
-    fun askNow(c: Context): Boolean {
-        val ask = shouldAskForNotifications(Build.VERSION.SDK_INT, Notifier.allowed(c), prefs(c).getBoolean(ASK, false))
-        if (!ask) asked(c)
-        return ask
+    /** The ask is kept only where it applies, so a permission granted now and revoked later does not ask for this plant. */
+    fun plantAdded(c: Context) {
+        val ask = shouldAskForNotifications(Build.VERSION.SDK_INT, Notifier.allowed(c), plantJustAdded = true)
+        val edit = prefs(c).edit().putBoolean(DISMISSED, false)
+        if (ask) edit.putBoolean(ASK, true)
+        edit.apply()
     }
+
+    fun askNow(c: Context) = shouldAskForNotifications(Build.VERSION.SDK_INT, Notifier.allowed(c), prefs(c).getBoolean(ASK, false))
 
     fun asked(c: Context) = prefs(c).edit().putBoolean(ASK, false).apply()
 
     fun dismissed(c: Context) = prefs(c).getBoolean(DISMISSED, false)
 
     fun dismiss(c: Context) = prefs(c).edit().putBoolean(DISMISSED, true).apply()
+
+    fun blocked(c: Context) = prefs(c).getBoolean(BLOCKED, false)
+
+    fun block(c: Context) = prefs(c).edit().putBoolean(BLOCKED, true).apply()
+}
+
+/**
+ * The reason for reminders, shown over whichever screen follows the saving of a new plant, then the system's own
+ * dialog, which cannot say why. Once the system has been refused twice it no longer shows that dialog, so Allow then
+ * opens the app's notification settings instead.
+ */
+@Composable
+internal fun NotificationQuestion() {
+    val g = rememberGraph()
+    val c = LocalContext.current
+    val activity = LocalActivity.current
+    val tick = changeTick()
+    var explain by remember(tick) { mutableStateOf(Onboarding.askNow(c)) }
+    val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        // The system tells that it will not ask again only by wanting no rationale after a refusal.
+        if (!granted && activity != null && !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS)) {
+            Onboarding.block(c)
+        }
+        // Today reads the permission again.
+        g.changed()
+    }
+    if (!explain) return
+    fun answer(allow: Boolean) {
+        explain = false
+        Onboarding.asked(c)
+        when {
+            allow && !Onboarding.blocked(c) -> request.launch(Manifest.permission.POST_NOTIFICATIONS)
+            allow -> { open(c, notificationSettingsIntent(c)); g.changed() }
+            else -> g.changed()
+        }
+    }
+    AlertDialog(
+        onDismissRequest = { answer(false) },
+        text = { Text(stringResource(R.string.notifications_reason), style = Type.body) },
+        confirmButton = { TextButton(onClick = { answer(true) }) { Text(stringResource(R.string.notifications_allow), style = Type.label) } },
+        dismissButton = { TextButton(onClick = { answer(false) }) { Text(stringResource(R.string.notifications_not_now), style = Type.label) } },
+    )
 }
 
 /** The app's own notification settings, where reminders can be turned back on. */
@@ -82,6 +137,15 @@ private fun open(c: Context, intent: Intent) {
         c.startActivity(intent)
     } catch (_: ActivityNotFoundException) {
         c.startActivity(appDetailsIntent(c))
+    }
+}
+
+/** Opens [url] in a browser. A phone without one shows a short message instead of ending the app. */
+internal fun openLink(c: Context, url: String) {
+    try {
+        c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(c, R.string.link_no_app, Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -107,7 +171,6 @@ internal fun RemindersOffLine(onDismiss: () -> Unit) {
 @Composable
 fun RemindersHelpScreen(onBack: () -> Unit) {
     val c = LocalContext.current
-    val uri = LocalUriHandler.current
     val ink = Overgrown.colors.ink
     Page(stringResource(R.string.notifications_help), onBack = onBack) {
         Text(stringResource(R.string.notifications_help_text), style = Type.body, color = ink)
@@ -119,7 +182,7 @@ fun RemindersHelpScreen(onBack: () -> Unit) {
             colors = ButtonDefaults.buttonColors(containerColor = ink, contentColor = Overgrown.colors.onInk),
         ) { Text(stringResource(R.string.notifications_help_battery), style = Type.label) }
         Text(stringResource(R.string.notifications_help_vendor), style = Type.body, color = ink)
-        TextButton(onClick = { uri.openUri(DONT_KILL_MY_APP_URL) }, Modifier.heightIn(min = Spacing.minTouchTarget)) {
+        TextButton(onClick = { openLink(c, DONT_KILL_MY_APP_URL) }, Modifier.heightIn(min = Spacing.minTouchTarget)) {
             Text(stringResource(R.string.notifications_help_vendor_link), style = Type.label, color = ink)
         }
     }

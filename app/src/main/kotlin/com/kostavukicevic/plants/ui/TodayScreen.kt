@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.ui
 
-import android.Manifest
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -24,7 +20,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsPropertyKey
@@ -71,15 +66,15 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
     val failed by g.fetchFailed.collectAsState()
     val scope = rememberCoroutineScope()
 
-    // Read again on each return, so a switch turned on in the system's settings takes the line away.
-    var off by remember { mutableStateOf(remindersOff(c)) }
+    // Read again on each return, so a switch turned on in the system's settings takes the line away, and on each
+    // change, which NotificationQuestion signals once it is answered.
+    var off by remember(tick) { mutableStateOf(remindersOff(c)) }
     LifecycleResumeEffect(Unit) {
         off = remindersOff(c)
         onPauseOrDispose {}
     }
-    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { off = remindersOff(c) }
-    // Keyed on the tick: saving a plant signals a change, and this screen may still be composed when it does.
-    var explain by remember(tick) { mutableStateOf(Onboarding.askNow(c)) }
+    // The line waits while NotificationQuestion asks.
+    val asking = remember(tick) { Onboarding.askNow(c) }
     var dismissed by remember(tick) { mutableStateOf(Onboarding.dismissed(c)) }
 
     // Recording reloads this screen in place, as on the plant screen.
@@ -95,7 +90,7 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
     ) {
         val list = statuses ?: return@Page
         val visible = (events ?: return@Page).filterNot { it.key in answered }
-        if (list.isNotEmpty() && off && !dismissed && !explain) RemindersOffLine(onDismiss = { dismissed = true; Onboarding.dismiss(c) })
+        if (list.isNotEmpty() && off && !dismissed && !asking) RemindersOffLine(onDismiss = { dismissed = true; Onboarding.dismiss(c) })
         TodayContent(
             list,
             g.garden.today(),
@@ -123,20 +118,6 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
                 }
             }
         }
-    }
-    if (explain) {
-        // The reason first, then the system's own dialog, which cannot say why.
-        fun answer(allow: Boolean) {
-            explain = false
-            Onboarding.asked(c)
-            if (allow) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-        AlertDialog(
-            onDismissRequest = { answer(false) },
-            text = { Text(stringResource(R.string.notifications_reason), style = Type.body) },
-            confirmButton = { TextButton(onClick = { answer(true) }) { Text(stringResource(R.string.notifications_allow), style = Type.label) } },
-            dismissButton = { TextButton(onClick = { answer(false) }) { Text(stringResource(R.string.notifications_not_now), style = Type.label) } },
-        )
     }
 }
 
@@ -176,12 +157,12 @@ internal fun WeatherStatus(fetched: Pair<Long, List<String>>?, now: Instant, ref
  */
 @Composable
 internal fun WeatherCredit(provider: String) {
-    val uri = LocalUriHandler.current
+    val c = LocalContext.current
     val met = provider == "MET_NORWAY"
     Text(
         stringResource(if (met) R.string.weather_credit_met else R.string.weather_credit_open_meteo),
         modifier = Modifier.heightIn(min = Spacing.minTouchTarget).wrapContentHeight()
-            .clickable(role = Role.Button) { uri.openUri(if (met) MetNorway.CREDIT_URL else OpenMeteo.CREDIT_URL) },
+            .clickable(role = Role.Button) { openLink(c, if (met) MetNorway.CREDIT_URL else OpenMeteo.CREDIT_URL) },
         style = Type.secondary,
         color = Overgrown.colors.muted,
         textDecoration = TextDecoration.Underline,

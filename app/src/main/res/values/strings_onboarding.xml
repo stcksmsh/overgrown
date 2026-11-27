@@ -19,4 +19,7 @@
     <string name="notifications_help_battery">Open battery settings</string>
     <string name="notifications_help_vendor">Some makers add their own battery savers. dontkillmyapp.com has the steps for each make of phone.</string>
     <string name="notifications_help_vendor_link">Steps for your phone</string>
+
+    <!-- Shown when a link is tapped on a phone with no browser. -->
+    <string name="link_no_app">No app on this phone can open links.</string>
 </resources>

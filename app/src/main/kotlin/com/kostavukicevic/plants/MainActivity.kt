@@ -85,6 +85,7 @@ import com.kostavukicevic.plants.ui.LocalSharedTransition
 import com.kostavukicevic.plants.ui.PlacesScreen
 import com.kostavukicevic.plants.ui.PlantScreen
 import com.kostavukicevic.plants.ui.PlantsScreen
+import com.kostavukicevic.plants.ui.NotificationQuestion
 import com.kostavukicevic.plants.ui.RemindersHelpScreen
 import com.kostavukicevic.plants.ui.SettingsScreen
 import com.kostavukicevic.plants.ui.TodayScreen
@@ -299,6 +300,8 @@ internal fun App(openPlant: Long?) {
         }
     }
 
+    // Over every screen: a plant added from Plants returns there, not to Today.
+    NotificationQuestion()
     Scaffold(
         // The screens inside draw their own top bar and status-bar inset.
         contentWindowInsets = WindowInsets(0),

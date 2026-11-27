@@ -2,6 +2,7 @@
 package com.kostavukicevic.plants.ui
 
 import android.Manifest
+import android.app.Activity
 import android.app.Application
 import android.app.NotificationManager
 import android.content.Context
@@ -39,6 +40,7 @@ import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowToast
 
 /**
  * Onboarding for a new user: the notification permission is asked for right after the first plant is saved and
@@ -71,7 +73,36 @@ class OnboardingTest {
     private fun systemSwitch(on: Boolean) =
         shadowOf(app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).setNotificationsEnabled(on)
 
-    private fun showToday() = compose.setContent { OvergrownTheme { TodayScreen(onPlant = {}, onAdd = {}, onPlaces = {}, onSettings = {}) } }
+    /** Today with the question over it, as App shows them. */
+    private fun showToday() = compose.setContent {
+        OvergrownTheme {
+            TodayScreen(onPlant = {}, onAdd = {}, onPlaces = {}, onSettings = {})
+            NotificationQuestion()
+        }
+    }
+
+    /**
+     * The system's answer to the request it was showing: refused, and whether it would still show a rationale.
+     * Delivered as the platform does, so the activity ends that request and can make the next one.
+     */
+    private fun refuse(rationale: Boolean) {
+        val shown = shadowOf(compose.activity).nextStartedActivityForResult!!
+        shadowOf(app.packageManager).setShouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS, rationale)
+        // PackageManager.EXTRA_REQUEST_PERMISSIONS_NAMES and _RESULTS, which are hidden.
+        val result = Intent()
+            .putExtra("android.content.pm.extra.REQUEST_PERMISSIONS_NAMES", arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+            .putExtra("android.content.pm.extra.REQUEST_PERMISSIONS_RESULTS", intArrayOf(PackageManager.PERMISSION_DENIED))
+        compose.runOnUiThread { shadowOf(compose.activity).receiveResult(shown.intent, Activity.RESULT_OK, result) }
+        compose.waitForIdle()
+        // What was started so far is done with.
+        generateSequence { startedActivity() }.count()
+    }
+
+    /** What the wizard does on saving a new plant. */
+    private fun savePlant() {
+        Onboarding.plantAdded(app)
+        g.changed()
+    }
 
     private fun press(id: Int) {
         compose.waitUntil(5_000) { compose.onAllNodes(hasText(s(id)) and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
@@ -99,6 +130,9 @@ class OnboardingTest {
         press(R.string.save)
     }
 
+    /** The activity the platform starts for a permission request (PackageManager.ACTION_REQUEST_PERMISSIONS, hidden). */
+    private val PERMISSION_SCREEN = "android.content.pm.action.REQUEST_PERMISSIONS"
+
     @Test
     fun theDecisionAsksOnlyAfterANewPlantOnAndroid13AndLater() {
         assertTrue(shouldAskForNotifications(33, granted = false, plantJustAdded = true))
@@ -114,6 +148,7 @@ class OnboardingTest {
             OvergrownTheme {
                 if (adding) AddPlantWizard(null, onDone = { adding = false }, careDb = WizardTest.FIXTURE_DB)
                 else TodayScreen(onPlant = {}, onAdd = { adding = true }, onPlaces = {}, onSettings = {})
+                NotificationQuestion()
             }
         }
         waitFor(s(R.string.today_add_first))
@@ -151,6 +186,73 @@ class OnboardingTest {
         compose.onNodeWithText(s(R.string.notifications_not_now)).performClick()
         waitFor(s(R.string.notifications_off))
         assertNull(requested())
+    }
+
+    @Test
+    fun afterOneRefusalTheNextPlantAsksTheSystemAgain() {
+        plant(g, "Fern", place(g, "Hall"))
+        savePlant()
+        showToday()
+        waitFor(s(R.string.notifications_reason))
+        compose.onNodeWithText(s(R.string.notifications_allow)).performClick()
+        compose.waitForIdle()
+        refuse(rationale = true)
+        waitFor(s(R.string.notifications_off))
+
+        savePlant()
+        waitFor(s(R.string.notifications_reason))
+        compose.onNodeWithText(s(R.string.notifications_allow)).performClick()
+        compose.waitForIdle()
+        // The system's permission screen again, not the settings.
+        val actions = generateSequence { startedActivity() }.map { it.action }.toList()
+        assertEquals(listOf(PERMISSION_SCREEN), actions)
+        assertEquals(Manifest.permission.POST_NOTIFICATIONS, requested())
+    }
+
+    /** Refused twice, the system answers at once without showing its dialog: Allow leads to the settings instead. */
+    @Test
+    fun afterTheSystemStopsAskingAllowOpensTheNotificationSettings() {
+        plant(g, "Fern", place(g, "Hall"))
+        savePlant()
+        showToday()
+        waitFor(s(R.string.notifications_reason))
+        compose.onNodeWithText(s(R.string.notifications_allow)).performClick()
+        compose.waitForIdle()
+        refuse(rationale = false)
+        waitFor(s(R.string.notifications_off))
+
+        savePlant()
+        waitFor(s(R.string.notifications_reason))
+        compose.onNodeWithText(s(R.string.notifications_allow)).performClick()
+        compose.waitForIdle()
+        // The settings, and no request that the system would refuse unseen.
+        val started = generateSequence { startedActivity() }.toList()
+        assertEquals(listOf(Settings.ACTION_APP_NOTIFICATION_SETTINGS), started.map { it.action })
+        assertEquals(app.packageName, started.single().getStringExtra(Settings.EXTRA_APP_PACKAGE))
+        gone(s(R.string.notifications_reason))
+    }
+
+    /** The wizard opened from Plants returns to Plants: the question shows there, not on the next visit to Today. */
+    @Test
+    fun aPlantSavedFromPlantsIsAskedAboutOnPlants() {
+        plant(g, "Fern", place(g, "Hall"))
+        compose.setContent { OvergrownTheme { App(null) } }
+        waitFor(s(R.string.plants_title))
+        compose.onAllNodesWithText(s(R.string.plants_title))[0].performClick()
+        // Today's line is gone with Today.
+        gone(s(R.string.notifications_off))
+        savePlant()
+        waitFor(s(R.string.notifications_reason))
+        compose.onNode(isDialog()).assertExists()
+    }
+
+    @Test
+    fun aLinkOnAPhoneWithNoBrowserDoesNotEndTheApp() {
+        shadowOf(app).checkActivities(true)
+        compose.setContent { OvergrownTheme { RemindersHelpScreen(onBack = {}) } }
+        compose.onNodeWithText(s(R.string.notifications_help_vendor_link)).performScrollTo().performClick()
+        compose.waitForIdle()
+        assertEquals(s(R.string.link_no_app), ShadowToast.getTextOfLatestToast())
     }
 
     @Test

@@ -45,7 +45,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -96,7 +95,6 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit, careDb: C
     val snackbar = remember { SnackbarHostState() }
     // Its own snackbar: deleting a history entry offers Undo on this screen.
     val undo = remember { UndoDelete(snackbar, scope) }
-    val uri = LocalUriHandler.current
     var askRanOut by remember { mutableStateOf(false) }
     val photos by g.garden.photos(plantId).collectAsState(emptyList())
     var askPhotoSource by remember { mutableStateOf(false) }
@@ -235,7 +233,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit, careDb: C
                 }
             }
 
-            SurfaceCard { CareInfo(s, careDb, onReport = { uri.openUri(reportUrl(s)) }) }
+            SurfaceCard { CareInfo(s, careDb, onReport = { openLink(c, reportUrl(s)) }) }
 
             if (weighing) SurfaceCard { Calibration(plantId) }
 
