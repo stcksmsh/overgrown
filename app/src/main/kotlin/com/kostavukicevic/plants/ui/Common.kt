@@ -82,6 +82,7 @@ import com.kostavukicevic.plants.ui.theme.StateBlock
 import com.kostavukicevic.plants.ui.theme.Type
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -301,12 +302,18 @@ class UndoDelete(private val snackbar: SnackbarHostState, private val scope: Cor
         hidden += key
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
+            // Set inside the Undo click itself: Unconfined resumes the wait in the click's own call, before the
+            // screen can be left in the same frame and cancel this coroutine on its way back.
+            var undone = false
             // With an action, showSnackbar defaults to Indefinite; the delete must commit on its own.
             val result = try {
-                snackbar.showSnackbar(message, undoLabel, duration = SnackbarDuration.Short)
+                withContext(Dispatchers.Unconfined) {
+                    snackbar.showSnackbar(message, undoLabel, duration = SnackbarDuration.Short)
+                        .also { undone = it == SnackbarResult.ActionPerformed }
+                }
             } catch (e: CancellationException) {
-                // Leaving the screen cancels its scope while the snackbar shows; no Undo came, so the delete stands.
-                commitOrLog(key, commit)
+                // Leaving the screen cancels its scope while the snackbar shows; unless Undo came, the delete stands.
+                if (!undone) commitOrLog(key, commit)
                 throw e
             }
             if (result == SnackbarResult.ActionPerformed) {
