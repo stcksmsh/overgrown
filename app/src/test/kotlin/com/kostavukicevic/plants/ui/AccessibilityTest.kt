@@ -9,10 +9,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
@@ -218,6 +220,7 @@ class AccessibilityTest(private val fontScale: Float) {
         compose.onNodeWithContentDescription(editEntry).performScrollTo().performClick()
         waitForText(s(R.string.plant_edit_entry))
         audit("Edit entry dialog", s(R.string.plant_edit_entry))
+        compose.assertSelectionsMarked("Edit entry dialog")
         cancel()
         waitGone(s(R.string.plant_edit_entry))
 
@@ -255,6 +258,7 @@ class AccessibilityTest(private val fontScale: Float) {
         tap(s(R.string.place_outdoor))
         tap(s(R.string.wizard_advanced))
         audit("Wizard step 2", s(R.string.wizard_where_title))
+        compose.assertSelectionsMarked("Wizard step 2")
         field(R.string.wizard_place_name).performTextInput("Balcony")
         field(R.string.field_latitude).performTextInput("44.8")
         field(R.string.field_longitude).performTextInput("20.5")
@@ -311,6 +315,13 @@ class AccessibilityTest(private val fontScale: Float) {
     }
 
     @Test
+    fun theTouchTargetGuardIgnoresPaddingOutsideTheClick() {
+        show { Box(Modifier.size(48.dp).padding(8.dp).clickable {}) { Text("Padded") } }
+        val failure = assertThrows(AssertionError::class.java) { compose.assertTouchTargets("Padded") }
+        assertTrue(failure.message, failure.message!!.contains("1 touch target(s) under 48 dp: \"Padded\" 32 x 32 dp"))
+    }
+
+    @Test
     fun theTextGuardCatchesCutText() {
         show { Text("A name far too long for its box", Modifier.width(60.dp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
         val failure = assertThrows(AssertionError::class.java) { compose.assertNoClippedText("Cut") }
@@ -336,6 +347,13 @@ class AccessibilityTest(private val fontScale: Float) {
         show { Box { Text("One"); Text("Two") } }
         val failure = assertThrows(AssertionError::class.java) { compose.assertNoClippedText("Overlap") }
         assertTrue(failure.message, failure.message!!.contains("\"One\" overlaps \"Two\""))
+    }
+
+    @Test
+    fun theSelectionGuardCatchesAChoiceShownByColourAlone() {
+        show { Box(Modifier.selectable(selected = true, role = Role.RadioButton) {}) { Text("Chosen") } }
+        val failure = assertThrows(AssertionError::class.java) { compose.assertSelectionsMarked("Bare") }
+        assertTrue(failure.message, failure.message!!.contains("1 choice(s) shown by colour alone: \"Chosen\""))
     }
 
     @Test

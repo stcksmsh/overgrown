@@ -161,8 +161,10 @@ internal fun WeatherCredit(provider: String) {
     val met = provider == "MET_NORWAY"
     Text(
         stringResource(if (met) R.string.weather_credit_met else R.string.weather_credit_open_meteo),
-        modifier = Modifier.heightIn(min = Spacing.minTouchTarget).wrapContentHeight()
-            .clickable(role = Role.Button) { openLink(c, if (met) MetNorway.CREDIT_URL else OpenMeteo.CREDIT_URL) },
+        // Clickable before wrapContentHeight, so the whole 48 dp row is the link, not only the line of text.
+        modifier = Modifier.heightIn(min = Spacing.minTouchTarget)
+            .clickable(role = Role.Button) { openLink(c, if (met) MetNorway.CREDIT_URL else OpenMeteo.CREDIT_URL) }
+            .wrapContentHeight(),
         style = Type.secondary,
         color = Overgrown.colors.muted,
         textDecoration = TextDecoration.Underline,

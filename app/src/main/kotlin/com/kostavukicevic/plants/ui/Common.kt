@@ -337,12 +337,22 @@ fun positive(s: String): Double? = s.replace(',', '.').toDoubleOrNull()?.takeIf 
 /**
  * [main] with [trailing] at its end, as a Row whose main part takes the room left. [trailing] goes under [main],
  * [under] apart, only when beside it [main]'s longest word would not fit, as at 2.0x font scale on a narrow phone.
+ * Under an unbounded width the two sit side by side, each at its own width.
  */
 @Composable
 internal fun BesideOrUnder(modifier: Modifier = Modifier, under: Dp = 0.dp, main: @Composable () -> Unit, trailing: @Composable () -> Unit) =
     Layout(listOf(main, trailing), modifier) { (mainItems, trailingItems), constraints ->
         val m = mainItems.single()
         val t = trailingItems.single().measure(constraints.copy(minWidth = 0, minHeight = 0))
+        // Unbounded, as when a parent asks for the intrinsic width, there is room for both side by side.
+        if (!constraints.hasBoundedWidth) {
+            val mp = m.measure(constraints.copy(minWidth = 0))
+            val h = maxOf(mp.height, t.height, constraints.minHeight)
+            return@Layout layout(mp.width + t.width, h) {
+                mp.placeRelative(0, Alignment.CenterVertically.align(mp.height, h))
+                t.placeRelative(mp.width, Alignment.CenterVertically.align(t.height, h))
+            }
+        }
         val width = constraints.maxWidth
         val room = width - t.width
         if (m.minIntrinsicWidth(constraints.maxHeight) <= room) {
@@ -391,11 +401,21 @@ internal data class WholeWords(private val max: TextUnit) : TextAutoSize {
 /**
  * Items of equal width, [columns] to a row, each row as tall as its tallest item. If an item's longest word would
  * not fit that width, as at 2.0x font scale on a narrow phone, it takes fewer columns rather than break the word.
+ * Under an unbounded width all items share one row, each at its own width.
  */
 @Composable
 internal fun EvenRows(columns: Int, modifier: Modifier = Modifier, gap: Dp = Spacing.grid * 2, content: @Composable () -> Unit) =
     Layout(content, modifier) { items, constraints ->
         val gapPx = gap.roundToPx()
+        // Unbounded, as when a parent asks for the intrinsic width, every item fits one row at its own width.
+        if (!constraints.hasBoundedWidth) {
+            val row = items.map { it.measure(constraints.copy(minWidth = 0)) }
+            val h = row.maxOfOrNull { it.height } ?: 0
+            return@Layout layout(row.sumOf { it.width } + gapPx * (row.size - 1).coerceAtLeast(0), h) {
+                var x = 0
+                row.forEach { it.placeRelative(x, 0); x += it.width + gapPx }
+            }
+        }
         val width = constraints.maxWidth
         // Widths as Row gives weighted items: each the rounded even share, the pixel or two left over or short
         // taken up by the first items.

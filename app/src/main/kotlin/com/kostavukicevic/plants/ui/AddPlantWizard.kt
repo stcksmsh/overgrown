@@ -63,6 +63,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -970,9 +971,13 @@ private fun Tile(label: String, selected: Boolean, onClick: () -> Unit, modifier
     }
 }
 
+/** Test tag of [Check], so a test can tell that a selection is marked by more than its fill. */
+internal const val SELECTED_MARK = "selected-mark"
+
+/** The check mark on a selected tile or answer, so the selection is not shown by colour alone. */
 @Composable
-private fun Check(color: Color) {
-    Canvas(Modifier.size(20.dp)) {
+internal fun Check(color: Color) {
+    Canvas(Modifier.size(20.dp).testTag(SELECTED_MARK)) {
         val s = size.width
         val path = Path().apply { moveTo(s * 0.18f, s * 0.52f); lineTo(s * 0.42f, s * 0.76f); lineTo(s * 0.84f, s * 0.28f) }
         drawPath(path, color, style = Stroke(width = s * 0.14f, cap = StrokeCap.Round))

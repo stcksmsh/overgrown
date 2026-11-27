@@ -14,12 +14,14 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.TextAutoSize
@@ -394,7 +396,8 @@ fun EditEntryDialog(event: EventEntity, error: String?, onDismiss: () -> Unit, o
                     OutlineButton(stringResource(R.string.plant_day_after)) { date = date.plus(DatePeriod(days = 1)) }
                 }
                 when (event.type) {
-                    // One answer of four: each says it is a radio button and whether it is the chosen one.
+                    // One answer of four: each says it is a radio button and whether it is the chosen one. The chosen one
+                    // also has a check mark: its moss fill is under 3:1 on the dialog's surface in dark (ContrastTest).
                     "CHECK_IN" -> FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2), verticalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
                         for (m in PLANT_ANSWERS) {
                             val label = answerLabel(c, m)
@@ -405,7 +408,11 @@ fun EditEntryDialog(event: EventEntity, error: String?, onDismiss: () -> Unit, o
                                     modifier = chosen.heightIn(min = Spacing.buttonHeight),
                                     shape = RoundedCornerShape(Radius.button),
                                     colors = ButtonDefaults.buttonColors(containerColor = StateBlock.Moss.fill, contentColor = StateBlock.Moss.text),
-                                ) { Text(label, style = Type.label) }
+                                ) {
+                                    Check(StateBlock.Moss.text)
+                                    Spacer(Modifier.width(Spacing.grid))
+                                    Text(label, style = Type.label)
+                                }
                             } else {
                                 OutlineButton(label, chosen) { moisture = m.name }
                             }
