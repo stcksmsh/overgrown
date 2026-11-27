@@ -75,7 +75,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import androidx.lifecycle.lifecycleScope
 import com.kostavukicevic.plants.data.ThemeChoice
 import com.kostavukicevic.plants.ui.AddPlantWizard
 import com.kostavukicevic.plants.ui.EditPlaceScreen
@@ -116,9 +115,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // The app is in the foreground: the only time MET Norway may be asked, if it is needed.
-        lifecycleScope.launch {
-            val g = graph
+        // The app is in the foreground: the only time MET Norway may be asked, if it is needed. In the app's scope, so
+        // rotating or leaving does not cut the reschedule short (D76).
+        val g = graph
+        g.scope.launch {
             g.scheduler.ensureDailyRefresh()
             g.refreshWeather(foreground = true)
             g.scheduler.reschedule()

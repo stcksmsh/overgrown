@@ -24,6 +24,7 @@ import androidx.room.Room
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
@@ -346,14 +347,18 @@ class PlantScreenTest {
         waitFor(s(R.string.plant_watered))
         compose.onNodeWithText(s(R.string.plant_watered)).performScrollTo().performClick()
         waitFor(s(R.string.plant_watered_question))
-        val before = g.changes.value
+        // Nothing scheduled yet, so a notification job queued from here on is reschedule()'s doing.
+        val work = WorkManager.getInstance(compose.activity)
+        work.cancelAllWorkByTag("notify").result.get()
         // Leaving in the frame of the tap, as Back pressed with it: the screen's scope is cancelled before its next frame.
         compose.runOnUiThread {
             compose.onNodeWithText(s(R.string.yes)).performClick()
             onScreen.value = false
         }
-        // changed() follows reschedule() in the same coroutine, so the count moving means the reschedule finished.
-        compose.waitUntil(15_000) { stored().any { it.type == "WATERED" } && g.changes.value > before }
+        compose.waitUntil(15_000) {
+            stored().any { it.type == "WATERED" } &&
+                work.getWorkInfosByTag("notify").get().any { it.state == WorkInfo.State.ENQUEUED }
+        }
     }
 
     @Test
