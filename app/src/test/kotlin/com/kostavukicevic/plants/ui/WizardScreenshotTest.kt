@@ -24,6 +24,7 @@ import com.github.takahirom.roborazzi.captureScreenRoboImage
 import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.UrlTransport
+import com.kostavukicevic.plants.caredb.CareDb
 import com.kostavukicevic.plants.data.DbResponseStore
 import com.kostavukicevic.plants.data.Garden
 import com.kostavukicevic.plants.data.GardenDb
@@ -46,7 +47,7 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import kotlin.time.Instant
 
-/** Golden images of the four add-plant steps, a new outdoor place with "Use my location", and step 1 with search results and with no match, light and dark, at 1.0x, 1.3x and 2.0x. */
+/** Golden images of the four add-plant steps, a new outdoor place with "Use my location", and step 1 with search results (one of each kind) and with no match, light and dark, at 1.0x, 1.3x and 2.0x. */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w400dp-h800dp-xhdpi")
@@ -79,10 +80,10 @@ class WizardScreenshotTest(private val dark: Boolean, private val fontScale: Flo
     private fun s(id: Int, vararg args: Any) = compose.activity.getString(id, *args)
 
     /** Waits for the places to load, which enables Next, so every image shows the loaded wizard. */
-    private fun start() {
+    private fun start(db: CareDb = WizardTest.FIXTURE_DB) {
         compose.setContent {
             FontScaled(fontScale) {
-                OvergrownTheme(dark = dark) { AddPlantWizard(null, onDone = {}, careDb = WizardTest.FIXTURE_DB) }
+                OvergrownTheme(dark = dark) { AddPlantWizard(null, onDone = {}, careDb = db) }
             }
         }
         compose.waitUntil(5_000) { compose.onAllNodes(hasText(s(R.string.wizard_next_where)) and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
@@ -117,6 +118,15 @@ class WizardScreenshotTest(private val dark: Boolean, private val fontScale: Flo
         type(R.string.wizard_name, "Test")
         unfocus()
         capture("step1_results")
+    }
+
+    /** A species row, a name-table row and an archetype row, in that order. */
+    @Test
+    fun step1ResultKinds() {
+        start(WizardTest.NAMES_DB)
+        type(R.string.wizard_name, "Test")
+        unfocus()
+        capture("step1_result_kinds")
     }
 
     @Test

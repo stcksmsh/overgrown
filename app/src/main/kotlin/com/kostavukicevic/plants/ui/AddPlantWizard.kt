@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.caredb.CareDb
+import com.kostavukicevic.plants.caredb.CommonName
 import com.kostavukicevic.plants.data.PlaceEntity
 import com.kostavukicevic.plants.data.PlantEntity
 import com.kostavukicevic.plants.ui.theme.Overgrown
@@ -186,22 +187,34 @@ private fun rainAnswer(rain: String) = when (rain) { "OPEN" -> Answer.YES; "COVE
 private fun windAnswer(wind: String) = when (wind) { "EXPOSED" -> Answer.YES; "SHELTERED" -> Answer.NO; else -> Answer.UNSURE }
 private fun sunAnswer(light: String?) = when (light) { "DIRECT" -> Answer.YES; "HIGH" -> Answer.LITTLE; null -> null; else -> Answer.NO }
 
-/** A name search hit: a species, or an archetype by its own name. [label] is the name that matched. */
+/**
+ * A name search hit: a species, a name-table row, or an archetype by its own name. [label] is the name that matched.
+ * Only a species hit has a [slug]; the others give the plant just an archetype.
+ */
 internal data class CareMatch(val slug: String?, val archetype: String, val label: String, val detail: String?)
 
 private const val MAX_MATCHES = 8
 
-/** Species by accepted name and common names, and archetypes by name; case-insensitive substring match. */
+/**
+ * Species, then name-table rows, both by common names and accepted name, then archetypes by name; case-insensitive
+ * substring match. A name row for a taxon whose species already matched is left out: the species row has the care data.
+ */
 internal fun searchCare(db: CareDb?, query: String): List<CareMatch> {
     val q = query.trim()
     if (db == null || q.length < 2) return emptyList()
+    fun firstMatch(commonNames: Map<String, List<CommonName>>, accepted: String) =
+        (commonNames.values.flatten().map { it.name } + accepted).firstOrNull { it.contains(q, ignoreCase = true) }
+    val speciesTaxa = HashSet<String>()
     val species = db.species.mapNotNull { (slug, s) ->
-        val names = s.commonNames.values.flatten().map { it.name } + s.taxon.acceptedName
-        names.firstOrNull { it.contains(q, ignoreCase = true) }
-            ?.let { CareMatch(slug, s.archetype, it, s.taxon.acceptedName.takeIf { a -> a != it }) }
+        firstMatch(s.commonNames, s.taxon.acceptedName)
+            ?.let { speciesTaxa += s.taxon.acceptedName; CareMatch(slug, s.archetype, it, s.taxon.acceptedName.takeIf { a -> a != it }) }
+    }
+    val names = db.names.values.filter { it.taxon.acceptedName !in speciesTaxa }.mapNotNull { n ->
+        firstMatch(n.commonNames, n.taxon.acceptedName)
+            ?.let { CareMatch(null, n.archetype, it, n.taxon.acceptedName.takeIf { a -> a != it }) }
     }
     val archetypes = db.archetypes.filter { it.value.name.contains(q, ignoreCase = true) }.map { (id, a) -> CareMatch(null, id, a.name, null) }
-    return (species + archetypes).take(MAX_MATCHES)
+    return (species + names + archetypes).take(MAX_MATCHES)
 }
 
 // ---- State --------------------------------------------------------------------------------
