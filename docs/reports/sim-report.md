@@ -27,20 +27,20 @@ Per plant per year unless stated, averaged over plants.
 - **Over-wet days**: days the true soil stayed near saturation (depletion under 0.05) within 3 days of a watering given while it was still wet.
 - **Wet waterings**: waterings given while the true soil was still wet (depletion under 0.3).
 - **Prompts**, and the **share answered still wet** ("too wet" or "ok").
-- **Dry-out error**: median, over all refills, of the error in the predicted day the plant reaches its dry fraction; in days and relative to the true cycle.
+- **Dry-out error**: median over plants of each plant's median error, over its refills with a dry-out prediction, in the predicted day the plant reaches its dry fraction; in days and relative to the true cycle. Every plant counts once however many refills it had. A refill gets a prediction only when both the model and the true plant reach the dry fraction within 90 days of it and before the weather record ends, and a watering prompted by the repot rule gets none, so a plant can be refilled often and still have no prediction. Such plants have no error and are left out; their number is in the last column.
 - **Answers to accurate**: median soil-moisture answers (check-ins, plus answers given when watering) before the dry-out prediction is within a day or 20 % for three refills in a row; with the share of plants that never got there. Zero means the starting prediction was already that good.
 - **Use error**: mean absolute relative error of predicted daily water use, on days the true plant used at least 20 ml. The real-world version of this metric is against the scale.
 
-| Scenario | Model | Stress days | Over-wet days | Wet waterings | Prompts | Still wet | Dry-out error, days | Dry-out error, rel. | Answers to accurate | Never accurate | Use error | Repot prompts |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| belgrade, outdoor | engine, provider ET0 | 18.4 | 0.1 | 0.3 | 62.7 | 30 % | 1.0 | 11 % | 10.0 | 0 % | 28 % | 0.0 |
-| belgrade, outdoor | engine, Hargreaves only | 22.4 | 0.2 | 0.6 | 62.3 | 29 % | 1.0 | 17 % | 9.0 | 0 % | 36 % | 0.0 |
-| belgrade, outdoor | baseline | 50.4 | 6.2 | 7.2 | 52.7 | 12 % | 2.0 | 50 % | 6.0 | 10 % | 65 % | 0.0 |
-| belgrade, indoor | engine, provider ET0 | 38.6 | 1.8 | 0.7 | 86.8 | 18 % | 0.0 | 0 % | 8.0 | 7 % | 29 % | 0.0 |
-| belgrade, indoor | baseline | 103.6 | 2.1 | 5.3 | 80.2 | 9 % | 1.0 | 25 % | 4.0 | 20 % | 36 % | 0.0 |
-| seville, outdoor | engine, provider ET0 | 22.9 | 0.0 | 0.3 | 80.3 | 31 % | 1.0 | 25 % | 11.0 | 0 % | 27 % | 0.0 |
-| seville, outdoor | engine, Hargreaves only | 25.5 | 0.1 | 0.5 | 80.6 | 31 % | 1.0 | 25 % | 12.5 | 0 % | 30 % | 0.0 |
-| seville, outdoor | baseline | 39.7 | 5.1 | 10.6 | 78.6 | 15 % | 1.0 | 38 % | 5.0 | 0 % | 45 % | 0.0 |
-| edinburgh, outdoor | engine, provider ET0 | 18.7 | 0.2 | 0.3 | 42.8 | 36 % | 1.0 | 20 % | 13.0 | 10 % | 29 % | 0.0 |
-| edinburgh, outdoor | engine, Hargreaves only | 31.3 | 0.3 | 0.6 | 40.8 | 35 % | 1.0 | 25 % | 11.0 | 7 % | 44 % | 0.0 |
-| edinburgh, outdoor | baseline | 39.8 | 5.4 | 3.3 | 32.2 | 13 % | 3.0 | 50 % | 5.5 | 13 % | 53 % | 0.0 |
+| Scenario | Model | Stress days | Over-wet days | Wet waterings | Prompts | Still wet | Dry-out error, days | Dry-out error, rel. | Answers to accurate | Never accurate | Use error | Repot prompts | Plants with no dry-out prediction |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| belgrade, outdoor | engine, provider ET0 | 18.4 | 0.1 | 0.3 | 62.7 | 30 % | 1.0 | 16 % | 10.0 | 0 % | 28 % | 0.0 | 0 |
+| belgrade, outdoor | engine, Hargreaves only | 22.4 | 0.2 | 0.6 | 62.3 | 29 % | 1.0 | 20 % | 9.0 | 0 % | 36 % | 0.0 | 0 |
+| belgrade, outdoor | baseline | 50.4 | 6.2 | 7.2 | 52.7 | 12 % | 3.0 | 52 % | 6.0 | 10 % | 65 % | 0.0 | 0 |
+| belgrade, indoor | engine, provider ET0 | 38.6 | 1.8 | 0.7 | 86.8 | 18 % | 1.0 | 14 % | 8.0 | 7 % | 29 % | 0.0 | 1 |
+| belgrade, indoor | baseline | 103.6 | 2.1 | 5.3 | 80.2 | 9 % | 2.0 | 30 % | 4.0 | 20 % | 36 % | 0.0 | 2 |
+| seville, outdoor | engine, provider ET0 | 22.9 | 0.0 | 0.3 | 80.3 | 31 % | 1.0 | 20 % | 11.0 | 0 % | 27 % | 0.0 | 0 |
+| seville, outdoor | engine, Hargreaves only | 25.5 | 0.1 | 0.5 | 80.6 | 31 % | 1.0 | 23 % | 12.5 | 0 % | 30 % | 0.0 | 0 |
+| seville, outdoor | baseline | 39.7 | 5.1 | 10.6 | 78.6 | 15 % | 1.0 | 34 % | 5.0 | 0 % | 45 % | 0.0 | 0 |
+| edinburgh, outdoor | engine, provider ET0 | 18.7 | 0.2 | 0.3 | 42.8 | 36 % | 2.0 | 20 % | 13.0 | 10 % | 29 % | 0.0 | 0 |
+| edinburgh, outdoor | engine, Hargreaves only | 31.3 | 0.3 | 0.6 | 40.8 | 35 % | 2.0 | 25 % | 11.0 | 7 % | 44 % | 0.0 | 0 |
+| edinburgh, outdoor | baseline | 39.8 | 5.4 | 3.3 | 32.2 | 13 % | 4.0 | 50 % | 5.5 | 13 % | 53 % | 0.0 | 0 |
