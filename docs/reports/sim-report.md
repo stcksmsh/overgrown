@@ -27,11 +27,11 @@ Per plant per year unless stated, averaged over plants.
 - **Over-wet days**: days the true soil stayed near saturation (depletion under 0.05) within 3 days of a watering given while it was still wet.
 - **Wet waterings**: waterings given while the true soil was still wet (depletion under 0.3).
 - **Prompts**, and the **share answered still wet** ("too wet" or "ok").
-- **Dry-out error**: median over plants of each plant's median error, over its refills, in the predicted day the plant reaches its dry fraction; in days and relative to the true cycle. Every plant counts once however many refills it had. Plants without a refill have no error and are left out; their number is in the last column.
+- **Dry-out error**: median over plants of each plant's median error, over its refills with a dry-out prediction, in the predicted day the plant reaches its dry fraction; in days and relative to the true cycle. Every plant counts once however many refills it had. A refill gets a prediction only when both the model and the true plant reach the dry fraction within 90 days of it and before the weather record ends, and a watering prompted by the repot rule gets none, so a plant can be refilled often and still have no prediction. Such plants have no error and are left out; their number is in the last column.
 - **Answers to accurate**: median soil-moisture answers (check-ins, plus answers given when watering) before the dry-out prediction is within a day or 20 % for three refills in a row; with the share of plants that never got there. Zero means the starting prediction was already that good.
 - **Use error**: mean absolute relative error of predicted daily water use, on days the true plant used at least 20 ml. The real-world version of this metric is against the scale.
 
-| Scenario | Model | Stress days | Over-wet days | Wet waterings | Prompts | Still wet | Dry-out error, days | Dry-out error, rel. | Answers to accurate | Never accurate | Use error | Repot prompts | Plants without a refill |
+| Scenario | Model | Stress days | Over-wet days | Wet waterings | Prompts | Still wet | Dry-out error, days | Dry-out error, rel. | Answers to accurate | Never accurate | Use error | Repot prompts | Plants with no dry-out prediction |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | belgrade, outdoor | engine, provider ET0 | 18.4 | 0.1 | 0.3 | 62.7 | 30 % | 1.0 | 16 % | 10.0 | 0 % | 28 % | 0.0 | 0 |
 | belgrade, outdoor | engine, Hargreaves only | 22.4 | 0.2 | 0.6 | 62.3 | 29 % | 1.0 | 20 % | 9.0 | 0 % | 36 % | 0.0 | 0 |

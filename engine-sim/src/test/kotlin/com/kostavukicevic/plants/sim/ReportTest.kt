@@ -19,10 +19,10 @@ class ReportTest {
     }
 
     @Test
-    fun plantsWithoutARefillAreLeftOutAndCounted() {
+    fun plantsWithoutADryOutPredictionAreLeftOutAndCounted() {
         val plants = listOf(plant(emptyList()), plant(listOf(1.0, 3.0)))
         assertEquals(2.0, plants.perPlantMedian { it.dryOutErrorsDays })
-        assertEquals(1, plants.plantsWithoutRefill())
+        assertEquals(1, plants.plantsWithoutPrediction())
     }
 
     @Test

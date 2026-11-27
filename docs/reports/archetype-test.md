@@ -22,7 +22,7 @@ Contexts: an outdoor container on every site (Belgrade, Seville, Edinburgh), and
 
 Fields exercised: the ones the watering model reads (water strategy, dry fraction, water use factor, drought asymmetry, winter rules). Wind sensitivity, frost class, minimum temperature, root-freeze alerts and waterlogging sensitivity only raise alerts and do not change watering, so they cannot move these metrics. A species equal to its archetype on every watering field gives two identical runs by construction.
 
-Metrics are the simulation report's. **Stress days**: per plant per year, days the true soil got drier than the true plant's stress threshold (its dry fraction + 0.3, at most 0.98). **Dry-out error**: median over plants of each plant's median error over its refills, so every plant counts once however many refills it had: the error, in days, between the day the engine predicts the plant reaches the dry fraction it was told and the day the true plant reaches its true dry fraction; relative to the true cycle in brackets. Plants without a refill have no error and are left out of the median; when a run has any, their number across its scenarios follows the error.
+Metrics are the simulation report's. **Stress days**: per plant per year, days the true soil got drier than the true plant's stress threshold (its dry fraction + 0.3, at most 0.98). **Dry-out error**: median over plants of each plant's median error over its refills with a dry-out prediction, so every plant counts once however many refills it had: the error, in days, between the day the engine predicts the plant reaches the dry fraction it was told and the day the true plant reaches its true dry fraction; relative to the true cycle in brackets. Plants with no refill with a dry-out prediction have no error and are left out of the median; when a run has any, their number across its scenarios follows the error.
 
 A species passes when the archetype-only run adds at most 1.0 stress day per plant per year (PRIOR, not measured: under 0.3 % of days, a single short dry spell a year that any hand-watered plant sees anyway, so not worth a species entry of its own) and its dry-out error in days is at most 20 % above the species run's. Errors are whole days, so each plant's median is a whole or half day and the median over plants a multiple of a quarter day; below a median of 1.25 days, 20 % above it allows no increase at all, so in practice the rule means "no worse median", which is stricter than 20 %. When at least one run has no refill with a dry-out prediction, only the stress criterion is judged: a stress failure is still a failure, otherwise the species is reported as no data, not as a pass or fail.
 
@@ -30,10 +30,10 @@ A species passes when the archetype-only run adds at most 1.0 stress day per pla
 
 | Species | Archetype | Watering fields that differ | Stress days, species | Stress days, archetype | Extra | Dry-out error, species | Dry-out error, archetype | Result |
 |---|---|---|---:|---:|---:|---:|---:|---|
-| buxus-sempervirens | outdoor-hardy-flowering-shrub | none (identical by construction) | 37.5 | 37.5 | 0.0 | 1.0 d (32 %), 1 without a refill | 1.0 d (32 %), 1 without a refill | pass |
-| citrus-limon | outdoor-tender-evergreen | none (identical by construction) | 11.2 | 11.2 | 0.0 | 1.0 d (13 %), 1 without a refill | 1.0 d (13 %), 1 without a refill | pass |
-| impatiens-walleriana | outdoor-annual-bedding | none (identical by construction) | 35.6 | 35.6 | 0.0 | 1.0 d (33 %), 1 without a refill | 1.0 d (33 %), 1 without a refill | pass |
-| ocimum-basilicum | outdoor-leafy-herb | winter rules | 35.6 | 37.5 | 1.9 | 1.0 d (33 %), 1 without a refill | 1.0 d (32 %), 1 without a refill | fail: stress |
+| buxus-sempervirens | outdoor-hardy-flowering-shrub | none (identical by construction) | 37.5 | 37.5 | 0.0 | 1.0 d (32 %), 1 with no dry-out prediction | 1.0 d (32 %), 1 with no dry-out prediction | pass |
+| citrus-limon | outdoor-tender-evergreen | none (identical by construction) | 11.2 | 11.2 | 0.0 | 1.0 d (13 %), 1 with no dry-out prediction | 1.0 d (13 %), 1 with no dry-out prediction | pass |
+| impatiens-walleriana | outdoor-annual-bedding | none (identical by construction) | 35.6 | 35.6 | 0.0 | 1.0 d (33 %), 1 with no dry-out prediction | 1.0 d (33 %), 1 with no dry-out prediction | pass |
+| ocimum-basilicum | outdoor-leafy-herb | winter rules | 35.6 | 37.5 | 1.9 | 1.0 d (33 %), 1 with no dry-out prediction | 1.0 d (32 %), 1 with no dry-out prediction | fail: stress |
 
 Scenarios per species:
 

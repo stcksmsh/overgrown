@@ -93,12 +93,12 @@ internal fun List<Double>.median(): Double = if (isEmpty()) Double.NaN else sort
 
 /**
  * Median over plants of each plant's own median error, so a plant with thousands of refills counts once, the same as
- * one with ten. Plants without a refill have no error and are left out; NaN when no plant has one.
+ * one with ten. Plants without a dry-out prediction have no error and are left out; NaN when no plant has one.
  */
 internal fun List<PlantResult>.perPlantMedian(errors: (PlantResult) -> List<Double>): Double =
     map(errors).filter { it.isNotEmpty() }.map { it.median() }.median()
 
-internal fun List<PlantResult>.plantsWithoutRefill(): Int = count { it.dryOutErrorsDays.isEmpty() }
+internal fun List<PlantResult>.plantsWithoutPrediction(): Int = count { it.dryOutErrorsDays.isEmpty() }
 
 fun runAll(plantsPerScenario: Int = 30): List<Row> {
     val rows = ArrayList<Row>()
@@ -157,11 +157,11 @@ fun report(rows: List<Row>): String = buildString {
     appendLine("- **Over-wet days**: days the true soil stayed near saturation (depletion under 0.05) within 3 days of a watering given while it was still wet.")
     appendLine("- **Wet waterings**: waterings given while the true soil was still wet (depletion under 0.3).")
     appendLine("- **Prompts**, and the **share answered still wet** (\"too wet\" or \"ok\").")
-    appendLine("- **Dry-out error**: median over plants of each plant's median error, over its refills, in the predicted day the plant reaches its dry fraction; in days and relative to the true cycle. Every plant counts once however many refills it had. Plants without a refill have no error and are left out; their number is in the last column.")
+    appendLine("- **Dry-out error**: median over plants of each plant's median error, over its refills with a dry-out prediction, in the predicted day the plant reaches its dry fraction; in days and relative to the true cycle. Every plant counts once however many refills it had. A refill gets a prediction only when both the model and the true plant reach the dry fraction within 90 days of it and before the weather record ends, and a watering prompted by the repot rule gets none, so a plant can be refilled often and still have no prediction. Such plants have no error and are left out; their number is in the last column.")
     appendLine("- **Answers to accurate**: median soil-moisture answers (check-ins, plus answers given when watering) before the dry-out prediction is within a day or 20 % for three refills in a row; with the share of plants that never got there. Zero means the starting prediction was already that good.")
     appendLine("- **Use error**: mean absolute relative error of predicted daily water use, on days the true plant used at least 20 ml. The real-world version of this metric is against the scale.")
     appendLine()
-    appendLine("| Scenario | Model | Stress days | Over-wet days | Wet waterings | Prompts | Still wet | Dry-out error, days | Dry-out error, rel. | Answers to accurate | Never accurate | Use error | Repot prompts | Plants without a refill |")
+    appendLine("| Scenario | Model | Stress days | Over-wet days | Wet waterings | Prompts | Still wet | Dry-out error, days | Dry-out error, rel. | Answers to accurate | Never accurate | Use error | Repot prompts | Plants with no dry-out prediction |")
     appendLine("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     for (r in rows) {
         val perYear = { f: (PlantResult) -> Number -> r.results.map { f(it).toDouble() / it.years }.average() }
@@ -171,7 +171,7 @@ fun report(rows: List<Row>): String = buildString {
             "| ${r.scenario} | ${r.model} | ${f1(perYear { it.stressDays })} | ${f1(perYear { it.overwetDays })} | " +
                 "${f1(perYear { it.wateringsWhileWet })} | ${f1(perYear { it.prompts })} | ${pct(r.stillWetShare())} | " +
                 "${f1(r.results.perPlantMedian { it.dryOutErrorsDays })} | ${pct(r.results.perPlantMedian { it.dryOutErrorsRelative })} | " +
-                "${f1(untils.median())} | ${pct(never)} | ${pct(r.results.map { it.useError }.average())} | ${f1(perYear { it.repotPrompts })} | ${r.results.plantsWithoutRefill()} |",
+                "${f1(untils.median())} | ${pct(never)} | ${pct(r.results.map { it.useError }.average())} | ${f1(perYear { it.repotPrompts })} | ${r.results.plantsWithoutPrediction()} |",
         )
     }
 }
