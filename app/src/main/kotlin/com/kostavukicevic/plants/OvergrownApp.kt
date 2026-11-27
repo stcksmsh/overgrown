@@ -90,7 +90,8 @@ class Graph(context: Context) {
 
     /** Bumped after any change, so screens recompute. */
     val changes = kotlinx.coroutines.flow.MutableStateFlow(0)
-    fun changed() { changes.value++ }
+    // Called from the app scope's thread, the main thread and workers; value++ could lose a bump.
+    fun changed() { changes.update { it + 1 } }
 
     private val fetchCount = MutableStateFlow(0)
     private val lastFetchFailed = MutableStateFlow(false)
