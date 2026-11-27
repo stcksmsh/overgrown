@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -79,10 +80,11 @@ internal object Onboarding {
 
     fun dismiss(c: Context) = prefs(c).edit().putBoolean(DISMISSED, true).apply()
 
+    fun blocked(c: Context) = prefs(c).getBoolean(BLOCKED, false)
+
     /** A permission found granted ends the block, so a later revoke asks the system again. */
-    fun blocked(c: Context): Boolean {
-        if (Notifier.allowed(c)) prefs(c).edit().putBoolean(BLOCKED, false).apply()
-        return prefs(c).getBoolean(BLOCKED, false)
+    fun grantSeen(c: Context) {
+        if (blocked(c) && Notifier.allowed(c)) prefs(c).edit().putBoolean(BLOCKED, false).apply()
     }
 
     fun block(c: Context) = prefs(c).edit().putBoolean(BLOCKED, true).apply()
@@ -99,6 +101,11 @@ internal fun NotificationQuestion() {
     val c = LocalContext.current
     val activity = LocalActivity.current
     val tick = changeTick()
+    // The grant may have been given in the system's settings while the app was away.
+    LifecycleResumeEffect(Unit) {
+        Onboarding.grantSeen(c)
+        onPauseOrDispose {}
+    }
     var explain by remember(tick) { mutableStateOf(Onboarding.askNow(c)) }
     val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         // The system tells that it will not ask again only by wanting no rationale after a refusal.

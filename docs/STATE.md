@@ -29,12 +29,15 @@ Handover for the next coordinator. Read this, then run `nonslop status` in BOTH 
 3. Store metadata (fastlane, BRIEF section 9).
 4. Data: next-entry batch (tomato, chilli, sweet pepper, rosemary, lavender) once #14 merges.
 5. Data-review skill wording: an explicit null on a cold field turns alerts off, it does not fall back.
-6. Polish: per-channel notifications off shows no reminders-off line; PR #12 data minors.
+6. Polish: per-channel notifications off shows no reminders-off line.
+7. Engine/Planner: repot advice re-arm on pot edit and backdated acquisition (D51 follow-up); harness per-plant median dry-out error.
+8. Data PR #12 review minors: two runners starting at once both pass the one-runner check; diff-merge note should quote both drafts; PIPELINE lacks the 5-plant cap; data-review scratch wording.
 
 ## Waiting on the owner
 
 - The A/B/C decision on data PR #14.
 - Optional CI step to upload both APKs and mapping.txt when the double-build compare fails (in the PR #63 body).
+- Boris: cold nights 30 Nov to 2 Dec: insulate, lift off the floor, against the wall; below -5 °C into an unheated room.
 - Weigh Boris daily (nursery pot only, same time, note rain); first full mark at the next real watering (G4 exit condition, G5 input). More plants are coming: he reports gaps.
 - Before release: trademark, lawyer, developer verification, signing key, contact address, privacy policy, Open-Meteo letter, repo visibility (public now; brief said private), Boris art (asset list in the advisor report section 7). Re-enable PR CI before the first beta to others.
 
