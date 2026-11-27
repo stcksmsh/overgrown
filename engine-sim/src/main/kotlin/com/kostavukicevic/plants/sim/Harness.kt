@@ -58,11 +58,16 @@ class Harness(private val weather: List<ObsDay>, private val withEt0: Boolean, p
 
     private val horizonDays = 90
 
-    fun <S> run(model: WateringModel<S>, tp: TruthPlant, person: Person, seed: Int): PlantResult {
-        val plant = tp.plant
+    /**
+     * [plant] is what the model is told. It differs from the true plant [tp] only when a test gives the model another
+     * care profile (the archetype test). Stress and the true dry-out day follow the true plant's profile; the
+     * predicted dry-out day follows the profile the model was given, since that is when it prompts.
+     */
+    fun <S> run(model: WateringModel<S>, tp: TruthPlant, person: Person, seed: Int, plant: Plant = tp.plant): PlantResult {
         val rng = Random(seed)
-        val dryFraction = WaterBalance.dryFraction(plant.profile)
-        val stressThreshold = min(0.98, dryFraction + 0.3)
+        val trueDryFraction = WaterBalance.dryFraction(tp.plant.profile)
+        val modelDryFraction = WaterBalance.dryFraction(plant.profile)
+        val stressThreshold = min(0.98, trueDryFraction + 0.3)
 
         var state = model.initial(plant)
         var truthD = 0.0
@@ -103,8 +108,8 @@ class Harness(private val weather: List<ObsDay>, private val withEt0: Boolean, p
         }
 
         fun recordDryOutPrediction(i: Int, stateAfter: S) {
-            val predicted = predictCrossing(model, plant, stateAfter, i, dryFraction) ?: return
-            val truth = truthCrossing(tp, truthD, i, dryFraction) ?: return
+            val predicted = predictCrossing(model, plant, stateAfter, i, modelDryFraction) ?: return
+            val truth = truthCrossing(tp, truthD, i, trueDryFraction) ?: return
             val e = abs(predicted - truth).toDouble()
             val rel = e / max(1, truth)
             errDays += e

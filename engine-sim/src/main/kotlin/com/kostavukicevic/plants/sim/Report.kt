@@ -87,7 +87,7 @@ data class Row(val scenario: String, val model: String, val results: List<PlantR
     }
 }
 
-private fun List<Double>.median(): Double = if (isEmpty()) Double.NaN else sorted().let { s ->
+internal fun List<Double>.median(): Double = if (isEmpty()) Double.NaN else sorted().let { s ->
     if (s.size % 2 == 1) s[s.size / 2] else (s[s.size / 2 - 1] + s[s.size / 2]) / 2
 }
 
@@ -167,8 +167,8 @@ fun report(rows: List<Row>): String = buildString {
     }
 }
 
-private fun f1(x: Double) = if (x.isNaN()) "n/a" else "%.1f".format(java.util.Locale.ROOT, x)
-private fun pct(x: Double) = if (x.isNaN()) "n/a" else "%.0f %%".format(java.util.Locale.ROOT, x * 100)
+internal fun f1(x: Double) = if (x.isNaN()) "n/a" else "%.1f".format(java.util.Locale.ROOT, x)
+internal fun pct(x: Double) = if (x.isNaN()) "n/a" else "%.0f %%".format(java.util.Locale.ROOT, x * 100)
 
 fun main(args: Array<String>) {
     val out = File(args.firstOrNull() ?: "build/reports/sim-report.md")
