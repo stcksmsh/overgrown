@@ -20,6 +20,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -66,9 +67,31 @@ class Graph(context: Context) {
     val garden = Garden(db, settings, WeatherService(openMeteo, metNorway, settings), openMeteo, { careDb }, now, zone, AndroidStorage.photos(context))
     val scheduler = Scheduler(context.applicationContext, this)
 
+    /**
+     * Where writes and rescheduling run, so leaving a screen does not cancel them halfway (D76). One at a time, as
+     * on the main thread the screens' own scopes use, so writes started in order start in order. A failure is not
+     * caught here: it ends the app as it did from a screen's scope.
+     */
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1))
+
+    /**
+     * [block] in [scope], awaited, for a screen that acts on the result (a message, navigating away). A caller that
+     * is cancelled stops waiting while [block] goes on; a failure no caller will see then is logged.
+     */
+    suspend fun <T> outlive(block: suspend () -> T): T {
+        val work = scope.async { block() }
+        try {
+            return work.await()
+        } catch (e: CancellationException) {
+            work.invokeOnCompletion { t -> if (t != null && t !is CancellationException) android.util.Log.e("Overgrown", "write failed after its screen was left", t) }
+            throw e
+        }
+    }
+
     /** Bumped after any change, so screens recompute. */
     val changes = kotlinx.coroutines.flow.MutableStateFlow(0)
-    fun changed() { changes.value++ }
+    // Called from the app scope's thread, the main thread and workers; value++ could lose a bump.
+    fun changed() { changes.update { it + 1 } }
 
     private val fetchCount = MutableStateFlow(0)
     private val lastFetchFailed = MutableStateFlow(false)

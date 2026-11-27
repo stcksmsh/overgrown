@@ -3,6 +3,7 @@ package com.kostavukicevic.plants.ui
 
 import android.app.Application
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -23,6 +24,7 @@ import androidx.room.Room
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.kostavukicevic.plants.Graph
 import com.kostavukicevic.plants.R
@@ -336,6 +338,27 @@ class PlantScreenTest {
         compose.mainClock.advanceTimeBy(SNACKBAR_GONE)
         compose.waitUntil(15_000) { stored().isEmpty() }
         compose.onNodeWithContentDescription(delete).assertDoesNotExist()
+    }
+
+    @Test
+    fun wateringThenLeavingAtOnceStillRecordsAndReschedules() {
+        val onScreen = mutableStateOf(true)
+        compose.setContent { OvergrownTheme { if (onScreen.value) PlantScreen(plantId, onBack = {}, onEdit = {}) } }
+        waitFor(s(R.string.plant_watered))
+        compose.onNodeWithText(s(R.string.plant_watered)).performScrollTo().performClick()
+        waitFor(s(R.string.plant_watered_question))
+        // Nothing scheduled yet, so a notification job queued from here on is reschedule()'s doing.
+        val work = WorkManager.getInstance(compose.activity)
+        work.cancelAllWorkByTag("notify").result.get()
+        // Leaving in the frame of the tap, as Back pressed with it: the screen's scope is cancelled before its next frame.
+        compose.runOnUiThread {
+            compose.onNodeWithText(s(R.string.yes)).performClick()
+            onScreen.value = false
+        }
+        compose.waitUntil(15_000) {
+            stored().any { it.type == "WATERED" } &&
+                work.getWorkInfosByTag("notify").get().any { it.state == WorkInfo.State.ENQUEUED }
+        }
     }
 
     @Test

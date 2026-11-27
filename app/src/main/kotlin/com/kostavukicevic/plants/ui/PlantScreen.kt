@@ -106,9 +106,10 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit, careDb: C
     // Survives the activity being recreated while the camera app is in front.
     var cameraFile by rememberSaveable { mutableStateOf<String?>(null) }
 
-    fun act(block: suspend () -> Unit) = scope.launch { block(); g.scheduler.reschedule(); g.changed() }
+    // In the app's scope: Back pressed with the tap, or deleting the plant, must not cancel the write or the reschedule.
+    fun act(block: suspend () -> Unit) = g.scope.launch { block(); g.scheduler.reschedule(); g.changed() }
 
-    fun addPhoto(read: () -> ByteArray?) = scope.launch {
+    fun addPhoto(read: () -> ByteArray?) = g.scope.launch {
         photoMessage = try {
             // A camera that reports success without writing, or an empty file, leaves nothing to store.
             val bytes = withContext(Dispatchers.IO) { read() }?.takeIf { it.isNotEmpty() }
@@ -221,9 +222,11 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit, careDb: C
                                 onEdit = { editError = null; editing = item },
                                 onDelete = {
                                     undo.delete("event:${item.id}", res.getString(R.string.deleted, line), res.getString(R.string.undo), res.getString(R.string.delete_failed, line)) {
-                                        g.garden.deleteEvent(item.id)
-                                        g.scheduler.reschedule()
-                                        g.changed()
+                                        g.outlive {
+                                            g.garden.deleteEvent(item.id)
+                                            g.scheduler.reschedule()
+                                            g.changed()
+                                        }
                                     }
                                 },
                             )
@@ -255,7 +258,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit, careDb: C
             error = editError,
             onDismiss = { editing = null },
             onSave = { edited ->
-                scope.launch {
+                g.scope.launch {
                     editError = try {
                         g.garden.updateEvent(edited)
                         null
@@ -323,7 +326,7 @@ fun PlantScreen(plantId: Long, onBack: () -> Unit, onEdit: () -> Unit, careDb: C
             onDismissRequest = { deletePhoto = null },
             title = { Text(stringResource(R.string.photo_delete_question), Modifier.semantics { heading() }) },
             confirmButton = {
-                DeleteButton(onClick = { deletePhoto = null; scope.launch { g.garden.deletePhoto(photo.id) } })
+                DeleteButton(onClick = { deletePhoto = null; g.scope.launch { g.garden.deletePhoto(photo.id) } })
             },
             dismissButton = { TextButton(onClick = { deletePhoto = null }) { Text(stringResource(R.string.cancel)) } },
         )
@@ -424,7 +427,6 @@ internal fun ToxicityInfo(t: Toxicity) {
 @Composable
 private fun Calibration(plantId: Long) {
     val g = rememberGraph()
-    val scope = rememberCoroutineScope()
     val entries by g.garden.calibration(plantId).collectAsState(emptyList())
     var grams by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
@@ -435,7 +437,7 @@ private fun Calibration(plantId: Long) {
     OutlinedTextField(note, { note = it }, label = { Text(stringResource(R.string.calibration_note)) }, modifier = Modifier.fillMaxWidth())
     Button(onClick = {
         val v = positive(grams)
-        if (v == null) error = true else scope.launch { g.garden.logMass(plantId, v, note.trim()); grams = ""; note = "" }
+        if (v == null) error = true else g.scope.launch { g.garden.logMass(plantId, v, note.trim()); grams = ""; note = "" }
     }) { Text(stringResource(R.string.calibration_log)) }
     if (error) Text(stringResource(R.string.calibration_invalid), color = MaterialTheme.colorScheme.error)
     for (e in entries.asReversed().take(30)) {

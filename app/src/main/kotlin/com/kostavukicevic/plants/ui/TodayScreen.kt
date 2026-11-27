@@ -16,7 +16,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -64,7 +63,6 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
     // Any fetch, also the one on opening the app, not only this screen's Refresh.
     val refreshing by g.fetching.collectAsState()
     val failed by g.fetchFailed.collectAsState()
-    val scope = rememberCoroutineScope()
 
     // Read again on each return, so a switch turned on in the system's settings takes the line away, and on each
     // change, which NotificationQuestion signals once it is answered.
@@ -77,8 +75,8 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
     val asking = remember(tick) { Onboarding.askNow(c) }
     var dismissed by remember(tick) { mutableStateOf(Onboarding.dismissed(c)) }
 
-    // Recording reloads this screen in place, as on the plant screen.
-    fun act(block: suspend () -> Unit) = scope.launch { block(); g.scheduler.reschedule(); g.changed() }
+    // Recording reloads this screen in place, as on the plant screen; in the app's scope, so leaving does not cancel it.
+    fun act(block: suspend () -> Unit) = g.scope.launch { block(); g.scheduler.reschedule(); g.changed() }
 
     Page(
         title = stringResource(R.string.today_title),
@@ -104,7 +102,7 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
         ) {
             // Indoor places use no weather, so a garden of only indoor plants shows none of this.
             if (list.any { it.place.outdoor }) WeatherStatus(lastFetch, Clock.System.now(), refreshing, failed) {
-                scope.launch {
+                g.scope.launch {
                     // A thrown fetch is already marked failed; only keep it from ending the app.
                     try {
                         g.refreshWeather(foreground = true)

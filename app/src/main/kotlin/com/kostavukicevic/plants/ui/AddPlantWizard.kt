@@ -86,9 +86,6 @@ import com.kostavukicevic.plants.ui.theme.StateBlock
 import com.kostavukicevic.plants.ui.theme.Type
 import com.kostavukicevic.plants.weather.PlaceMatch
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.MathContext
@@ -360,9 +357,6 @@ internal class WizardState(acquiredOn: String) {
 
 private const val STEPS = 4
 
-/** Outlives the screen, so leaving it does not cancel the forecast fetch for a new outdoor place. */
-private val afterSave = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-
 /**
  * Adding a plant, or editing one ([plantId]), in four steps: what plant, where, the pot, sun and rain.
  * [careDb] is the shipped care database; tests pass their own.
@@ -416,11 +410,16 @@ fun AddPlantWizard(plantId: Long?, onDone: () -> Unit, careDb: CareDb? = remembe
         failedOn = null
         scope.launch {
             try {
-                val newOutdoorPlace = savePlantAndPlace(g, st, plantId, known)
-                if (plantId == null) Onboarding.plantAdded(context)
-                g.scheduler.reschedule(); g.changed(); onDone()
+                // The save outlives the wizard; only closing it waits on it here.
+                val newOutdoorPlace = g.outlive {
+                    savePlantAndPlace(g, st, plantId, known).also {
+                        if (plantId == null) Onboarding.plantAdded(context)
+                        g.scheduler.reschedule(); g.changed()
+                    }
+                }
+                onDone()
                 // A new outdoor place has no forecast yet, as in EditPlaceScreen; the screen does not wait for it.
-                if (newOutdoorPlace) afterSave.launch { refreshAfterSave(g) }
+                if (newOutdoorPlace) g.scope.launch { refreshAfterSave(g) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

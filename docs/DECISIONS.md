@@ -573,3 +573,11 @@ The `overgrown-data` submodule moves from `fe49d40` to `676f969` (data PR #22). 
 ## D74. Care-data pin moved to 286 reviewed names
 
 The `overgrown-data` submodule moves from `676f969` to `e4366ba` (data PR #23). 48 more reviewed name rows (286 in total) ship, so add-plant search finds them (user-visible): for example "wild thyme" now gives a name row for `outdoor-mediterranean-shrub` (Thymus serpyllum). `NameTablePinTest` asserts the 286 row ids in the real compiled asset and the "wild thyme" search. Ranking is unchanged.
+
+## D75. Deleting with Undo and leaving the screen at once now deletes
+
+Before, `UndoDelete` committed only when its snackbar closed, and leaving the screen cancelled the snackbar's scope, so the delete was lost and the entry came back (owner report). Now a cancelled wait without Undo commits under `NonCancellable` and rethrows; Undo still keeps the entry. No soft-delete column, no schema change. If the app dies before the commit, the entry survives. Open: Undo pressed and the screen left within the same frame can still delete (PR #84 review).
+
+## D76. Writes and rescheduling run in an app-level scope, not the screen's
+
+Every database write, settings write and scheduler call used to run in the screen's `rememberCoroutineScope`, so leaving the screen cancelled unfinished work: tapping "Watered" and pressing Back at once could store the event but skip the reschedule, leaving notifications stale. `Graph` now holds one `scope` (`SupervisorJob` on `Dispatchers.Default.limitedParallelism(1)`, so writes started in order start in order, as on the main thread) and screens launch writes there. Where a screen acts on the result by navigating (place editor, add-plant wizard) it awaits `Graph.outlive`, which runs the work in that scope: leaving early stops the wait, not the write, and a failure no screen will show is logged. Undo commits go through `outlive` too; the Undo snackbar wait stays on the screen, where its timeout runs. A failure in fire-and-forget work is not caught, so it ends the app as before. Not on the main looper: Compose tests do not drain it, and a write's UI state updates are plain snapshot writes that need no main thread. No WorkManager, no new dependency. If the process dies mid-write, the work is lost as before.
