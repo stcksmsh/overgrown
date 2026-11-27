@@ -30,7 +30,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
-import com.kostavukicevic.plants.voicedResource
 import com.kostavukicevic.plants.data.AlertEvent
 import com.kostavukicevic.plants.data.AlertKind
 import com.kostavukicevic.plants.data.Garden
@@ -48,6 +47,7 @@ import com.kostavukicevic.plants.ui.theme.Spacing
 import com.kostavukicevic.plants.ui.theme.StateBlock
 import com.kostavukicevic.plants.ui.theme.Type
 import com.kostavukicevic.plants.ui.theme.waterLeftPercent
+import com.kostavukicevic.plants.voicedResource
 import kotlinx.datetime.LocalDate
 
 /** An action that asks the person for something today: a "Do now" card. Holds wait, so they are not. */
@@ -177,7 +177,7 @@ internal fun ActionCard(s: PlantStatus, onOpen: () -> Unit, onWatered: () -> Uni
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 3)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.grid / 2)) {
-                Text(s.plant.name, Modifier.sharedPlant("name", "plant:${s.plant.id}"), style = Type.title, color = block.text)
+                Text(s.plant.name, Modifier.sharedPlant("name", "plant:${s.plant.id}"), style = Type.title, color = block.text, autoSize = WholeWords(Type.title.fontSize))
                 val body = when (action) {
                     is Action.WaterNow -> stringResource(R.string.today_water_dose, Texts.roundDose(action.doseMl))
                     is Action.CheckSoil -> stringResource(R.string.today_soil_question)
@@ -189,14 +189,17 @@ internal fun ActionCard(s: PlantStatus, onOpen: () -> Unit, onWatered: () -> Uni
             Glyph(glyphFor(s.plant.archetypeId), block.text, contentDescription = null, Modifier.sharedPlant("glyph", "plant:${s.plant.id}"), size = Spacing.grid * 16)
         }
         when (action) {
-            is Action.WaterNow -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 3)) {
-                PotGauge(s.waterLeft.toFloat(), PotGaugeSize.Medium, block = block)
-                Text(
-                    stringResource(R.string.today_level, Texts.waterLevel(c, s.waterLeft), waterLeftPercent(s.waterLeft.toFloat())),
-                    Modifier.weight(1f),
-                    style = Type.secondary,
-                    color = block.text,
-                )
+            is Action.WaterNow -> BesideOrUnder(under = Spacing.grid * 3, main = {
+                Row(Modifier.padding(end = Spacing.grid * 3), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 3)) {
+                    PotGauge(s.waterLeft.toFloat(), PotGaugeSize.Medium, block = block)
+                    Text(
+                        stringResource(R.string.today_level, Texts.waterLevel(c, s.waterLeft), waterLeftPercent(s.waterLeft.toFloat())),
+                        Modifier.weight(1f),
+                        style = Type.secondary,
+                        color = block.text,
+                    )
+                }
+            }) {
                 // Primary on a state block: the block's own ink, the same in both themes like the block itself.
                 Button(
                     onClick = onWatered,
@@ -205,8 +208,8 @@ internal fun ActionCard(s: PlantStatus, onOpen: () -> Unit, onWatered: () -> Uni
                     colors = ButtonDefaults.buttonColors(containerColor = block.text, contentColor = LightColors.onInk),
                 ) { Text(stringResource(R.string.plant_watered), style = Type.label) }
             }
-            is Action.CheckSoil -> Row(horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
-                for ((label, moisture) in answers) OnBlockButton(stringResource(label), { onAnswer(moisture) }, Modifier.weight(1f))
+            is Action.CheckSoil -> EvenRows(answers.size) {
+                for ((label, moisture) in answers) OnBlockButton(stringResource(label), { onAnswer(moisture) })
             }
             else -> Unit
         }
@@ -236,7 +239,7 @@ internal fun RestingTile(s: PlantStatus, today: LocalDate, modifier: Modifier = 
             PotGauge(s.waterLeft.toFloat(), PotGaugeSize.Small)
         }
         // No line limit: a long name wraps and the tile grows, so it is never cut.
-        Text(s.plant.name, Modifier.sharedPlant("name", "plant:${s.plant.id}"), style = Type.cardTitle, color = colors.ink)
+        Text(s.plant.name, Modifier.sharedPlant("name", "plant:${s.plant.id}"), style = Type.cardTitle, color = colors.ink, autoSize = WholeWords(Type.cardTitle.fontSize))
         Text(line, style = Type.secondary, color = colors.ink)
     }
 }

@@ -12,14 +12,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -942,16 +941,11 @@ private fun AdvancedToggle(open: Boolean, onChange: (Boolean) -> Unit) {
     }
 }
 
-/** [items] in rows of [columns]; tiles in a row share the tallest one's height. */
+/** [items] in rows of [columns], fewer when a label's word would not fit; tiles in a row share the tallest one's height. */
 @Composable
 private fun <T> TileGrid(items: List<T>, columns: Int, minHeight: Dp, tile: @Composable (T, Modifier) -> Unit) {
-    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(Spacing.cardGap)) {
-        for (row in items.chunked(columns)) {
-            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(Spacing.cardGap)) {
-                for (item in row) tile(item, Modifier.weight(1f).fillMaxHeight().heightIn(min = minHeight))
-                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
-            }
-        }
+    EvenRows(columns, Modifier.fillMaxWidth().selectableGroup(), gap = Spacing.cardGap) {
+        for (item in items) tile(item, Modifier.fillMaxHeight().heightIn(min = minHeight))
     }
 }
 

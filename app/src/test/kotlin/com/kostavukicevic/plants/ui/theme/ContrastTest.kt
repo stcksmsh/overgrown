@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.pow
 
-/** WCAG 2 contrast of every text/fill and gauge pair the theme defines, in both themes. */
+/** WCAG 2 contrast of every text/fill, gauge and control-boundary pair the theme and its Material mapping use, in both themes. */
 class ContrastTest {
 
     private fun channel(c: Float): Double = if (c <= 0.04045f) c / 12.92 else ((c + 0.055) / 1.055).pow(2.4)
@@ -21,7 +21,8 @@ class ContrastTest {
 
     private data class Check(val name: String, val fg: Color, val bg: Color, val min: Double)
 
-    private fun pairs(theme: String, c: OvergrownColors): List<Check> {
+    private fun pairs(theme: String, c: OvergrownColors, dark: Boolean): List<Check> {
+        val m = materialScheme(c, dark)
         val text = buildList {
             add(Check("ink on ground", c.ink, c.ground, TEXT))
             add(Check("ink on surface", c.ink, c.surface, TEXT))
@@ -40,6 +41,12 @@ class ContrastTest {
             for (b in StateBlock.entries) add(Check("gauge outline on ${b.name}", b.text, b.fill, GRAPHIC))
             add(Check("moss on moss tint", StateBlock.Moss.fill, Tints.moss, GRAPHIC))
             add(Check("brick on brick tint", StateBlock.Brick.fill, Tints.brick, GRAPHIC))
+            // Material draws a text field's and an off switch's boundary in outline: the only sign the control is there.
+            add(Check("Material outline (text field, off switch) on ground", m.outline, c.ground, GRAPHIC))
+            add(Check("Material outline (text field, off switch) on surface", m.outline, c.surface, GRAPHIC))
+            // A selected chip or wizard tile shows its state by its moss fill alone.
+            add(Check("selected chip and tile fill on ground", m.secondaryContainer, c.ground, GRAPHIC))
+            add(Check("on switch track (primary) on ground", m.primary, c.ground, GRAPHIC))
         }
         return (text + graphics).map { it.copy(name = "$theme: ${it.name}") }
     }
@@ -52,7 +59,7 @@ class ContrastTest {
 
     @Test
     fun everyPairMeetsItsThreshold() {
-        val all = pairs("light", LightColors) + pairs("dark", DarkColors)
+        val all = pairs("light", LightColors, dark = false) + pairs("dark", DarkColors, dark = true)
         val failures = all.filter { ratio(it.fg, it.bg) < it.min }
             .map { "${it.name}: %.2f < %.1f".format(ratio(it.fg, it.bg), it.min) }
         assertTrue(failures.joinToString("\n"), failures.isEmpty())

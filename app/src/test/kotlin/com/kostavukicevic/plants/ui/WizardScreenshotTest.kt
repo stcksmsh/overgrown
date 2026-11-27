@@ -3,8 +3,6 @@ package com.kostavukicevic.plants.ui
 
 import android.app.Application
 import androidx.activity.ComponentActivity
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
@@ -14,7 +12,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.unit.Density
 import androidx.room.Room
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
@@ -49,7 +46,7 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import kotlin.time.Instant
 
-/** Golden images of the four add-plant steps, a new outdoor place with "Use my location", and step 1 with search results and with no match, light and dark, at 1.0x and 1.3x. */
+/** Golden images of the four add-plant steps, a new outdoor place with "Use my location", and step 1 with search results and with no match, light and dark, at 1.0x, 1.3x and 2.0x. */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w400dp-h800dp-xhdpi")
@@ -84,8 +81,7 @@ class WizardScreenshotTest(private val dark: Boolean, private val fontScale: Flo
     /** Waits for the places to load, which enables Next, so every image shows the loaded wizard. */
     private fun start() {
         compose.setContent {
-            val density = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
+            FontScaled(fontScale) {
                 OvergrownTheme(dark = dark) { AddPlantWizard(null, onDone = {}, careDb = WizardTest.FIXTURE_DB) }
             }
         }
@@ -169,7 +165,7 @@ class WizardScreenshotTest(private val dark: Boolean, private val fontScale: Flo
     companion object {
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "dark={0}, fontScale={1}")
-        fun params() = listOf(arrayOf<Any>(false, 1.0f), arrayOf<Any>(false, 1.3f), arrayOf<Any>(true, 1.0f), arrayOf<Any>(true, 1.3f))
+        fun params() = listOf(1.0f, 1.3f, 2.0f).flatMap { scale -> listOf(arrayOf<Any>(false, scale), arrayOf<Any>(true, scale)) }
 
         /** Step 3 shows today's date, so the images need a clock that does not move. */
         private val NOW = Instant.parse("2026-11-24T09:00:00Z")

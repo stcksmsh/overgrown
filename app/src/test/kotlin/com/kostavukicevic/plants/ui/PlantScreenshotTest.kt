@@ -2,14 +2,11 @@
 package com.kostavukicevic.plants.ui
 
 import androidx.activity.ComponentActivity
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.unit.Density
 import com.dropbox.differ.SimpleImageComparator
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.RoborazziOptions
@@ -41,7 +38,7 @@ import org.robolectric.annotation.GraphicsMode
 import kotlin.time.Duration.Companion.hours
 
 /**
- * Golden images of the plant screen, light and dark, at 1.0x and 1.3x: an outdoor plant with frost ahead and two
+ * Golden images of the plant screen, light and dark, at 1.0x, 1.3x and 2.0x: an outdoor plant with frost ahead and two
  * weeks of history, a plant the app knows well, a plant with nothing logged, the edit-entry dialog, and the
  * toxicity lines for unknown, no known and toxic fixture species. The window is tall enough to show the whole page.
  */
@@ -71,8 +68,7 @@ class PlantScreenshotTest(private val dark: Boolean, private val fontScale: Floa
     private fun s(id: Int, vararg args: Any) = compose.activity.getString(id, *args)
 
     private fun start(plantId: Long) = compose.setContent {
-        val density = LocalDensity.current
-        CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
+        FontScaled(fontScale) {
             OvergrownTheme(dark = dark) { PlantScreen(plantId, onBack = {}, onEdit = {}, careDb = fixture ?: g.careDb) }
         }
     }
@@ -215,7 +211,7 @@ class PlantScreenshotTest(private val dark: Boolean, private val fontScale: Floa
     companion object {
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "dark={0} fontScale={1}")
-        fun params() = listOf(arrayOf<Any>(false, 1.0f), arrayOf<Any>(false, 1.3f), arrayOf<Any>(true, 1.0f), arrayOf<Any>(true, 1.3f))
+        fun params() = listOf(1.0f, 1.3f, 2.0f).flatMap { scale -> listOf(arrayOf<Any>(false, scale), arrayOf<Any>(true, scale)) }
     }
 }
 

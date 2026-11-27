@@ -7,6 +7,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -40,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -50,7 +53,10 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.Texts
 import com.kostavukicevic.plants.data.EventEntity
@@ -169,12 +175,30 @@ fun NameBlock(plantId: Long, name: String, typeAndPlace: String, glyph: GlyphKin
                 Text(stringResource(R.string.edit), style = Type.label, color = block.text)
             }
         }
-        Row(Modifier.padding(horizontal = Spacing.grid * 3), verticalAlignment = Alignment.Bottom) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.grid)) {
-                Text(name, style = Type.display, color = block.text, modifier = Modifier.sharedPlant("name", key).semantics { heading() })
+        BoxWithConstraints(Modifier.padding(horizontal = Spacing.grid * 3)) {
+            val autoSize = WholeWords(Type.display.fontSize)
+            val glyphSize = 72.dp
+            val glyph = @Composable { Glyph(glyph, block.text, contentDescription = null, Modifier.sharedPlant("glyph", key), size = glyphSize) }
+            val texts = @Composable {
+                Text(name, Modifier.sharedPlant("name", key).semantics { heading() }, color = block.text, autoSize = autoSize, style = Type.display)
                 Text(typeAndPlace, style = Type.label, color = block.text)
             }
-            Glyph(glyph, block.text, contentDescription = null, Modifier.sharedPlant("glyph", key), size = 72.dp)
+            // The glyph goes under the name only when, beside it, the name would break a word even at its smallest
+            // size, as a 12-letter name does at 2.0x font scale on a narrow phone.
+            val room = constraints.maxWidth - with(LocalDensity.current) { glyphSize.roundToPx() }
+            val measurer = rememberTextMeasurer()
+            val beside = room > 0 && !measurer.measure(name, Type.display.copy(fontSize = autoSize.smallest), constraints = Constraints(maxWidth = room)).breaksAWord()
+            if (beside) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.grid)) { texts() }
+                    glyph()
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.grid)) {
+                    texts()
+                    glyph()
+                }
+            }
         }
         Row(
             Modifier.padding(horizontal = Spacing.grid * 3),
@@ -241,10 +265,14 @@ private fun RowScope.StripColumn(d: OutlookDay, isNext: Boolean) {
         Box(Modifier.fillMaxWidth().height(STRIP_BAR_DP.dp).clip(RoundedCornerShape(Radius.bar)).background(colors.ground), contentAlignment = Alignment.BottomCenter) {
             Box(Modifier.fillMaxWidth().fillMaxHeight(d.waterLeft.toFloat().coerceIn(0f, 1f)).background(if (isNext) colors.ink else colors.gaugeFill))
         }
+        // One letter in a tenth of the card: at 2.0x a wide letter such as W is shrunk to fit its column.
         Text(
             dayName(d.date).take(1),
             style = Type.secondary.copy(fontWeight = if (isNext) FontWeight.ExtraBold else FontWeight.Normal),
             color = if (isNext) colors.ink else colors.muted,
+            softWrap = false,
+            maxLines = 1,
+            autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = Type.secondary.fontSize),
         )
     }
 }
@@ -316,8 +344,8 @@ fun LearningDots(name: String, answers: Int, learned: Boolean) {
 @Composable
 fun AnswerButtons(onAnswer: (Moisture) -> Unit) {
     val c = LocalContext.current
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 2)) {
-        for (m in PLANT_ANSWERS) SecondaryButton(answerLabel(c, m), onClick = { onAnswer(m) }, modifier = Modifier.weight(1f))
+    EvenRows(PLANT_ANSWERS.size, Modifier.fillMaxWidth()) {
+        for (m in PLANT_ANSWERS) SecondaryButton(answerLabel(c, m), onClick = { onAnswer(m) })
     }
 }
 
@@ -333,12 +361,13 @@ fun HistoryRow(line: String, onEdit: () -> Unit, onDelete: () -> Unit) {
     val colors = Overgrown.colors
     val editLabel = stringResource(R.string.edit_named, line)
     val deleteLabel = stringResource(R.string.delete_named, line)
-    Row(Modifier.fillMaxWidth().heightIn(min = Spacing.minTouchTarget), verticalAlignment = Alignment.CenterVertically) {
-        Text(line, style = Type.secondary, color = colors.ink, modifier = Modifier.weight(1f))
-        TextButton(onClick = onEdit, modifier = Modifier.semantics { contentDescription = editLabel }) {
-            Text(stringResource(R.string.edit), style = Type.label, color = colors.ink)
+    BesideOrUnder(Modifier.fillMaxWidth().heightIn(min = Spacing.minTouchTarget), main = { Text(line, style = Type.secondary, color = colors.ink) }) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onEdit, modifier = Modifier.semantics { contentDescription = editLabel }) {
+                Text(stringResource(R.string.edit), style = Type.label, color = colors.ink)
+            }
+            DeleteButton(onDelete, Modifier.semantics { contentDescription = deleteLabel })
         }
-        DeleteButton(onDelete, Modifier.semantics { contentDescription = deleteLabel })
     }
 }
 
@@ -356,7 +385,7 @@ fun EditEntryDialog(event: EventEntity, error: String?, onDismiss: () -> Unit, o
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = colors.surface,
-        title = { Text(stringResource(R.string.plant_edit_entry), style = Type.cardTitle, color = colors.ink) },
+        title = { Text(stringResource(R.string.plant_edit_entry), Modifier.semantics { heading() }, style = Type.cardTitle, color = colors.ink) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.grid * 3)) {
                 Text(Texts.date(date), style = Type.cardTitle, color = colors.ink)

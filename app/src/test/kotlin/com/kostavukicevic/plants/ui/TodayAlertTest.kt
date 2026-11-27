@@ -18,13 +18,11 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.dropbox.differ.SimpleImageComparator
@@ -277,7 +275,7 @@ class AlertWordsTest {
     }
 }
 
-/** Golden images of the alert card, with one plant and with two, light and dark, at 1.0x and 1.3x font scale. */
+/** Golden images of the alert card, with one plant and with two, light and dark, at 1.0x, 1.3x and 2.0x font scale. */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w400dp-h1600dp-xhdpi")
@@ -292,8 +290,7 @@ class TodayAlertScreenshotTest(private val dark: Boolean, private val fontScale:
 
     private fun capture(name: String, content: @Composable () -> Unit) =
         captureRoboImage("src/test/snapshots/today_alert_${name}_$suffix.png", roborazziOptions = exact) {
-            val density = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
+            FontScaled(fontScale) {
                 OvergrownTheme(dark = dark) {
                     Box(Modifier.width(400.dp).background(Overgrown.colors.ground).padding(Spacing.screen)) { Column { content() } }
                 }
@@ -326,7 +323,7 @@ class TodayAlertScreenshotTest(private val dark: Boolean, private val fontScale:
     companion object {
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "dark={0} fontScale={1}")
-        fun params() = listOf(arrayOf<Any>(false, 1.0f), arrayOf<Any>(false, 1.3f), arrayOf<Any>(true, 1.0f), arrayOf<Any>(true, 1.3f))
+        fun params() = listOf(1.0f, 1.3f, 2.0f).flatMap { scale -> listOf(arrayOf<Any>(false, scale), arrayOf<Any>(true, scale)) }
     }
 }
 

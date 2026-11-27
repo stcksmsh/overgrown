@@ -33,7 +33,8 @@ import com.kostavukicevic.plants.R
 private val InkLight = Color(0xFF1B1B1B)
 private val White = Color(0xFFFFFFFF)
 private val GroundDark = Color(0xFF121512)
-private val MossGreen = Color(0xFF2F6B3F)
+// DESIGN #2F6B3F, raised to #31703F for 3:1 against the dark ground (docs/DECISIONS.md D62).
+private val MossGreen = Color(0xFF31703F)
 private val BrickRed = Color(0xFFB8401C)
 private val BrickTint = Color(0xFFF3D9CF)
 
@@ -185,7 +186,7 @@ private val MaterialShapes = Shapes(
     extraLarge = RoundedCornerShape(Radius.card),
 )
 
-private fun materialScheme(c: OvergrownColors, dark: Boolean) = (if (dark) darkColorScheme() else lightColorScheme()).copy(
+internal fun materialScheme(c: OvergrownColors, dark: Boolean) = (if (dark) darkColorScheme() else lightColorScheme()).copy(
     primary = c.ink,
     onPrimary = c.onInk,
     secondaryContainer = StateBlock.Moss.fill,
@@ -201,7 +202,8 @@ private fun materialScheme(c: OvergrownColors, dark: Boolean) = (if (dark) darkC
     surfaceContainer = c.surface,
     surfaceContainerHigh = c.surface,
     surfaceContainerHighest = c.surface,
-    outline = c.outline,
+    // Muted, not the DESIGN outline: a text field's and an off switch's edge is the only sign they are there (D62).
+    outline = c.muted,
     outlineVariant = c.outline,
     error = c.errorText,
     errorContainer = StateBlock.Brick.fill,

@@ -14,8 +14,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,13 +29,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.notify.Notifier
 import com.kostavukicevic.plants.ui.theme.Overgrown
@@ -167,7 +167,7 @@ internal fun RemindersOffLine(onDismiss: () -> Unit) {
     val muted = Overgrown.colors.muted
     Column(Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.notifications_off), style = Type.secondary, color = Overgrown.colors.ink)
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 4)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 4)) {
             TextButton(onClick = { open(c, notificationSettingsIntent(c)) }, Modifier.heightIn(min = Spacing.minTouchTarget), contentPadding = PaddingValues(0.dp)) {
                 Text(stringResource(R.string.notifications_open_settings), style = Type.label, color = Overgrown.colors.ink)
             }

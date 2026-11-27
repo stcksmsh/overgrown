@@ -2,10 +2,7 @@
 package com.kostavukicevic.plants.ui
 
 import androidx.activity.ComponentActivity
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
-import androidx.compose.ui.unit.Density
 import com.dropbox.differ.SimpleImageComparator
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.RoborazziOptions
@@ -19,7 +16,7 @@ import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** Golden images of the "Reminders not arriving?" screen, light and dark, at 1.0x and 1.3x. */
+/** Golden images of the "Reminders not arriving?" screen, light and dark, at 1.0x, 1.3x and 2.0x. */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w400dp-h800dp-xhdpi")
@@ -41,8 +38,7 @@ class RemindersHelpScreenshotTest(private val dark: Boolean, private val fontSca
     @Test
     fun screen() {
         compose.setContent {
-            val density = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
+            FontScaled(fontScale) {
                 OvergrownTheme(dark = dark) { RemindersHelpScreen(onBack = {}) }
             }
         }
@@ -53,6 +49,6 @@ class RemindersHelpScreenshotTest(private val dark: Boolean, private val fontSca
     companion object {
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "dark={0} fontScale={1}")
-        fun params() = listOf(arrayOf<Any>(false, 1.0f), arrayOf<Any>(false, 1.3f), arrayOf<Any>(true, 1.0f), arrayOf<Any>(true, 1.3f))
+        fun params() = listOf(1.0f, 1.3f, 2.0f).flatMap { scale -> listOf(arrayOf<Any>(false, scale), arrayOf<Any>(true, scale)) }
     }
 }
