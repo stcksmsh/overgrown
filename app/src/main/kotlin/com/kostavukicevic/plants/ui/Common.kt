@@ -289,8 +289,8 @@ private fun ListRow(item: ListItem) {
 
 /**
  * Delete with Undo and no soft-delete column: the item is hidden at once and deleted for real only when its
- * snackbar closes without Undo, including when the next delete replaces it. If the app dies first, the item
- * survives.
+ * snackbar closes without Undo, including when the next delete replaces it or [scope] is cancelled because the
+ * screen was left. If the app dies first, the item survives.
  */
 class UndoDelete(private val snackbar: SnackbarHostState, private val scope: CoroutineScope) {
     /** Keys of items waiting to be deleted, or deleted; lists leave them out. */
@@ -302,25 +302,33 @@ class UndoDelete(private val snackbar: SnackbarHostState, private val scope: Cor
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
             // With an action, showSnackbar defaults to Indefinite; the delete must commit on its own.
-            if (snackbar.showSnackbar(message, undoLabel, duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) {
+            val result = try {
+                snackbar.showSnackbar(message, undoLabel, duration = SnackbarDuration.Short)
+            } catch (e: CancellationException) {
+                // Leaving the screen cancels its scope while the snackbar shows; no Undo came, so the delete stands.
+                commitOrLog(key, commit)
+                throw e
+            }
+            if (result == SnackbarResult.ActionPerformed) {
                 hidden -= key
                 return@launch
             }
-            val ok = withContext(NonCancellable) {
-                try {
-                    commit()
-                    true
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w("UndoDelete", "delete of $key failed", e)
-                    false
-                }
-            }
-            if (!ok) {
+            if (!commitOrLog(key, commit)) {
                 hidden -= key
                 say(failed)
             }
+        }
+    }
+
+    private suspend fun commitOrLog(key: String, commit: suspend () -> Unit): Boolean = withContext(NonCancellable) {
+        try {
+            commit()
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("UndoDelete", "delete of $key failed", e)
+            false
         }
     }
 

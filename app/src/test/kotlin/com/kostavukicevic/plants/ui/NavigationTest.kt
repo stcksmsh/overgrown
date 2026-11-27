@@ -7,6 +7,8 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.semantics.Role
@@ -363,6 +365,72 @@ class NavigationTest {
         waitFor(s(R.string.delete_failed, "Boris"))
         compose.onNodeWithText(s(R.string.deleted, "Boris")).assertDoesNotExist()
         compose.onNodeWithContentDescription(delete).assertExists()
+    }
+
+    /**
+     * An UndoDelete in a scope that lives while [onScreen] is true, as a screen's rememberCoroutineScope does; the
+     * snackbar host stays, as the app's does. Returns the UndoDelete once composed.
+     */
+    private fun undoOnAScreen(onScreen: MutableState<Boolean>): UndoDelete {
+        var undo: UndoDelete? = null
+        compose.setContent {
+            OvergrownTheme {
+                val snackbar = remember { SnackbarHostState() }
+                Box {
+                    if (onScreen.value) {
+                        val scope = rememberCoroutineScope()
+                        undo = remember { UndoDelete(snackbar, scope) }
+                    }
+                    SnackbarHost(snackbar)
+                }
+            }
+        }
+        compose.waitForIdle()
+        return undo!!
+    }
+
+    private fun deleteFirstEvent(undo: UndoDelete, plantId: Long) {
+        val id = runBlocking { g.garden.events(plantId).first().single().id }
+        compose.runOnUiThread {
+            undo.delete("event:$id", s(R.string.deleted, "Watered"), s(R.string.undo), s(R.string.delete_failed, "Watered")) {
+                g.garden.deleteEvent(id)
+            }
+        }
+        waitFor(s(R.string.deleted, "Watered"))
+    }
+
+    @Test
+    fun leavingTheScreenWhileTheSnackbarShowsStillDeletes() {
+        val boris = plant(g, "Boris", place(g, "Hall"))
+        runBlocking { g.garden.watered(boris, ranOutOfBottom = false) }
+        val onScreen = mutableStateOf(true)
+        val undo = undoOnAScreen(onScreen)
+        deleteFirstEvent(undo, boris)
+
+        // The clock moves well short of the 4 s snackbar, so only leaving the screen can end it.
+        compose.mainClock.autoAdvance = false
+        compose.runOnUiThread { onScreen.value = false }
+        // One frame drops the screen and cancels its scope; the time after it lets the cancelled coroutine run.
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.waitUntil(5_000) { runBlocking { g.garden.events(boris).first().isEmpty() } }
+    }
+
+    @Test
+    fun undoThenLeavingTheScreenKeepsTheEvent() {
+        val boris = plant(g, "Boris", place(g, "Hall"))
+        runBlocking { g.garden.watered(boris, ranOutOfBottom = false) }
+        val onScreen = mutableStateOf(true)
+        val undo = undoOnAScreen(onScreen)
+        deleteFirstEvent(undo, boris)
+
+        compose.onNodeWithText(s(R.string.undo)).performClick()
+        compose.waitUntil(5_000) { undo.hidden.isEmpty() }
+        compose.runOnUiThread { onScreen.value = false }
+        compose.mainClock.advanceTimeBy(SNACKBAR_GONE)
+        compose.waitForIdle()
+        assertEquals(1, runBlocking { g.garden.events(boris).first().size })
     }
 
     private companion object {
