@@ -2,6 +2,7 @@
 package com.kostavukicevic.plants.ui
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -49,8 +50,18 @@ import com.kostavukicevic.plants.ui.theme.Type
  */
 internal fun shouldAskForNotifications(sdk: Int, granted: Boolean, plantJustAdded: Boolean) = plantJustAdded && sdk >= 33 && !granted
 
-/** Reminders cannot reach the person: the permission is missing, or notifications are off in the system's settings. */
-internal fun remindersOff(c: Context) = !Notifier.allowed(c) || !NotificationManagerCompat.from(c).areNotificationsEnabled()
+/** The channels that carry reminders and alerts. The status channel only reports background work, so it is left out. */
+internal val REMINDER_CHANNELS = listOf(Notifier.CHANNEL_PROMPTS, Notifier.CHANNEL_ALERTS)
+
+/**
+ * The reminder channels that cannot reach the person: all of them when the permission is missing or the app's
+ * notifications are off in the system's settings, else those turned off one by one there. Empty when all can.
+ */
+internal fun remindersOff(c: Context): List<String> {
+    val nm = NotificationManagerCompat.from(c)
+    if (!Notifier.allowed(c) || !nm.areNotificationsEnabled()) return REMINDER_CHANNELS
+    return REMINDER_CHANNELS.filter { nm.getNotificationChannel(it)?.importance == NotificationManager.IMPORTANCE_NONE }
+}
 
 /**
  * Flags kept across restarts: a plant was just added and the permission may be asked for, the reminders-off line was
@@ -137,18 +148,29 @@ internal fun NotificationQuestion() {
 internal fun notificationSettingsIntent(c: Context) =
     Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, c.packageName)
 
+/** One channel's settings, where a channel turned off on its own can be turned back on. */
+internal fun channelSettingsIntent(c: Context, channel: String) = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+    .putExtra(Settings.EXTRA_APP_PACKAGE, c.packageName)
+    .putExtra(Settings.EXTRA_CHANNEL_ID, channel)
+
 /** The system's battery-optimisation list. Only opens it: asking to be exempted directly is a Play policy risk. */
 internal fun batterySettingsIntent() = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
 
 private fun appDetailsIntent(c: Context) = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", c.packageName, null))
 
-/** Some vendors' builds lack a settings page; the app's details page is on every phone and leads to the same switches. */
-private fun open(c: Context, intent: Intent) {
-    try {
-        c.startActivity(intent)
-    } catch (_: ActivityNotFoundException) {
-        c.startActivity(appDetailsIntent(c))
+/**
+ * Opens the first of [intents] the phone has. Some vendors' builds lack a settings page; the app's details page is
+ * on every phone and leads to the same switches, so it is the last resort.
+ */
+private fun open(c: Context, vararg intents: Intent) {
+    for (intent in intents) {
+        try {
+            c.startActivity(intent)
+            return
+        } catch (_: ActivityNotFoundException) {
+        }
     }
+    c.startActivity(appDetailsIntent(c))
 }
 
 /** Opens [url] in a browser. A phone without one shows a short message instead of ending the app. */
@@ -160,15 +182,31 @@ internal fun openLink(c: Context, url: String) {
     }
 }
 
-/** A short line on Today while reminders are off, with a way to turn them on and a way to put the line away. */
+/**
+ * A short line on Today while reminders are off, with a way to turn them on and a way to put the line away. One
+ * channel off on its own is named, and its button goes straight to that channel's switch.
+ */
 @Composable
-internal fun RemindersOffLine(onDismiss: () -> Unit) {
+internal fun RemindersOffLine(off: List<String>, onDismiss: () -> Unit) {
     val c = LocalContext.current
     val muted = Overgrown.colors.muted
+    val channel = off.singleOrNull()
+    val text = when (channel) {
+        Notifier.CHANNEL_PROMPTS -> R.string.notifications_prompts_off
+        Notifier.CHANNEL_ALERTS -> R.string.notifications_alerts_off
+        else -> R.string.notifications_off
+    }
     Column(Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.notifications_off), style = Type.secondary, color = Overgrown.colors.ink)
+        Text(stringResource(text), style = Type.secondary, color = Overgrown.colors.ink)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.grid * 4)) {
-            TextButton(onClick = { open(c, notificationSettingsIntent(c)) }, Modifier.heightIn(min = Spacing.minTouchTarget), contentPadding = PaddingValues(0.dp)) {
+            TextButton(
+                onClick = {
+                    if (channel != null) open(c, channelSettingsIntent(c, channel), notificationSettingsIntent(c))
+                    else open(c, notificationSettingsIntent(c))
+                },
+                modifier = Modifier.heightIn(min = Spacing.minTouchTarget),
+                contentPadding = PaddingValues(0.dp),
+            ) {
                 Text(stringResource(R.string.notifications_open_settings), style = Type.label, color = Overgrown.colors.ink)
             }
             TextButton(onClick = onDismiss, Modifier.heightIn(min = Spacing.minTouchTarget), contentPadding = PaddingValues(0.dp)) {

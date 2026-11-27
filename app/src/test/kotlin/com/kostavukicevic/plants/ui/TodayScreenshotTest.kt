@@ -102,7 +102,7 @@ class TodayScreenshotTest(private val dark: Boolean, private val fontScale: Floa
     @Test
     fun remindersOff() = capture("reminders_off") {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.cardGap)) {
-            RemindersOffLine(onDismiss = {})
+            RemindersOffLine(REMINDER_CHANNELS, onDismiss = {})
             TodayContent(fullToday(), TODAY, onPlant = {}, onAdd = {}, onWatered = {}, onAnswer = { _, _ -> }) { FixedWeather() }
         }
     }

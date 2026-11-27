@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
@@ -30,6 +31,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -38,6 +40,7 @@ import com.kostavukicevic.plants.R
 import com.kostavukicevic.plants.data.EventEntity
 import com.kostavukicevic.plants.data.PlaceEntity
 import com.kostavukicevic.plants.data.PlantEntity
+import com.kostavukicevic.plants.notify.Notifier
 import com.kostavukicevic.plants.ui.theme.OvergrownTheme
 import com.kostavukicevic.plants.ui.theme.Spacing
 import kotlinx.coroutines.runBlocking
@@ -78,7 +81,11 @@ class AccessibilityTest(private val fontScale: Float) {
 
     private fun waitGone(text: String) = compose.waitUntil(15_000) { compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isEmpty() }
 
-    private fun tap(text: String) = compose.onNodeWithText(text).performScrollTo().performClick()
+    /**
+     * Clicks by the node's click action, not by coordinates: a tap at a position read while the screen still lays
+     * out, as after a watering's history row lands, can land on the wrong spot and open nothing.
+     */
+    private fun tap(text: String) = compose.onNodeWithText(text).performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
 
     private fun field(label: Int) = compose.onNode(hasSetTextAction() and hasText(s(label))).performScrollTo()
 
@@ -109,7 +116,9 @@ class AccessibilityTest(private val fontScale: Float) {
         show {
             Column(Modifier.padding(horizontal = Spacing.screen)) {
                 TodayContent(fullToday(), TODAY, onPlant = {}, onAdd = {}, onWatered = {}, onAnswer = { _, _ -> }) { FixedWeather() }
-                RemindersOffLine(onDismiss = {})
+                RemindersOffLine(REMINDER_CHANNELS, onDismiss = {})
+                // The longer of the one-channel lines.
+                RemindersOffLine(listOf(Notifier.CHANNEL_ALERTS), onDismiss = {})
                 EmptyToday(onAdd = {})
             }
         }
@@ -217,7 +226,7 @@ class AccessibilityTest(private val fontScale: Float) {
         waitForText(s(R.string.calibration_title))
         audit("Plant", "Monstera deliciosa", s(R.string.plant_history), s(R.string.calibration_title))
 
-        compose.onNodeWithContentDescription(editEntry).performScrollTo().performClick()
+        compose.onNodeWithContentDescription(editEntry).performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
         waitForText(s(R.string.plant_edit_entry))
         audit("Edit entry dialog", s(R.string.plant_edit_entry))
         compose.assertSelectionsMarked("Edit entry dialog")
@@ -239,7 +248,7 @@ class AccessibilityTest(private val fontScale: Float) {
         waitGone(s(R.string.photo_add_title))
 
         compose.onNode(hasText(s(R.string.delete)) and hasClickAction() and !SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription))
-            .performScrollTo().performClick()
+            .performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
         waitForText(s(R.string.plant_delete_question, "Monstera deliciosa"))
         audit("Delete plant dialog", s(R.string.plant_delete_question, "Monstera deliciosa"))
     }
