@@ -57,6 +57,10 @@ data class PlantEntity(
     val rootBound: Boolean = false,
     val acquiredOn: String,
     val lastRepotOn: String? = null,
+    /** The day the plant was entered in the app; null for plants added before this was kept. */
+    val addedOn: String? = null,
+    /** The last day a pot field was edited; null when never edited, or edited before this was kept. */
+    val potChangedOn: String? = null,
 )
 
 @Serializable
@@ -230,9 +234,9 @@ interface GardenDao {
         PlaceEntity::class, PlantEntity::class, EventEntity::class, WeatherDayEntity::class,
         ClimatologyEntity::class, ResponseEntity::class, CalibrationEntity::class, PhotoEntity::class,
     ],
-    version = 2,
-    // 2 adds the photo table and changes nothing else.
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    version = 3,
+    // 2 adds the photo table and changes nothing else. 3 adds plant.addedOn and plant.potChangedOn, null on existing rows.
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 @ConstructedBy(GardenDbConstructor::class)
 abstract class GardenDb : RoomDatabase() {

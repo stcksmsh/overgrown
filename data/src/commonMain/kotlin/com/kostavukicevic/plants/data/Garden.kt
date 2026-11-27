@@ -94,7 +94,17 @@ class Garden(
     suspend fun place(id: Long) = dao.place(id)
     suspend fun plant(id: Long) = dao.plant(id)
     suspend fun savePlace(p: PlaceEntity) = dao.upsertPlace(p).let { if (p.id != 0L) p.id else it }
-    suspend fun savePlant(p: PlantEntity) = dao.upsertPlant(p).let { if (p.id != 0L) p.id else it }
+    /** Records the day a plant is added and the day its pot really changes, for the planner's repot advice. */
+    suspend fun savePlant(p: PlantEntity): Long {
+        val stored = if (p.id != 0L) dao.plant(p.id) else null
+        val day = today().toString()
+        val saved = when {
+            stored == null -> p.copy(addedOn = day)
+            Planner.pot(stored) != Planner.pot(p) -> p.copy(potChangedOn = day)
+            else -> p
+        }
+        return dao.upsertPlant(saved).let { if (p.id != 0L) p.id else it }
+    }
     suspend fun deletePlant(id: Long) {
         val photos = dao.photosOf(id)
         dao.deletePlantFully(id)
@@ -455,6 +465,8 @@ class Garden(
             require(runCatching { PotShape.valueOf(p.potShape); PotMaterial.valueOf(p.potMaterial) }.isSuccess) { "bad pot for plant ${p.id}" }
             date(p.acquiredOn, "plant ${p.id}")
             p.lastRepotOn?.let { date(it, "plant ${p.id}") }
+            p.addedOn?.let { date(it, "plant ${p.id}") }
+            p.potChangedOn?.let { date(it, "plant ${p.id}") }
         }
         for (ev in e.events) {
             require(ev.plantId in plantIds) { "event ${ev.id} refers to a missing plant" }

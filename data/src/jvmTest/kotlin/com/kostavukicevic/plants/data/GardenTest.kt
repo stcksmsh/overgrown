@@ -42,6 +42,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -670,5 +671,131 @@ class GardenTest {
             assertTrue(g.photoFile(g.photos(plantId).first().single()).isFile)
         }
         assertFalse(File(photoDir("oversized").path + ".import").exists())
+    }
+
+    // ---- Repot advice: re-armed on a pot edit, never given before the plant was added (D65) ----
+
+    private val room = PlaceEntity(name = "Room", outdoor = false, latitude = 44.8167, longitude = 20.4589, lightClass = "HIGH")
+
+    /** A wide canopy in a half-litre pot: indoors it uses more than the pot holds, and more than 0.8 l too. */
+    private val outgrown = PlantEntity(
+        name = "Ficus", placeId = 0, canopyWidthCm = 150.0, potVolumeL = 0.5, acquiredOn = today.plus(DatePeriod(days = -20)).toString(),
+    )
+
+    private suspend fun Garden.addOutgrown(acquiredOn: LocalDate = today): Long =
+        savePlant(outgrown.copy(placeId = savePlace(room), acquiredOn = acquiredOn.toString()))
+
+    private fun at(day: LocalDate) { clock = Instant.parse("${day}T08:00:00Z") }
+
+    @Test
+    fun editingThePotWithoutARepottedEventReArmsTheRepotAdvice() = runTest {
+        val g = garden("pot-edit")
+        val added = today.plus(DatePeriod(days = -20))
+        at(added)
+        val id = g.addOutgrown(acquiredOn = added)
+        assertEquals(Action.RepotOrWaterDaily, g.status(id)?.today)
+        at(today)
+        // Given once, on the day the plant was added.
+        assertNotEquals(Action.RepotOrWaterDaily, g.status(id)?.today)
+
+        g.savePlant(assertNotNull(g.plant(id)).copy(potVolumeL = 0.8))
+        assertEquals(today.toString(), g.plant(id)?.potChangedOn)
+        assertTrue(dbs.last().dao().events(id).isEmpty())
+        assertEquals(Action.RepotOrWaterDaily, g.status(id)?.today)
+
+        // Shown today for the new pot, so not repeated tomorrow.
+        at(today.plus(DatePeriod(days = 1)))
+        assertNotEquals(Action.RepotOrWaterDaily, g.status(id)?.today)
+    }
+
+    @Test
+    fun aRepottedEventAndAPotEditOnTheSameDayReArmTheAdviceOnce() = runTest {
+        val g = garden("pot-edit-repotted")
+        val added = today.plus(DatePeriod(days = -20))
+        at(added)
+        val id = g.addOutgrown(acquiredOn = added)
+        at(today)
+        g.repotted(id)
+        g.savePlant(assertNotNull(g.plant(id)).copy(potVolumeL = 0.8))
+        assertEquals(Action.RepotOrWaterDaily, g.status(id)?.today)
+        at(today.plus(DatePeriod(days = 1)))
+        assertNotEquals(Action.RepotOrWaterDaily, g.status(id)?.today)
+    }
+
+    @Test
+    fun aBackdatedAcquisitionDoesNotMarkTheRepotAdviceGivenBeforeThePlantWasAdded() = runTest {
+        val g = garden("backdated")
+        val id = g.addOutgrown(acquiredOn = today.plus(DatePeriod(days = -20)))
+        assertEquals(today.toString(), g.plant(id)?.addedOn)
+        // The replay starts 20 days back, but the person sees the advice for the first time today.
+        assertEquals(Action.RepotOrWaterDaily, g.status(id)?.today)
+        at(today.plus(DatePeriod(days = 1)))
+        assertNotEquals(Action.RepotOrWaterDaily, g.status(id)?.today)
+    }
+
+    @Test
+    fun aPlantWithoutTheTwoDatesReplaysAsBefore() {
+        val place = room.copy(id = 1)
+        val plant = outgrown.copy(id = 1, placeId = 1)
+        assertNull(plant.addedOn)
+        assertNull(plant.potChangedOn)
+        val s = Planner.status(plant, place, emptyList(), emptyList(), emptyList(), null, today)
+        // Marked given on the first replayed day, as before the two dates were kept.
+        assertEquals(Planner.pot(plant), s.state.repotAdvisedFor)
+        assertNotEquals(Action.RepotOrWaterDaily, s.today)
+        // Re-arming on the first replayed day, before anything ran, changes nothing.
+        val sameStart = plant.copy(addedOn = plant.acquiredOn)
+        assertEquals(s, Planner.status(sameStart, place, emptyList(), emptyList(), emptyList(), null, today).copy(plant = plant))
+    }
+
+    @Test
+    fun anEditThatKeepsThePotRecordsNoPotChange() = runTest {
+        val g = garden("same-pot")
+        val id = g.addOutgrown()
+        at(today.plus(DatePeriod(days = 3)))
+        g.savePlant(assertNotNull(g.plant(id)).copy(name = "Renamed", canopyWidthCm = 160.0, potVolumeL = 0.5))
+        assertEquals("Renamed", g.plant(id)?.name)
+        assertNull(g.plant(id)?.potChangedOn)
+        assertEquals(today.toString(), g.plant(id)?.addedOn)
+    }
+
+    @Test
+    fun anExportWithTheTwoDatesRoundTrips() = runTest {
+        val a = garden("dates-a")
+        val id = a.addOutgrown()
+        at(today.plus(DatePeriod(days = 2)))
+        a.savePlant(assertNotNull(a.plant(id)).copy(potVolumeL = 0.8))
+        val exported = a.exportJson("x")
+        val b = garden("dates-b")
+        b.importJson(exported)
+        assertEquals(today.toString(), b.plant(id)?.addedOn)
+        assertEquals(today.plus(DatePeriod(days = 2)).toString(), b.plant(id)?.potChangedOn)
+        assertEquals(exported, b.exportJson("x"))
+    }
+
+    @Test
+    fun anExportWithoutTheTwoDatesImportsWithThemNull() = runTest {
+        val a = garden("no-dates-a")
+        val id = a.addOutgrown()
+        a.savePlant(assertNotNull(a.plant(id)).copy(potVolumeL = 0.8))
+        // An export from before the two dates were kept has neither field.
+        val old = a.exportJson("x").replace(Regex(",\\s*\"(addedOn|potChangedOn)\": [^,\\n]*"), "")
+        assertFalse("addedOn" in old || "potChangedOn" in old)
+        val b = garden("no-dates-b")
+        b.importJson(old)
+        assertEquals("Ficus", b.plant(id)?.name)
+        assertNull(b.plant(id)?.addedOn)
+        assertNull(b.plant(id)?.potChangedOn)
+    }
+
+    @Test
+    fun anImportWithABadAddedOrPotChangeDateIsRefused() = runTest {
+        val a = garden("bad-dates")
+        a.addOutgrown()
+        val exported = a.exportJson("x")
+        for (bad in listOf(exported.replace("\"addedOn\": \"$today\"", "\"addedOn\": \"soon\""), exported.replace("\"potChangedOn\": null", "\"potChangedOn\": \"x\""))) {
+            assertNotEquals(exported, bad)
+            assertIs<IllegalArgumentException>(runCatching { garden("bad-dates-${bad.hashCode()}").importJson(bad) }.exceptionOrNull())
+        }
     }
 }
