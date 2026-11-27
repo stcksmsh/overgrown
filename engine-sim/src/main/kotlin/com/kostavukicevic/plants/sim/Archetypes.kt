@@ -54,20 +54,22 @@ data class ArchetypeResult(
 ) {
     val extraStressDays get() = archetypeRun.stressDaysPerYear - speciesRun.stressDaysPerYear
     val stressOk get() = extraStressDays <= EXTRA_STRESS_DAYS_ALLOWANCE
+    /** At least one run had no refill with a dry-out prediction, so only the stress criterion can be judged. */
+    val dryOutUnknown get() = speciesRun.dryOutErrorDays.isNaN() || archetypeRun.dryOutErrorDays.isNaN()
     val dryOutOk get() = archetypeRun.dryOutErrorDays <= speciesRun.dryOutErrorDays * (1 + DRY_OUT_ERROR_TOLERANCE)
-    /** No refill gave a dry-out prediction in one of the runs, so the dry-out criterion cannot be judged. */
-    val noData get() = speciesRun.dryOutErrorDays.isNaN() || archetypeRun.dryOutErrorDays.isNaN()
-    val pass get() = !noData && stressOk && dryOutOk
     val failure: String? get() = when {
-        pass || noData -> null
-        !stressOk && !dryOutOk -> "stress and dry-out"
+        !stressOk && !dryOutUnknown && !dryOutOk -> "stress and dry-out"
         !stressOk -> "stress"
-        else -> "dry-out"
+        !dryOutUnknown && !dryOutOk -> "dry-out"
+        else -> null
     }
+    /** Stress is within the allowance but dry-out cannot be judged: neither a pass nor a fail. */
+    val noData get() = failure == null && dryOutUnknown
+    val pass get() = failure == null && !dryOutUnknown
     val result get() = when {
+        failure != null -> "fail: $failure"
         noData -> "no data"
-        pass -> "pass"
-        else -> "fail: $failure"
+        else -> "pass"
     }
 }
 
@@ -141,7 +143,7 @@ fun archetypeReport(db: CareDb, results: List<ArchetypeResult>): String = buildS
     }
     val noData = results.filter { it.noData }
     if (noData.isNotEmpty()) {
-        appendLine("No data (no refill gave a dry-out prediction, so the species cannot be judged): ${noData.joinToString { it.species }}.")
+        appendLine("No data (stress within the allowance, but at least one run had no refill with a dry-out prediction): ${noData.joinToString { it.species }}.")
     }
     appendLine()
     val failing = results.filter { it.failure != null }
@@ -158,8 +160,9 @@ fun archetypeReport(db: CareDb, results: List<ArchetypeResult>): String = buildS
                 "(the mean of the last ${Coefficients.WINTER_MODE_WINDOW_DAYS} days below ${f1(Coefficients.WINTER_MODE_MEAN_C)} degC), so the two runs can diverge only from a winter-mode day on. " +
                 "The simulated true plant takes no harm from cold or from wet soil in winter, so the stress metric counts the cost of winter rules (fewer prompts, drier soil) and never their benefit. " +
                 (
-                    if (cold != null) "The simulated plant also stays outdoors through every winter, though its own entry gives a minimum temperature of ${f1(cold)} degC" +
-                        (own.frostClass?.let { " (frost class ${it.name.lowercase()})" } ?: "") + ": the extra stress days begin in weeks it would not have survived. "
+                    if (cold != null) "The simulated plant also stays outdoors through every winter: the extra stress days begin in weeks whose " +
+                        "${Coefficients.WINTER_MODE_WINDOW_DAYS}-day mean is below ${f1(Coefficients.WINTER_MODE_MEAN_C)} degC, under its own minimum temperature of ${f1(cold)} degC" +
+                        (own.frostClass?.let { " (frost class ${it.name.lowercase()})" } ?: "") + ". "
                     else ""
                 ) +
                 "The verdict that it needs its own entry agrees with its care data, which leaves winter rules unset where the archetype sets them, but it rests mostly on this limit of the simulation.",
@@ -184,7 +187,7 @@ fun archetypeReport(db: CareDb, results: List<ArchetypeResult>): String = buildS
     appendLine()
     appendLine("Metrics are the simulation report's. **Stress days**: per plant per year, days the true soil got drier than the true plant's stress threshold (its dry fraction + 0.3, at most 0.98). **Dry-out error**: median over all refills of the error, in days, between the day the engine predicts the plant reaches the dry fraction it was told and the day the true plant reaches its true dry fraction; relative to the true cycle in brackets.")
     appendLine()
-    appendLine("A species passes when the archetype-only run adds at most ${f1(EXTRA_STRESS_DAYS_ALLOWANCE)} stress day per plant per year (PRIOR, not measured: under 0.3 % of days, a single short dry spell a year that any hand-watered plant sees anyway, so not worth a species entry of its own) and its dry-out error in days is at most ${pct(DRY_OUT_ERROR_TOLERANCE)} above the species run's. Errors are whole days, so the medians are whole or half days; below a median of 2.5 days, ${pct(DRY_OUT_ERROR_TOLERANCE)} above it allows no increase at all, so in practice the rule means \"no worse median\", which is stricter than ${pct(DRY_OUT_ERROR_TOLERANCE)}. A species with no dry-out prediction in either run is reported as no data, not as a pass or fail.")
+    appendLine("A species passes when the archetype-only run adds at most ${f1(EXTRA_STRESS_DAYS_ALLOWANCE)} stress day per plant per year (PRIOR, not measured: under 0.3 % of days, a single short dry spell a year that any hand-watered plant sees anyway, so not worth a species entry of its own) and its dry-out error in days is at most ${pct(DRY_OUT_ERROR_TOLERANCE)} above the species run's. Errors are whole days, so the medians are whole or half days; below a median of 2.5 days, ${pct(DRY_OUT_ERROR_TOLERANCE)} above it allows no increase at all, so in practice the rule means \"no worse median\", which is stricter than ${pct(DRY_OUT_ERROR_TOLERANCE)}. When at least one run has no refill with a dry-out prediction, only the stress criterion is judged: a stress failure is still a failure, otherwise the species is reported as no data, not as a pass or fail.")
     appendLine()
     appendLine("## Results")
     appendLine()
