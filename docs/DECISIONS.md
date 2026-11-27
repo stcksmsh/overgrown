@@ -569,3 +569,7 @@ The `overgrown-data` submodule moves from `00a0328` to `fe49d40` (data PR #21). 
 ## D73. Care-data pin moved to 238 reviewed names
 
 The `overgrown-data` submodule moves from `fe49d40` to `676f969` (data PR #22). 45 more reviewed name rows (238 in total) ship, so add-plant search finds them (user-visible): for example "Goethe plant" now gives a name row for `indoor-succulent` (Kalanchoe pinnata). `NameTablePinTest` asserts the 238 row ids in the real compiled asset and the "Goethe plant" search. Ranking is unchanged.
+
+## D74. Care-data pin moved to 286 reviewed names
+
+The `overgrown-data` submodule moves from `676f969` to `e4366ba` (data PR #23). 48 more reviewed name rows (286 in total) ship, so add-plant search finds them (user-visible): for example "wild thyme" now gives a name row for `outdoor-mediterranean-shrub` (Thymus serpyllum). `NameTablePinTest` asserts the 286 row ids in the real compiled asset and the "wild thyme" search. Ranking is unchanged.
