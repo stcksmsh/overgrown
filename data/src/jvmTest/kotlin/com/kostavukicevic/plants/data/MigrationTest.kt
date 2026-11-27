@@ -14,16 +14,17 @@ import java.io.File
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MigrationTest {
 
-    /** Builds a version 1 database exactly as the exported version 1 schema describes it. */
-    private fun versionOneDatabase(path: String) {
+    /** Builds an older database exactly as its exported schema describes it. */
+    private fun oldDatabase(path: String, version: Int) {
         // Gradle runs the tests in the module directory.
-        val schema = Json.parseToJsonElement(File("schemas/com.kostavukicevic.plants.data.GardenDb/1.json").readText())
+        val schema = Json.parseToJsonElement(File("schemas/com.kostavukicevic.plants.data.GardenDb/$version.json").readText())
             .jsonObject.getValue("database").jsonObject
-        assertEquals(1, schema.getValue("version").jsonPrimitive.content.toInt())
+        assertEquals(version, schema.getValue("version").jsonPrimitive.content.toInt())
         val conn = BundledSQLiteDriver().open(path)
         try {
             for (entity in schema.getValue("entities").jsonArray.map { it.jsonObject }) {
@@ -40,7 +41,7 @@ class MigrationTest {
                     "VALUES (7, 'Boris', 1, 35.0, 3.0, 'STANDARD', 'PLASTIC', 1, 0, 0, '2026-10-01')",
             )
             conn.execSQL("INSERT INTO event (id, plantId, date, type, ranOutOfBottom) VALUES (3, 7, '2026-11-20', 'WATERED', 1)")
-            conn.execSQL("PRAGMA user_version = 1")
+            conn.execSQL("PRAGMA user_version = $version")
         } finally {
             conn.close()
         }
@@ -49,7 +50,7 @@ class MigrationTest {
     @Test
     fun versionOneMigratesWithPlantsAndEventsIntact() = runTest {
         val path = Files.createTempDirectory("migration-test").resolve(GardenDb.FILE_NAME).toString()
-        versionOneDatabase(path)
+        oldDatabase(path, 1)
 
         val db = Room.databaseBuilder<GardenDb>(path)
             .setDriver(BundledSQLiteDriver())
@@ -62,6 +63,27 @@ class MigrationTest {
             assertTrue(dao.allPhotos().isEmpty())
             val id = dao.insertPhoto(PhotoEntity(plantId = 7, date = "2026-11-21", file = "a.jpg"))
             assertEquals("a.jpg", dao.photo(id)?.file)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun versionTwoMigratesWithBothNewPlantDatesNull() = runTest {
+        val path = Files.createTempDirectory("migration-test").resolve(GardenDb.FILE_NAME).toString()
+        oldDatabase(path, 2)
+
+        val db = Room.databaseBuilder<GardenDb>(path)
+            .setDriver(BundledSQLiteDriver())
+            .setQueryCoroutineContext(Dispatchers.Default)
+            .build()
+        try {
+            val dao = db.dao()
+            val plant = dao.allPlants().single()
+            assertEquals(7L to "Boris", plant.id to plant.name)
+            assertNull(plant.addedOn)
+            assertNull(plant.potChangedOn)
+            assertEquals(listOf(EventEntity(id = 3, plantId = 7, date = "2026-11-20", type = "WATERED", ranOutOfBottom = true)), dao.allEvents())
         } finally {
             db.close()
         }

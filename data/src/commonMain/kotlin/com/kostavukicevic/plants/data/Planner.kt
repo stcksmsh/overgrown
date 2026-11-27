@@ -119,18 +119,20 @@ object Planner {
         return out
     }
 
+    fun pot(plant: PlantEntity) = Pot(
+        substrateVolumeL = plant.potVolumeL,
+        heightCm = plant.potHeightCm,
+        shape = PotShape.valueOf(plant.potShape),
+        material = PotMaterial.valueOf(plant.potMaterial),
+        drainageHoles = plant.drainageHoles,
+        inNurseryPot = plant.inNurseryPot,
+        rootBound = plant.rootBound,
+    )
+
     fun enginePlant(plant: PlantEntity, place: PlaceEntity, profile: CareProfile) = Plant(
         profile = profile,
         canopyWidthCm = plant.canopyWidthCm,
-        pot = Pot(
-            substrateVolumeL = plant.potVolumeL,
-            heightCm = plant.potHeightCm,
-            shape = PotShape.valueOf(plant.potShape),
-            material = PotMaterial.valueOf(plant.potMaterial),
-            drainageHoles = plant.drainageHoles,
-            inNurseryPot = plant.inNurseryPot,
-            rootBound = plant.rootBound,
-        ),
+        pot = pot(plant),
         place = enginePlace(place),
     )
 
@@ -196,13 +198,20 @@ object Planner {
         val byDate = series.associateBy { it.date }
         val eventsByDate = events.groupBy { LocalDate.parse(it.date) }
 
+        // The replay uses the current pot throughout, so the repot advice counts as given only
+        // from days the person could have seen it for that pot: it is re-armed on the day the
+        // plant was added (the acquisition date may be earlier) and on the day the pot was last
+        // edited, as a Repotted event re-arms it.
+        val rearmOn = setOfNotNull(plant.addedOn, plant.potChangedOn).map(LocalDate::parse)
         var state = Engine.initial(enginePlant)
         var d = start
         while (d < today) {
+            if (d in rearmOn) state = state.copy(repotAdvisedFor = null)
             eventsByDate[d]?.forEach { e -> event(e)?.let { state = Engine.apply(enginePlant, state, it) } }
             byDate[d]?.let { state = Engine.advance(enginePlant, state, it) }
             d = d.plus(DatePeriod(days = 1))
         }
+        if (today in rearmOn) state = state.copy(repotAdvisedFor = null)
         eventsByDate[today]?.forEach { e -> event(e)?.let { state = Engine.apply(enginePlant, state, it) } }
 
         val upcoming: List<WeatherDay> = series.filter { it.date >= today }
