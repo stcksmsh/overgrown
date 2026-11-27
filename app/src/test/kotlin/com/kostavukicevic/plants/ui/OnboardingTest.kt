@@ -256,7 +256,27 @@ class OnboardingTest {
     }
 
     @Test
-    fun aGrantedPermissionDropsThePendingAsk() {
+    fun aPendingAskIsDroppedOncePermissionIsGranted() {
+        plant(g, "Fern", place(g, "Hall"))
+        Onboarding.plantAdded(app)
+        assertTrue(Onboarding.askNow(app))
+        grant()
+        assertFalse(Onboarding.askNow(app))
+    }
+
+    @Test
+    fun aGrantAfterAPermanentDenialClearsTheBlock() {
+        Onboarding.block(app)
+        assertTrue(Onboarding.blocked(app))
+        grant()
+        assertFalse(Onboarding.blocked(app))
+        // Revoked later: the system is asked again rather than the settings page opened.
+        shadowOf(app).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        assertFalse(Onboarding.blocked(app))
+    }
+
+    @Test
+    fun aPlantAddedWithPermissionStoresNoAsk() {
         grant()
         plant(g, "Fern", place(g, "Hall"))
         Onboarding.plantAdded(app)

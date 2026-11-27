@@ -79,7 +79,11 @@ internal object Onboarding {
 
     fun dismiss(c: Context) = prefs(c).edit().putBoolean(DISMISSED, true).apply()
 
-    fun blocked(c: Context) = prefs(c).getBoolean(BLOCKED, false)
+    /** A permission found granted ends the block, so a later revoke asks the system again. */
+    fun blocked(c: Context): Boolean {
+        if (Notifier.allowed(c)) prefs(c).edit().putBoolean(BLOCKED, false).apply()
+        return prefs(c).getBoolean(BLOCKED, false)
+    }
 
     fun block(c: Context) = prefs(c).edit().putBoolean(BLOCKED, true).apply()
 }
