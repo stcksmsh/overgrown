@@ -33,12 +33,18 @@ val WATERING_FIELDS: List<Pair<String, (CareProfile) -> Any?>> = listOf(
     "winter rules" to { it.winterRules },
 )
 
-data class RunSummary(val stressDaysPerYear: Double, val dryOutErrorDays: Double, val dryOutErrorRelative: Double) {
+data class RunSummary(
+    val stressDaysPerYear: Double,
+    val dryOutErrorDays: Double,
+    val dryOutErrorRelative: Double,
+    val plantsWithoutRefill: Int,
+) {
     companion object {
         fun of(results: List<PlantResult>) = RunSummary(
             stressDaysPerYear = results.map { it.stressDays / it.years }.average(),
-            dryOutErrorDays = results.flatMap { it.dryOutErrorsDays }.median(),
-            dryOutErrorRelative = results.flatMap { it.dryOutErrorsRelative }.median(),
+            dryOutErrorDays = results.perPlantMedian { it.dryOutErrorsDays },
+            dryOutErrorRelative = results.perPlantMedian { it.dryOutErrorsRelative },
+            plantsWithoutRefill = results.plantsWithoutRefill(),
         )
     }
 }
@@ -185,9 +191,9 @@ fun archetypeReport(db: CareDb, results: List<ArchetypeResult>): String = buildS
     appendLine()
     appendLine("Fields exercised: the ones the watering model reads (${WATERING_FIELDS.joinToString { it.first }}). Wind sensitivity, frost class, minimum temperature, root-freeze alerts and waterlogging sensitivity only raise alerts and do not change watering, so they cannot move these metrics. A species equal to its archetype on every watering field gives two identical runs by construction.")
     appendLine()
-    appendLine("Metrics are the simulation report's. **Stress days**: per plant per year, days the true soil got drier than the true plant's stress threshold (its dry fraction + 0.3, at most 0.98). **Dry-out error**: median over all refills of the error, in days, between the day the engine predicts the plant reaches the dry fraction it was told and the day the true plant reaches its true dry fraction; relative to the true cycle in brackets.")
+    appendLine("Metrics are the simulation report's. **Stress days**: per plant per year, days the true soil got drier than the true plant's stress threshold (its dry fraction + 0.3, at most 0.98). **Dry-out error**: median over plants of each plant's median error over its refills, so every plant counts once however many refills it had: the error, in days, between the day the engine predicts the plant reaches the dry fraction it was told and the day the true plant reaches its true dry fraction; relative to the true cycle in brackets. Plants without a refill have no error and are left out of the median; when a run has any, their number across its scenarios follows the error.")
     appendLine()
-    appendLine("A species passes when the archetype-only run adds at most ${f1(EXTRA_STRESS_DAYS_ALLOWANCE)} stress day per plant per year (PRIOR, not measured: under 0.3 % of days, a single short dry spell a year that any hand-watered plant sees anyway, so not worth a species entry of its own) and its dry-out error in days is at most ${pct(DRY_OUT_ERROR_TOLERANCE)} above the species run's. Errors are whole days, so the medians are whole or half days; below a median of 2.5 days, ${pct(DRY_OUT_ERROR_TOLERANCE)} above it allows no increase at all, so in practice the rule means \"no worse median\", which is stricter than ${pct(DRY_OUT_ERROR_TOLERANCE)}. When at least one run has no refill with a dry-out prediction, only the stress criterion is judged: a stress failure is still a failure, otherwise the species is reported as no data, not as a pass or fail.")
+    appendLine("A species passes when the archetype-only run adds at most ${f1(EXTRA_STRESS_DAYS_ALLOWANCE)} stress day per plant per year (PRIOR, not measured: under 0.3 % of days, a single short dry spell a year that any hand-watered plant sees anyway, so not worth a species entry of its own) and its dry-out error in days is at most ${pct(DRY_OUT_ERROR_TOLERANCE)} above the species run's. Errors are whole days, so each plant's median is a whole or half day and the median over plants a multiple of a quarter day; below a median of 1.25 days, ${pct(DRY_OUT_ERROR_TOLERANCE)} above it allows no increase at all, so in practice the rule means \"no worse median\", which is stricter than ${pct(DRY_OUT_ERROR_TOLERANCE)}. When at least one run has no refill with a dry-out prediction, only the stress criterion is judged: a stress failure is still a failure, otherwise the species is reported as no data, not as a pass or fail.")
     appendLine()
     appendLine("## Results")
     appendLine()
@@ -197,7 +203,7 @@ fun archetypeReport(db: CareDb, results: List<ArchetypeResult>): String = buildS
         val diff = if (r.differingFields.isEmpty()) "none (identical by construction)" else r.differingFields.joinToString()
         appendLine(
             "| ${r.species} | ${r.archetype} | $diff | ${f1(r.speciesRun.stressDaysPerYear)} | ${f1(r.archetypeRun.stressDaysPerYear)} | ${f1(r.extraStressDays)} | " +
-                "${f1(r.speciesRun.dryOutErrorDays)} d (${pct(r.speciesRun.dryOutErrorRelative)}) | ${f1(r.archetypeRun.dryOutErrorDays)} d (${pct(r.archetypeRun.dryOutErrorRelative)}) | " +
+                "${dryOut(r.speciesRun)} | ${dryOut(r.archetypeRun)} | " +
                 "${r.result} |",
         )
     }
@@ -206,6 +212,9 @@ fun archetypeReport(db: CareDb, results: List<ArchetypeResult>): String = buildS
     appendLine()
     for (r in results) appendLine("- ${r.species}: ${r.scenarios.joinToString("; ")}")
 }
+
+private fun dryOut(run: RunSummary) = "${f1(run.dryOutErrorDays)} d (${pct(run.dryOutErrorRelative)})" +
+    if (run.plantsWithoutRefill > 0) ", ${run.plantsWithoutRefill} without a refill" else ""
 
 fun main(args: Array<String>) {
     require(args.size == 2) { "usage: <caredb.json> <report.md>" }

@@ -37,7 +37,7 @@ class ArchetypeTest {
 
     @Test
     fun speciesWithoutAnyRefillIsNoDataNotAFailure() {
-        val r = ArchetypeResult("fixture", "fixture-archetype", emptyList(), emptyList(), RunSummary(10.0, 1.0, 0.2), noRefills(10.0))
+        val r = ArchetypeResult("fixture", "fixture-archetype", emptyList(), emptyList(), RunSummary(10.0, 1.0, 0.2, 0), noRefills(10.0))
         assertTrue(r.noData)
         assertFalse(r.pass)
         assertEquals(null, r.failure)
@@ -50,7 +50,7 @@ class ArchetypeTest {
     /** An archetype that makes the model believe the plant uses water far more slowly never predicts a dry-out within the horizon. */
     @Test
     fun stressFailureStandsWhenOneRunHasNoDryOutPrediction() {
-        val r = ArchetypeResult("fixture", "fixture-archetype", emptyList(), emptyList(), RunSummary(10.0, 1.0, 0.2), noRefills(60.0))
+        val r = ArchetypeResult("fixture", "fixture-archetype", emptyList(), emptyList(), RunSummary(10.0, 1.0, 0.2, 0), noRefills(60.0))
         assertTrue(r.dryOutUnknown)
         assertFalse(r.noData)
         assertFalse(r.pass)
