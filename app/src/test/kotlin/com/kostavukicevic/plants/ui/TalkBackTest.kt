@@ -75,6 +75,9 @@ class TalkBackTest {
 
     private fun waitForText(text: String) = waitFor(hasText(text))
 
+    /** Waits until [text] is gone: a dialog still closing takes the next tap meant for the screen beneath it. */
+    private fun waitGone(text: String) = compose.waitUntil(15_000) { compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isEmpty() }
+
     private fun tap(text: String) = compose.onNodeWithText(text).performScrollTo().performClick()
 
     private fun field(label: Int): SemanticsNodeInteraction = compose.onNode(hasSetTextAction() and hasText(s(label))).performScrollTo()
@@ -222,16 +225,19 @@ class TalkBackTest {
         waitForText(s(R.string.plant_edit_entry))
         assertEveryClickableNamed("Edit entry dialog")
         cancel()
+        waitGone(s(R.string.plant_edit_entry))
 
         tap(s(R.string.plant_watered))
         waitForText(s(R.string.no))
         assertEveryClickableNamed("Ran out of the bottom dialog")
         compose.onNodeWithText(s(R.string.no)).performClick()
+        waitGone(s(R.string.plant_watered_question))
 
         tap(s(R.string.photo_add))
         waitForText(s(R.string.photo_add_title))
         assertEveryClickableNamed("Photo source dialog")
         cancel()
+        waitGone(s(R.string.photo_add_title))
 
         // The plant's own Delete, not a history row's, which is named after its entry.
         compose.onNode(hasText(s(R.string.delete)) and hasClickAction() and !SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription))
