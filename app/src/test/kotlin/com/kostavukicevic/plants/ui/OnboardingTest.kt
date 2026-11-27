@@ -256,7 +256,34 @@ class OnboardingTest {
     }
 
     @Test
-    fun aGrantedPermissionDropsThePendingAsk() {
+    fun aPendingAskIsDroppedOncePermissionIsGranted() {
+        plant(g, "Fern", place(g, "Hall"))
+        Onboarding.plantAdded(app)
+        assertTrue(Onboarding.askNow(app))
+        grant()
+        assertFalse(Onboarding.askNow(app))
+    }
+
+    /** Blocked, then granted in the system's settings and the app opened, then revoked: Allow asks the system again. */
+    @Test
+    fun aGrantAfterAPermanentDenialClearsTheBlock() {
+        plant(g, "Fern", place(g, "Hall"))
+        Onboarding.block(app)
+        grant()
+        showToday()
+        compose.waitForIdle()
+        shadowOf(app).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        savePlant()
+        waitFor(s(R.string.notifications_reason))
+        compose.onNodeWithText(s(R.string.notifications_allow)).performClick()
+        compose.waitForIdle()
+        val actions = generateSequence { startedActivity() }.map { it.action }.toList()
+        assertEquals(listOf(PERMISSION_SCREEN), actions)
+        assertEquals(Manifest.permission.POST_NOTIFICATIONS, requested())
+    }
+
+    @Test
+    fun aPlantAddedWithPermissionStoresNoAsk() {
         grant()
         plant(g, "Fern", place(g, "Hall"))
         Onboarding.plantAdded(app)

@@ -144,7 +144,7 @@ class VoiceTest {
         fun placeholders(text: String) = PLACEHOLDER.findAll(text).map { it.value }.filter { it != "%%" }.toList()
 
         // Text that must stay plain (voice rule 7): by key prefix, by word anywhere in the key, and by name.
-        val PROTECTED_PREFIXES = listOf("notifications_", "import", "export", "photo_", "about_")
+        val PROTECTED_PREFIXES = listOf("notifications_", "import", "export", "photo_", "about_", "link_")
         val PROTECTED_WORDS = listOf(
             "toxic", "poison", "safety", "danger", "warning", "loss", "lost", "delete", "permission", "location",
             "privacy", "private", "legal", "licence", "license", "credit",
@@ -169,7 +169,7 @@ class VoiceTest {
             "about_licence", "about_font_licence", "about_data", "about_weather", "about_care_notice",
             "weather_credit_open_meteo", "weather_credit_met",
             // safety: the frost-hardiness line
-            "cold_in_ground",
+            "cold_in_ground", "link_no_app",
         )
 
         fun isProtected(key: String) =
