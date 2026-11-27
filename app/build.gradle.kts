@@ -153,7 +153,7 @@ val dataDir = rootProject.layout.projectDirectory.dir("overgrown-data")
 val compileCareAsset = tasks.register<CompileCareAsset>("compileCareAsset") {
     dataRoot.set(dataDir)
     dataFiles.from(fileTree(dataDir) {
-        include("species/**", "archetypes/**", "schema/**", "provenance/snapshots/**", "redirects.yaml", "DATA_VERSION")
+        include("species/**", "names/**", "archetypes/**", "schema/**", "provenance/snapshots/**", "redirects.yaml", "DATA_VERSION")
     })
     toolClasspath.from(careTool)
     sourceCommit.set(
