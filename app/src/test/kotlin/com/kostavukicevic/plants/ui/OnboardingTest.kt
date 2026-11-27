@@ -266,7 +266,7 @@ class OnboardingTest {
     }
 
     @Test
-    fun aPendingAskIsDroppedOncePermissionIsGranted() {
+    fun aPendingAskIsNotMadeWhilePermissionIsGranted() {
         plant(g, "Fern", place(g, "Hall"))
         Onboarding.plantAdded(app)
         assertTrue(Onboarding.askNow(app))
@@ -343,6 +343,27 @@ class OnboardingTest {
         systemSwitch(false)
         plant(g, "Fern", place(g, "Hall"))
         showToday()
+        waitFor(s(R.string.notifications_off))
+        compose.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+        systemSwitch(true)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        gone(s(R.string.notifications_off))
+    }
+
+    /** The line follows the system's switch as it is now, not the history: a block, a grant, a revoke and a re-enable. */
+    @Test
+    fun aRevokeAfterAGrantShowsTheLineAndReEnablingTakesItAway() {
+        Onboarding.block(app)
+        grant()
+        systemSwitch(true)
+        Notifier.createChannels(app)
+        plant(g, "Fern", place(g, "Hall"))
+        showToday()
+        waitFor("Fern")
+        compose.onNodeWithText(s(R.string.notifications_off)).assertDoesNotExist()
+        compose.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+        systemSwitch(false)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
         waitFor(s(R.string.notifications_off))
         compose.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
         systemSwitch(true)
