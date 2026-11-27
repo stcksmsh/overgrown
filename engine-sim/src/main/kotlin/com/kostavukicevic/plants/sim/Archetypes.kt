@@ -5,6 +5,7 @@ import com.kostavukicevic.plants.caredb.CareDb
 import com.kostavukicevic.plants.caredb.Context
 import com.kostavukicevic.plants.caredb.toProfile
 import com.kostavukicevic.plants.engine.CareProfile
+import com.kostavukicevic.plants.engine.Coefficients
 import com.kostavukicevic.plants.engine.Engine
 import com.kostavukicevic.plants.engine.WaterBalance
 import java.io.File
@@ -54,12 +55,19 @@ data class ArchetypeResult(
     val extraStressDays get() = archetypeRun.stressDaysPerYear - speciesRun.stressDaysPerYear
     val stressOk get() = extraStressDays <= EXTRA_STRESS_DAYS_ALLOWANCE
     val dryOutOk get() = archetypeRun.dryOutErrorDays <= speciesRun.dryOutErrorDays * (1 + DRY_OUT_ERROR_TOLERANCE)
-    val pass get() = stressOk && dryOutOk
+    /** No refill gave a dry-out prediction in one of the runs, so the dry-out criterion cannot be judged. */
+    val noData get() = speciesRun.dryOutErrorDays.isNaN() || archetypeRun.dryOutErrorDays.isNaN()
+    val pass get() = !noData && stressOk && dryOutOk
     val failure: String? get() = when {
-        pass -> null
+        pass || noData -> null
         !stressOk && !dryOutOk -> "stress and dry-out"
         !stressOk -> "stress"
         else -> "dry-out"
+    }
+    val result get() = when {
+        noData -> "no data"
+        pass -> "pass"
+        else -> "fail: $failure"
     }
 }
 
@@ -131,13 +139,33 @@ fun archetypeReport(db: CareDb, results: List<ArchetypeResult>): String = buildS
     } else {
         appendLine(if (passed * 5 >= results.size * 4) "That meets the rule of at least four in five." else "That does not meet the rule of at least four in five.")
     }
+    val noData = results.filter { it.noData }
+    if (noData.isNotEmpty()) {
+        appendLine("No data (no refill gave a dry-out prediction, so the species cannot be judged): ${noData.joinToString { it.species }}.")
+    }
     appendLine()
-    val failing = results.filter { !it.pass }
+    val failing = results.filter { it.failure != null }
     appendLine(
         if (failing.isEmpty()) "No species needs its own entry on this evidence."
         else "Needing their own entry: ${failing.joinToString { "${it.species} (${it.failure})" }}.",
     )
-    val toSplit = byArchetype.filter { (_, members) -> members.size >= 2 && members.all { !it.pass } && members.map { it.failure }.toSet().size == 1 }
+    for (r in failing.filter { it.failure == "stress" && it.differingFields == listOf("winter rules") }) {
+        val own = db.species.getValue(r.species).groupsFor(Context.OUTDOOR_CONTAINER).toProfile()
+        val cold = own.minTempC?.takeIf { it > Coefficients.WINTER_MODE_MEAN_C }
+        appendLine()
+        appendLine(
+            "**What the ${r.species} failure means.** The only watering field that differs is winter rules, which act only in winter mode " +
+                "(the mean of the last ${Coefficients.WINTER_MODE_WINDOW_DAYS} days below ${f1(Coefficients.WINTER_MODE_MEAN_C)} degC), so the two runs can diverge only from a winter-mode day on. " +
+                "The simulated true plant takes no harm from cold or from wet soil in winter, so the stress metric counts the cost of winter rules (fewer prompts, drier soil) and never their benefit. " +
+                (
+                    if (cold != null) "The simulated plant also stays outdoors through every winter, though its own entry gives a minimum temperature of ${f1(cold)} degC" +
+                        (own.frostClass?.let { " (frost class ${it.name.lowercase()})" } ?: "") + ": the extra stress days begin in weeks it would not have survived. "
+                    else ""
+                ) +
+                "The verdict that it needs its own entry agrees with its care data, which leaves winter rules unset where the archetype sets them, but it rests mostly on this limit of the simulation.",
+        )
+    }
+    val toSplit = byArchetype.filter { (_, members) -> members.size >= 2 && members.all { it.failure != null } && members.map { it.failure }.toSet().size == 1 }
     appendLine()
     appendLine(
         if (toSplit.isEmpty()) "No archetype has every member failing the same way, so none is to be split."
@@ -156,7 +184,7 @@ fun archetypeReport(db: CareDb, results: List<ArchetypeResult>): String = buildS
     appendLine()
     appendLine("Metrics are the simulation report's. **Stress days**: per plant per year, days the true soil got drier than the true plant's stress threshold (its dry fraction + 0.3, at most 0.98). **Dry-out error**: median over all refills of the error, in days, between the day the engine predicts the plant reaches the dry fraction it was told and the day the true plant reaches its true dry fraction; relative to the true cycle in brackets.")
     appendLine()
-    appendLine("A species passes when the archetype-only run adds at most ${f1(EXTRA_STRESS_DAYS_ALLOWANCE)} stress day per plant per year (PRIOR, not measured: under 0.3 % of days, a single short dry spell a year that any hand-watered plant sees anyway, so not worth a species entry of its own) and its dry-out error in days is at most ${pct(DRY_OUT_ERROR_TOLERANCE)} above the species run's.")
+    appendLine("A species passes when the archetype-only run adds at most ${f1(EXTRA_STRESS_DAYS_ALLOWANCE)} stress day per plant per year (PRIOR, not measured: under 0.3 % of days, a single short dry spell a year that any hand-watered plant sees anyway, so not worth a species entry of its own) and its dry-out error in days is at most ${pct(DRY_OUT_ERROR_TOLERANCE)} above the species run's. Errors are whole days, so the medians are whole or half days; below a median of 2.5 days, ${pct(DRY_OUT_ERROR_TOLERANCE)} above it allows no increase at all, so in practice the rule means \"no worse median\", which is stricter than ${pct(DRY_OUT_ERROR_TOLERANCE)}. A species with no dry-out prediction in either run is reported as no data, not as a pass or fail.")
     appendLine()
     appendLine("## Results")
     appendLine()
@@ -167,7 +195,7 @@ fun archetypeReport(db: CareDb, results: List<ArchetypeResult>): String = buildS
         appendLine(
             "| ${r.species} | ${r.archetype} | $diff | ${f1(r.speciesRun.stressDaysPerYear)} | ${f1(r.archetypeRun.stressDaysPerYear)} | ${f1(r.extraStressDays)} | " +
                 "${f1(r.speciesRun.dryOutErrorDays)} d (${pct(r.speciesRun.dryOutErrorRelative)}) | ${f1(r.archetypeRun.dryOutErrorDays)} d (${pct(r.archetypeRun.dryOutErrorRelative)}) | " +
-                "${if (r.pass) "pass" else "fail: ${r.failure}"} |",
+                "${r.result} |",
         )
     }
     appendLine()

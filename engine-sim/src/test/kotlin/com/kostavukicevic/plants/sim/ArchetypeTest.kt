@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.kostavukicevic.plants.sim
 
+import com.kostavukicevic.plants.caredb.CareDb
 import com.kostavukicevic.plants.caredb.CareGroups
 import com.kostavukicevic.plants.caredb.Context
 import com.kostavukicevic.plants.caredb.EngineFields
@@ -32,5 +33,18 @@ class ArchetypeTest {
         val r = run(archetype.copy(engine = EngineFields(waterUseFactor = 3.0)))
         assertEquals(listOf("water use factor"), r.differingFields)
         assertFalse(r.pass, "archetype run: $r")
+    }
+
+    @Test
+    fun speciesWithoutAnyRefillIsNoDataNotAFailure() {
+        val none = RunSummary.of(emptyList())
+        val r = ArchetypeResult("fixture", "fixture-archetype", emptyList(), emptyList(), none, none)
+        assertTrue(r.noData)
+        assertFalse(r.pass)
+        assertEquals(null, r.failure)
+        assertEquals("no data", r.result)
+        val report = archetypeReport(CareDb(schemaVersion = 1, dataVersion = 1, sourceCommit = "fixture"), listOf(r))
+        assertTrue("| no data |" in report, report)
+        assertFalse("Needing their own entry" in report, report)
     }
 }
