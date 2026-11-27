@@ -15,29 +15,25 @@ Handover for the next coordinator. Read this, then run `nonslop status` in BOTH 
 
 ## Done (this round)
 
-#55 four species; #56 flake fixes; #57 docs D53/D54 + PRIVACY; #58 weather credit + herb glyph; #59 unknown root_freeze_alerts = on outdoors (D57); #60 per-place credit (D55/D56); #61 cold/frost alerts for tender plants (D58); #62 toxicity display + disclaimers (D59); #63 reproducible build: R8 keep rule (D61), CI double build green at 606cbd0; #64 onboarding + battery guidance (D60). Last APK sent: 1566ce9.
+#55 four species; #56 flake fixes; #57 docs D53/D54 + PRIVACY; #58 weather credit + herb glyph; #59 unknown root_freeze_alerts = on outdoors (D57); #60 per-place credit (D55/D56); #61 cold/frost alerts for tender plants (D58); #62 toxicity display + disclaimers (D59); #63 reproducible build: R8 keep rule (D61), CI double build green at 606cbd0; #64 onboarding + battery guidance (D60); #66 G5 archetype test (`docs/reports/archetype-test.md`: 3 of 4 pass; basil fails on stress, mostly a simulation limit; four-in-five needs >= 5 species); #67 store metadata (`fastlane/`, draft F-Droid text, not published); #68 accessibility pass (48 dp, headings, 2.0x without clipping, contrast; owner accepted the outline and moss changes, D62). #70 Today names a single notification channel that is off; tap helpers in AccessibilityTest/TalkBackTest use semantic clicks against a load flake. Data: PR #15 merged (cold fields never null; the most cautious of archetype and quotes unless two publishers agree). Last APK sent: 445465e.
 
 ## In flight
 
-- G5 archetype test (BRIEF section 10; gate status in D54).
-- Data repo PR #14 (settle Lawson cypress + snake plant) passed data-review (minor) at 30746d6. The marking commit was blocked by the auto-mode classifier because the data repo's `.nonslop.toml` still says "Only the owner sets reviewed". The owner has been asked to choose A (update that line), B (commit the prepared marking himself; edits in overgrown-data/.claude/tmp/mark14/data) or C (review it himself).
+- Data PR #14 (settle Lawson cypress + snake plant): data-review minor at 30746d6. The marking commit waits until the owner's edit of the data repo `.nonslop.toml` line 35 ("Only the owner sets reviewed" -> the agent marks reviewed after a fresh data-review; toxicity other than `unknown` stays owner-only) reaches data main. He said he edited it; it was not on main when last checked.
 
 ## Next, in order
 
-1. G5 archetype test (in flight).
-2. Accessibility pass.
-3. Store metadata (fastlane, BRIEF section 9).
-4. Data: next-entry batch (tomato, chilli, sweet pepper, rosemary, lavender) once #14 merges.
-5. Data-review skill wording: an explicit null on a cold field turns alerts off, it does not fall back.
-6. Polish: per-channel notifications off shows no reminders-off line.
-7. Engine/Planner: repot advice re-arm on pot edit and backdated acquisition (D51 follow-up); harness per-plant median dry-out error.
-8. Data PR #12 review minors: two runners starting at once both pass the one-runner check; diff-merge note should quote both drafts; PIPELINE lacks the 5-plant cap; data-review scratch wording.
+1. After #14: data next-entry batch (tomato, chilli pepper, sweet pepper, rosemary, lavender).
+2. Data PR #15 minors: item 7 first sentence vs the two-publisher exception; next-entry:50 typo; copy the two-publisher exception into the D entry.
+3. Data-review skill wording: an explicit null on a cold field turns alerts off, it does not fall back.
+4. Engine/Planner: repot advice re-arm on pot edit and backdated acquisition (D51 follow-up); harness per-plant median dry-out error.
+5. Data PR #12 review minors: two runners starting at once both pass the one-runner check; diff-merge note should quote both drafts; PIPELINE lacks the 5-plant cap; data-review scratch wording.
 
 ## Waiting on the owner
 
-- The A/B/C decision on data PR #14.
-- Optional CI step to upload both APKs and mapping.txt when the double-build compare fails (in the PR #63 body).
-- Boris: cold nights 30 Nov to 2 Dec: insulate, lift off the floor, against the wall; below -5 °C into an unheated room.
+- The `.nonslop.toml` change on data main (blocks the #14 marking commit).
+- Optional CI changes: upload both APKs and mapping.txt when the double-build compare fails (snippet in the PR #63 body); run `:engine-sim:archetypeReport` in the "Simulation report is current" step.
+- Boris: cold nights 30 Nov to 2 Dec (drop this item once past 2 Dec): insulate, lift off the floor, against the wall; below -5 °C into an unheated room.
 - Weigh Boris daily (nursery pot only, same time, note rain); first full mark at the next real watering (G4 exit condition, G5 input). More plants are coming: he reports gaps.
 - Before release: trademark, lawyer, developer verification, signing key, contact address, privacy policy, Open-Meteo letter, repo visibility (public now; brief said private), Boris art (asset list in the advisor report section 7). Re-enable PR CI before the first beta to others.
 
@@ -51,6 +47,8 @@ Earlier owner answers A–E, W1–W2, P1–P2, S1–S3, gauge A, Today look: see
 
 ## Hard-won facts
 
+- The merge guard looks the PR up from the current directory: run `gh pr merge` with `-R stcksmsh/overgrown` from the app checkout, never from overgrown-data.
+- Reviewers and builders cannot always delete scratch clones (recursive delete denied); the coordinator removes them.
 - `gh pr edit` fails: `gh api -X PATCH repos/stcksmsh/overgrown/pulls/<n> -f body=...`.
 - Worktrees need `git submodule update --init`, `ANDROID_HOME=~/Android/Sdk` and a copy of `local.properties`. Worktrees with the submodule need `--force` to remove; leave them.
 - `nonslop slice new` parses parentheses in Scope lines as paths: keep Scope lines to plain comma-separated paths.

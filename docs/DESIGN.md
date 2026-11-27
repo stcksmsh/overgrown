@@ -21,7 +21,7 @@ For the agents building the UI. Reference mockups: https://claude.ai/artifact/2W
 | ink | `#1B1B1B` | `#F2F4F0` | text, primary button fill |
 | on-ink | `#FFFFFF` | `#121512` | text on primary button |
 | muted | `#4D4D4D` | `#B4BAB2` | secondary text |
-| outline | `#C9CDC6` | `#3A403A` | borders of secondary buttons on surface |
+| outline | `#C9CDC6` | `#3A403A` | the app's own outlines: chip borders, dividers, OutlineButton. Material components that read `colorScheme.outline` (text-field borders, an unchecked switch's border and thumb, the TimePicker period border) use the muted colour (`#4D4D4D` / `#B4BAB2`) instead, so they reach 3:1 (D62) |
 
 ### State blocks (same in both themes; each block carries its own text colour)
 
@@ -30,7 +30,7 @@ For the agents building the UI. Reference mockups: https://claude.ai/artifact/2W
 | sky | `#BFD9F2` | `#1B1B1B` | needs water |
 | marigold | `#F2B632` | `#1B1B1B` | the app has a question (soil check, "did rain reach it?") |
 | brick | `#B8401C` | `#FFFFFF` | weather alert, destructive confirmation |
-| moss | `#2F6B3F` | `#FFFFFF` | fine / resting; brand colour; selected state |
+| moss | `#31703F` | `#FFFFFF` | fine / resting; brand colour; selected state |
 
 Tints for chips on surface: moss-tint `#DDE8D8`, brick-tint `#F3D9CF`. Gauge fill on neutral surfaces: moss in light, `#7FC08F` in dark.
 
@@ -38,7 +38,7 @@ Rules:
 - One state block per card. Never nest a state block in another.
 - A plant that is fine uses moss (featured) or surface (compact). It never uses sky or marigold.
 - "Repot or expect daily watering" is a marigold card (a question/decision), not an alert.
-- Dark values above are proposed and have **not** been contrast-checked; verify 4.5:1 for text and 3:1 for large text and gauge outlines before merging.
+- `ContrastTest` checks every colour pair the app uses, in both themes (D62). A selected moss fill on a surface below 3:1 also carries a check mark.
 
 ## 3. Type
 
