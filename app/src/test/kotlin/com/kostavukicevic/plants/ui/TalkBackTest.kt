@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -30,6 +31,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
 import com.kostavukicevic.plants.App
@@ -78,7 +80,11 @@ class TalkBackTest {
     /** Waits until [text] is gone: a dialog still closing takes the next tap meant for the screen beneath it. */
     private fun waitGone(text: String) = compose.waitUntil(15_000) { compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isEmpty() }
 
-    private fun tap(text: String) = compose.onNodeWithText(text).performScrollTo().performClick()
+    /**
+     * Clicks by the node's click action, not by coordinates: a tap at a position read while the screen still lays
+     * out, as after a watering's history row lands, can land on the wrong spot and open nothing.
+     */
+    private fun tap(text: String) = compose.onNodeWithText(text).performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
 
     private fun field(label: Int): SemanticsNodeInteraction = compose.onNode(hasSetTextAction() and hasText(s(label))).performScrollTo()
 
@@ -221,7 +227,7 @@ class TalkBackTest {
         waitFor(hasContentDescription(editEntry))
         assertEveryClickableNamed("Plant")
 
-        compose.onNodeWithContentDescription(editEntry).performScrollTo().performClick()
+        compose.onNodeWithContentDescription(editEntry).performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
         waitForText(s(R.string.plant_edit_entry))
         assertEveryClickableNamed("Edit entry dialog")
         cancel()
@@ -241,7 +247,7 @@ class TalkBackTest {
 
         // The plant's own Delete, not a history row's, which is named after its entry.
         compose.onNode(hasText(s(R.string.delete)) and hasClickAction() and !SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription))
-            .performScrollTo().performClick()
+            .performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
         // The question, not Cancel: the Photo source dialog just dismissed may still show its own Cancel.
         waitForText(s(R.string.plant_delete_question, "Fern"))
         assertEveryClickableNamed("Delete plant dialog")

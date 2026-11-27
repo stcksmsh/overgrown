@@ -90,7 +90,7 @@ fun TodayScreen(onPlant: (Long) -> Unit, onAdd: () -> Unit, onPlaces: () -> Unit
     ) {
         val list = statuses ?: return@Page
         val visible = (events ?: return@Page).filterNot { it.key in answered }
-        if (list.isNotEmpty() && off && !dismissed && !asking) RemindersOffLine(onDismiss = { dismissed = true; Onboarding.dismiss(c) })
+        if (list.isNotEmpty() && off.isNotEmpty() && !dismissed && !asking) RemindersOffLine(off, onDismiss = { dismissed = true; Onboarding.dismiss(c) })
         TodayContent(
             list,
             g.garden.today(),
