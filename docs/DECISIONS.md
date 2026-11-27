@@ -543,3 +543,7 @@ The `overgrown-data` submodule moves from `fd05404` to `c337cdc` (data PR #14, w
 - A name row whose accepted name equals that of a species already in the results is left out: the species row carries the care data. It still shows when only its own names match.
 - Name rows match on the accepted name too, not only on common names, so typing a genus such as "monstera" finds its row even when no common name contains it.
 - The `overgrown-data` pin moves from `c337cdc` to `f794c39` (data PR #16). Its name rows are all draft, so the compiled `names` is empty and the shipped search is unchanged until rows are reviewed; tests use fixtures.
+
+## D68. Care-data pin moved to the first ten reviewed names
+
+The `overgrown-data` submodule moves from `f794c39` to `4d3196f` (data PR #17). Ten name-table rows are now `reviewed`, so the compiled asset's `names` holds them and the add-plant search (D67) finds them: tomato, chilli, sweet pepper, rosemary, lavender, geranium, petunia, parsley, mint and monstera. This is user-visible: a person typing one of these names now gets a name row instead of nothing. Picking it stores the archetype and no species slug, as D67 describes, so the plant takes the archetype's defaults. `NameTablePinTest` asserts the ten row ids in the real compiled asset and that searching it for "mint" returns a name row for `outdoor-leafy-herb`. The simulation report is unchanged; the archetype report only carries the new data commit.
