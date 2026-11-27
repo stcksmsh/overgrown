@@ -165,6 +165,11 @@ val compileCareAsset = tasks.register<CompileCareAsset>("compileCareAsset") {
     outputDir.set(layout.buildDirectory.dir("generated/caredb"))
 }
 
+// NameTablePinTest reads the generated asset from disk, so the tests need it built first and rerun when it changes.
+tasks.withType<Test>().configureEach {
+    inputs.files(compileCareAsset).withPropertyName("careAsset")
+}
+
 androidComponents {
     onVariants { variant ->
         variant.sources.assets?.addGeneratedSourceDirectory(compileCareAsset, CompileCareAsset::outputDir)
