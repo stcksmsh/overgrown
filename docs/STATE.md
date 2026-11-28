@@ -15,23 +15,23 @@ Handover for the next coordinator. Read this, then run `nonslop status` in BOTH 
 
 ## Done (this round)
 
-App: #79-#83 pins dec2e85 -> e4366ba, names 99 -> 286 (D70-D74). Data: #20-#23 name batches 4-7 (each: fresh opus data-review found must-fixes, fixed, second review clean/minor, coordinator marking commit, haiku check). Last APK sent: 2a97f4d (238 names).
+App: #79-#83 pins to e4366ba, 286 names (D70-D74); #84 undo-delete survives leaving the screen (D75); #85 all writes and reschedules on the app scope `Graph.scope`/`g.outlive` (D76); #86 notification tests; #87 wizard forecast after leaving, Undo wins same-frame race, sim horizon constant (D77 appended by #88). Data: #20-#23 name batches 4-7. Last APK sent: e63ef3d.
 
 ## In flight
-Nothing.
+Data PR #24 (validator rejects null cold fields in species; citrus min_temp_c 10.0) and #25 (shared-name sweep: 8 names removed, 25 kept as clearly meant): both verified, reviewed clean, CI green; owner merging.
 
 ## Next, in order
 
-1. Send an APK at the #83 merge (286 names).
-2. Cross-name sweep over the 238 rows merged before batch 7: batch 7's reviewer search (`.claude/tmp/fffc12d9/review-d23b/scripts/xsearch2.py` + `retry.py`, which report HTTP 429) finds names Wikidata also gives another plant; remove each such name (note it) in one data PR, then pin.
-3. Name table is about 300 target: further batches only if the owner wants more (template `.claude/tmp/fffc12d9/briefs/names-batch-7.md`, which carries all review lessons).
-4. Data docs: D17/PIPELINE describe the WFO-synonym item tie and genus-item names via P171, and the shared-name rule.
-5. Polish backlog `.claude/tmp/fffc12d9/polish-backlog.md` (PR #64 leftovers, data-review cold-null wording, validator misses null cold fields inside in_ground/outdoor_container, PR #12/#15/#21/#23 minors, careAsset input path sensitivity, sim report "90 days").
-6. Species next-entry batch (tomato, chilli, sweet pepper, rosemary, lavender) when full care data is wanted beyond archetypes.
+1. After #24 and #25 merge: app pin slice to the new data head (template `.claude/tmp/fffc12d9/briefs/data-pin-names-7.md`; ids test stays 286; add a test that the lemon asset has min_temp_c 10.0; D78), then an APK.
+2. Archetype cold values: 7 archetypes have min_temp_c null and 11 root_kill_temp_c null, so members without their own value get no COLD/root-kill alert (FROST works). Source cautious values, two publishers each, through the next-entry/data-review pipeline.
+3. Re-run the sweep's second search pass (wbgetentities exact labels+aliases; the old xsearch2.py misses aliases hidden behind a matching label) over the 48 batch-7 rows.
+4. Data docs: D17/PIPELINE: WFO-synonym item tie, genus-item names via P171, the shared-name rule with its "unless clearly meant" exception and the ancestor/descendant rule.
+5. Polish backlog `.claude/tmp/fffc12d9/polish-backlog.md` (data-review/PR #12/#15/#21/#23 minors, 35 null cold fields in drafts/ that validate does not check, PR #87 minors).
+6. Species next-entry batch (tomato, chilli, sweet pepper, rosemary, lavender) when full care data is wanted.
 
 ## Waiting on the owner
 
-- Test the latest APK: Boris kept; pot edit re-arms repot advice; search "mint", "мушк", "African violet", "dragon tree", "lilac", "wild thyme".
+- Test the latest APK: Boris kept; pot edit re-arms repot advice; delete a history entry and leave at once (stays deleted); Watered then Back (event kept, reminder updated); search "wild thyme", "lilac".
 - Optional CI changes: upload both APKs and mapping.txt when the double-build compare fails (snippet in the PR #63 body); run `:engine-sim:archetypeReport` in the "Simulation report is current" step.
 - Boris: cold nights 30 Nov to 2 Dec (drop after 2 Dec): insulate, lift off the floor, against the wall; below -5 °C into an unheated room. Weigh daily on the gram scale only (about 18:00, note rain). The 24 Nov 300 g reading was on a 50 g-step scale: not a full mark. At the next real watering: weigh before (dry end), water, drain an hour, weigh (full end). Readings are in the coordinator's private memory, never in this repo.
 - Before release: trademark, lawyer, developer verification, signing key, contact address, privacy policy, Open-Meteo letter, repo visibility, Boris art. Re-enable PR CI before the first beta to others.
@@ -55,6 +55,6 @@ This round: pot history option A (D65). Name table option A (data D17): separate
 - Robolectric: wait with `compose.waitUntil`, never sleeps.
 - Full test runs fail intermittently under heavy parallel load: re-run once before blaming the PR.
 - Builders can report edits that never landed (PR #77): check the diff yourself before trusting a report.
-- Name rows inherit archetype cold fields: a frost-tender plant must not map to a hardy archetype (lemongrass). Other name-row must-fixes: unplaced WFO id (P7715 must equal the accepted wfo_id), names from a group item without a quoted P171/P225 tie, WFO placing the plant people mean in another genus (schefflera, hatiora), trees or climbers on the shrub archetype, Wikidata P225 vs WFO name disagreement, names Wikidata also gives another plant (from batch 7 a reviewer cross-search catches these).
-- Data builders can loop re-sending their report after DONE: once the branch is pushed and the worktree clean, TaskStop them; fixes go to a fresh builder with the branch name.
+- Name rows inherit archetype cold fields: a frost-tender plant must not map to a hardy archetype (lemongrass). Other name-row must-fixes: unplaced WFO id (P7715 must equal the accepted wfo_id), names from a group item without a quoted P171/P225 tie, WFO placing the plant people mean in another genus (schefflera, hatiora), trees or climbers on the shrub archetype, Wikidata P225 vs WFO name disagreement, names Wikidata also gives an unrelated plant, unless this plant is clearly what growers here mean (genus/family or species-within-genus overlaps get a note only).
+- Data builders can loop re-sending their report after DONE: once pushed and clean, TaskStop them. Dispatch each builder from its own repo's root (cd first): the worktree is made from the coordinator's current directory.
 - `gradle build` does not regenerate docs/reports/archetype-test.md: pin slices run `:engine-sim:archetypeReport :engine-sim:simReport`.
